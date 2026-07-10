@@ -1,0 +1,17 @@
+[package]
+name = "wasi-authz-testkit"
+description = "Conformance fixtures for wasi-authz policy decision providers"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+wasi-authz-contract.workspace = true
+
+[lints]
+workspace = true
