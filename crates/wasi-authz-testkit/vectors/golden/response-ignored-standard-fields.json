@@ -1,0 +1,9 @@
+{
+  "decision": true,
+  "context": {
+    "cache": {"max_age": 300},
+    "advice": [{"type": "vendor-display-hint"}],
+    "vendor_extension": {"revision": 2}
+  },
+  "vendor_extension": "ignored"
+}

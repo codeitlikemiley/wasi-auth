@@ -1,0 +1,9 @@
+{
+  "subject": {
+    "type": "user",
+    "id": "alice",
+    "properties": {"wasi_authz": {"state": "anonymous"}}
+  },
+  "action": {"name": "document.read", "properties": {"wasi_authz": {}}},
+  "resource": {"type": "document", "id": "report-1", "properties": {"wasi_authz": {}}}
+}

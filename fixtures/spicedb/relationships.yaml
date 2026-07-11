@@ -1,0 +1,76 @@
+schema: |-
+  definition user {}
+
+  definition group {
+      relation member: user | group#member
+  }
+
+  definition tenant {
+      relation member: user | group#member
+      permission access = member
+  }
+
+  definition folder {
+      relation tenant: tenant
+      relation parent: folder
+      relation viewer: user | group#member
+      relation editor: user | group#member
+
+      permission tenant_member = tenant->access
+      permission view = tenant_member & (viewer + editor + parent->view)
+      permission edit = tenant_member & (editor + parent->edit)
+  }
+
+  definition document {
+      relation tenant: tenant
+      relation parent: folder
+      relation owner: user
+      relation viewer: user | group#member
+      relation editor: user | group#member
+
+      permission tenant_member = tenant->access
+      permission view = tenant_member & (owner + viewer + editor + parent->view)
+      permission edit = tenant_member & (owner + editor + parent->edit)
+      permission delete = tenant_member & owner
+  }
+
+relationships: |-
+  group:platform#member@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGNhcm9s
+  group:engineering#member@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGJvYg
+  group:engineering#member@group:platform#member
+  tenant:acme#member@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGFsaWNl
+  tenant:acme#member@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGRhdmU
+  tenant:acme#member@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGZyYW5r
+  tenant:acme#member@group:engineering#member
+  tenant:globex#member@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGVyaW4
+  folder:root#tenant@tenant:acme
+  folder:root#viewer@group:engineering#member
+  folder:root#editor@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGRhdmU
+  folder:child#tenant@tenant:acme
+  folder:child#parent@folder:root
+  document:report-1#tenant@tenant:acme
+  document:report-1#parent@folder:child
+  document:report-1#owner@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGFsaWNl
+  document:report-1#editor@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGJvYg
+  document:report-1#viewer@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGZyYW5r
+  document:globex-report#tenant@tenant:globex
+  document:globex-report#owner@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGVyaW4
+  folder:cycle-a#tenant@tenant:acme
+  folder:cycle-b#tenant@tenant:acme
+  folder:cycle-a#parent@folder:cycle-b
+  folder:cycle-b#parent@folder:cycle-a
+
+assertions:
+  assertTrue:
+    - document:report-1#view@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGFsaWNl
+    - document:report-1#edit@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGJvYg
+    - document:report-1#view@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGNhcm9s
+    - document:report-1#edit@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGRhdmU
+    - document:report-1#view@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGZyYW5r
+    - document:globex-report#view@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGVyaW4
+  assertFalse:
+    - document:report-1#delete@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGJvYg
+    - document:report-1#edit@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGNhcm9s
+    - document:report-1#edit@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGZyYW5r
+    - document:report-1#view@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGVyaW4
+    - document:globex-report#view@user:v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGFsaWNl

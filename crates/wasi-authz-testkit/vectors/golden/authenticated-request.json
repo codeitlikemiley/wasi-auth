@@ -1,0 +1,34 @@
+{
+  "subject": {
+    "type": "user",
+    "id": "alice",
+    "properties": {
+      "wasi_authz": {
+        "state": "authenticated",
+        "issuer": "https://identity.example",
+        "scopes": ["documents.read"]
+      }
+    }
+  },
+  "action": {
+    "name": "document.read",
+    "properties": {
+      "wasi_authz": {}
+    }
+  },
+  "resource": {
+    "type": "document",
+    "id": "report-1",
+    "properties": {
+      "wasi_authz": {}
+    }
+  },
+  "context": {
+    "wasi_authz": {
+      "consistency": {
+        "mode": "minimize_latency"
+      },
+      "request_id": "request-1"
+    }
+  }
+}

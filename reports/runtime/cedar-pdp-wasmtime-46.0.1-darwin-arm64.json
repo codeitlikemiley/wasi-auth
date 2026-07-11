@@ -1,0 +1,45 @@
+{
+  "artifact": {
+    "bytes": 6068427,
+    "sha256": "5c62158d32834e0b6bf50d93dec9ddceca486b3e665740070364d7df6791c352"
+  },
+  "cold_start_ms": {
+    "max": 120.351,
+    "p50": 72.937,
+    "p95": 120.351,
+    "trials": [
+      120.351,
+      75.844,
+      69.126,
+      69.776,
+      72.937
+    ]
+  },
+  "flags": [
+    "-W component-model-async=y",
+    "-S p3=y",
+    "-S cli=y",
+    "-S http=y"
+  ],
+  "load": {
+    "concurrency": 16,
+    "errors": 0,
+    "latency_ms": {
+      "max": 7.847,
+      "p50": 2.966,
+      "p95": 5.968,
+      "p99": 7.146
+    },
+    "peak_host_rss_kib": 72832,
+    "requests": 200,
+    "throughput_requests_per_second": 2343.92
+  },
+  "platform": {
+    "machine": "arm64",
+    "python": "3.13.7",
+    "system": "Darwin"
+  },
+  "runtime": "wasmtime 46.0.1 (823d1b8f2 2026-06-24)",
+  "support_status": "candidate",
+  "verification_scope": "local cold-start and bounded concurrency probe; production soak and CI matrix remain required"
+}

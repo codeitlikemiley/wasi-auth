@@ -1,0 +1,11 @@
+{
+  "subject": {
+    "type": "anonymous",
+    "id": "anonymous",
+    "properties": {"wasi_authz": {"state": "anonymous"}},
+    "vendor_extension": {"trace_hint": "safe-correlation-only"}
+  },
+  "action": {"name": "document.read", "properties": {"wasi_authz": {}}},
+  "resource": {"type": "document", "id": "report-1", "properties": {"wasi_authz": {}}},
+  "vendor_extension": {"revision": 2}
+}

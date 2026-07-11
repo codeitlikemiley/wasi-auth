@@ -1,0 +1,44 @@
+# Rust and fuzz build output
+/target/
+/fuzz/target/
+/fuzz/artifacts/
+/fuzz/corpus/
+
+# Generated release files that are local-only. Deterministic release metadata
+# below remains tracked and is revalidated by CI.
+/artifacts/*
+/artifacts/components/
+/artifacts/native/
+/artifacts/provenance.intoto.json
+/artifacts/RELEASE-SHA256SUMS
+!/artifacts/SHA256SUMS
+!/artifacts/sbom/
+!/artifacts/sbom/*.cdx.json
+
+/reports/*
+/reports/supply-chain/
+!/reports/wit/
+!/reports/wit/*.wit
+!/reports/runtime/
+!/reports/runtime/*.json
+!/reports/semver/
+!/reports/semver/*.md
+
+# Local tooling and editor state
+.spin/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.vscode/
+.idea/
+.env
+.env.*
+!.env.example
+
+# Temporary and OS files
+*.tmp
+**/*.rs.bk
+*.swp
+*.swo
+.DS_Store

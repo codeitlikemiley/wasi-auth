@@ -1,0 +1,26 @@
+[package]
+name = "wasi-authz-cedar-pdp-component"
+description = "Final-WASIp3 reference AuthZEN service backed by Cedar"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+bytes.workspace = true
+http.workspace = true
+http-body-util.workspace = true
+wasi-authz-cedar-pdp = { path = "../../services/cedar-pdp", version = "=0.1.0-alpha.3" }
+wasi-authz-client.workspace = true
+wasi-authz-contract.workspace = true
+wasip3.workspace = true
+
+[lints]
+workspace = true

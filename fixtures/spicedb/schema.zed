@@ -1,0 +1,34 @@
+definition user {}
+
+definition group {
+    relation member: user | group#member
+}
+
+definition tenant {
+    relation member: user | group#member
+    permission access = member
+}
+
+definition folder {
+    relation tenant: tenant
+    relation parent: folder
+    relation viewer: user | group#member
+    relation editor: user | group#member
+
+    permission tenant_member = tenant->access
+    permission view = tenant_member & (viewer + editor + parent->view)
+    permission edit = tenant_member & (editor + parent->edit)
+}
+
+definition document {
+    relation tenant: tenant
+    relation parent: folder
+    relation owner: user
+    relation viewer: user | group#member
+    relation editor: user | group#member
+
+    permission tenant_member = tenant->access
+    permission view = tenant_member & (owner + viewer + editor + parent->view)
+    permission edit = tenant_member & (owner + editor + parent->edit)
+    permission delete = tenant_member & owner
+}

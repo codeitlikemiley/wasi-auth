@@ -1,0 +1,191 @@
+package root:component;
+
+world root {
+  import wasi:http/types@0.3.0;
+  import wasi:cli/environment@0.3.0;
+  import wasi:io/error@0.2.6;
+  import wasi:io/streams@0.2.6;
+  import wasi:cli/environment@0.2.6;
+  import wasi:cli/exit@0.2.6;
+  import wasi:cli/stderr@0.2.6;
+  import wasi:random/insecure-seed@0.2.6;
+
+  export wasi:http/handler@0.3.0;
+}
+package wasi:http@0.3.0 {
+  interface types {
+    resource request {
+      get-method: func() -> method;
+      get-path-with-query: func() -> option<string>;
+      get-scheme: func() -> option<scheme>;
+      get-authority: func() -> option<string>;
+      get-options: func() -> option<request-options>;
+      get-headers: func() -> headers;
+      consume-body: static func(this: request, res: future<result<_, error-code>>) -> tuple<stream<u8>, future<result<option<trailers>, error-code>>>;
+    }
+
+    resource response {
+      new: static func(headers: headers, contents: option<stream<u8>>, trailers: future<result<option<trailers>, error-code>>) -> tuple<response, future<result<_, error-code>>>;
+      set-status-code: func(status-code: status-code) -> result;
+    }
+
+    resource fields {
+      from-list: static func(entries: list<tuple<field-name, field-value>>) -> result<fields, header-error>;
+      get: func(name: field-name) -> list<field-value>;
+      copy-all: func() -> list<tuple<field-name, field-value>>;
+    }
+
+    type headers = fields;
+
+    record DNS-error-payload {
+      rcode: option<string>,
+      info-code: option<u16>,
+    }
+
+    record TLS-alert-received-payload {
+      alert-id: option<u8>,
+      alert-message: option<string>,
+    }
+
+    record field-size-payload {
+      field-name: option<string>,
+      field-size: option<u32>,
+    }
+
+    variant error-code {
+      DNS-timeout,
+      DNS-error(DNS-error-payload),
+      destination-not-found,
+      destination-unavailable,
+      destination-IP-prohibited,
+      destination-IP-unroutable,
+      connection-refused,
+      connection-terminated,
+      connection-timeout,
+      connection-read-timeout,
+      connection-write-timeout,
+      connection-limit-reached,
+      TLS-protocol-error,
+      TLS-certificate-error,
+      TLS-alert-received(TLS-alert-received-payload),
+      HTTP-request-denied,
+      HTTP-request-length-required,
+      HTTP-request-body-size(option<u64>),
+      HTTP-request-method-invalid,
+      HTTP-request-URI-invalid,
+      HTTP-request-URI-too-long,
+      HTTP-request-header-section-size(option<u32>),
+      HTTP-request-header-size(option<field-size-payload>),
+      HTTP-request-trailer-section-size(option<u32>),
+      HTTP-request-trailer-size(field-size-payload),
+      HTTP-response-incomplete,
+      HTTP-response-header-section-size(option<u32>),
+      HTTP-response-header-size(field-size-payload),
+      HTTP-response-body-size(option<u64>),
+      HTTP-response-trailer-section-size(option<u32>),
+      HTTP-response-trailer-size(field-size-payload),
+      HTTP-response-transfer-coding(option<string>),
+      HTTP-response-content-coding(option<string>),
+      HTTP-response-timeout,
+      HTTP-upgrade-failed,
+      HTTP-protocol-error,
+      loop-detected,
+      configuration-error,
+      internal-error(option<string>),
+    }
+
+    type trailers = fields;
+
+    resource request-options {
+      clone: func() -> request-options;
+    }
+
+    type field-name = string;
+
+    type field-value = list<u8>;
+
+    variant header-error {
+      invalid-syntax,
+      forbidden,
+      immutable,
+      size-exceeded,
+      other(option<string>),
+    }
+
+    variant method {
+      get,
+      head,
+      post,
+      put,
+      delete,
+      connect,
+      options,
+      trace,
+      patch,
+      other(string),
+    }
+
+    variant scheme {
+      HTTP,
+      HTTPS,
+      other(string),
+    }
+
+    type status-code = u16;
+  }
+  interface handler {
+    use types.{request, response, error-code};
+
+    handle: async func(request: request) -> result<response, error-code>;
+  }
+}
+
+
+package wasi:cli@0.3.0 {
+  interface environment {
+    get-environment: func() -> list<tuple<string, string>>;
+  }
+}
+
+
+package wasi:io@0.2.6 {
+  interface error {
+    resource error {
+      to-debug-string: func() -> string;
+    }
+  }
+  interface streams {
+    use error.{error};
+
+    resource output-stream {
+      blocking-write-and-flush: func(contents: list<u8>) -> result<_, stream-error>;
+    }
+
+    variant stream-error {
+      last-operation-failed(error),
+      closed,
+    }
+  }
+}
+
+
+package wasi:cli@0.2.6 {
+  interface environment {
+    get-environment: func() -> list<tuple<string, string>>;
+  }
+  interface exit {
+    exit: func(status: result);
+  }
+  interface stderr {
+    use wasi:io/streams@0.2.6.{output-stream};
+
+    get-stderr: func() -> output-stream;
+  }
+}
+
+
+package wasi:random@0.2.6 {
+  interface insecure-seed {
+    insecure-seed: func() -> tuple<u64, u64>;
+  }
+}

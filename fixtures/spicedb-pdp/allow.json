@@ -1,0 +1,28 @@
+{
+  "subject": {
+    "type": "principal",
+    "id": "user-1",
+    "properties": {
+      "wasi_authz": {
+        "state": "authenticated",
+        "issuer": "middleware-secret-issuer-sentinel",
+        "scopes": []
+      }
+    }
+  },
+  "action": {
+    "name": "counter.increment",
+    "properties": {"wasi_authz": {}}
+  },
+  "resource": {
+    "type": "counter",
+    "id": "session-counter",
+    "properties": {"wasi_authz": {}}
+  },
+  "context": {
+    "wasi_authz": {
+      "consistency": {"mode": "fully_consistent"},
+      "request_id": "spicedb-pdp-allow"
+    }
+  }
+}

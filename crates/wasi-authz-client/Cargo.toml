@@ -1,0 +1,28 @@
+[package]
+name = "wasi-authz-client"
+description = "Transport-neutral AuthZEN client with additive WASIp2 and WASIp3 transports"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+wasip2 = ["dep:futures", "dep:wasi"]
+wasip3 = ["dep:bytes", "dep:futures", "dep:http-body-util", "dep:wasip3"]
+
+[dependencies]
+bytes = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+http.workspace = true
+http-body-util = { workspace = true, optional = true }
+thiserror.workspace = true
+wasi = { version = "=0.14.7", optional = true }
+wasi-authz-contract.workspace = true
+wasip3 = { workspace = true, optional = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,30 @@
+[package]
+name = "leptos-wasi-authz"
+description = "Typed Leptos context and server-function authorization layers for wasi-authz"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+axum-core.workspace = true
+bytes.workspace = true
+futures.workspace = true
+http.workspace = true
+leptos.workspace = true
+server_fn.workspace = true
+thiserror.workspace = true
+wasi-authz-client.workspace = true
+wasi-authz-contract.workspace = true
+wasi-authz-http = { path = "../wasi-authz-http", version = "=0.1.0-alpha.3" }
+wasi-http-metadata.workspace = true
+
+[dev-dependencies]
+http-body-util.workspace = true
+wasi-authz-testkit = { path = "../wasi-authz-testkit", version = "=0.1.0-alpha.3" }
+
+[lints]
+workspace = true

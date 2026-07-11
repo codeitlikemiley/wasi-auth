@@ -1,0 +1,8 @@
+[advisories]
+# These are informational unmaintained notices in the Leptos 0.8 dependency
+# graph, not known vulnerabilities. They remain visible in SECURITY.md and are
+# reviewed before every release.
+ignore = [
+    "RUSTSEC-2024-0436", # paste
+    "RUSTSEC-2026-0173", # proc-macro-error2
+]

@@ -1,0 +1,8 @@
+{
+  "decision": false,
+  "context": {
+    "wasi_authz": {
+      "reason_code": "policy.deny"
+    }
+  }
+}

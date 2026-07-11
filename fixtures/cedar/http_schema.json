@@ -1,0 +1,133 @@
+{
+  "": {
+    "entityTypes": {
+      "Anonymous": {
+        "shape": {"type": "Record", "attributes": {}}
+      },
+      "principal": {
+        "shape": {
+          "type": "Record",
+          "attributes": {
+            "wasi_issuer": {"type": "String", "required": true},
+            "wasi_scopes": {
+              "type": "Set",
+              "element": {"type": "String"},
+              "required": true
+            },
+            "wasi_tenant_id": {"type": "String", "required": false},
+            "roles": {
+              "type": "Record",
+              "attributes": {
+                "value": {"type": "Set", "element": {"type": "String"}, "required": true},
+                "provenance": {"type": "String", "required": true}
+              },
+              "required": false
+            },
+            "acr": {
+              "type": "Record",
+              "attributes": {
+                "value": {"type": "String", "required": true},
+                "provenance": {"type": "String", "required": true}
+              },
+              "required": false
+            },
+            "amr": {
+              "type": "Record",
+              "attributes": {
+                "value": {"type": "Set", "element": {"type": "String"}, "required": true},
+                "provenance": {"type": "String", "required": true}
+              },
+              "required": false
+            },
+            "actor_issuer": {
+              "type": "Record",
+              "attributes": {
+                "value": {"type": "String", "required": true},
+                "provenance": {"type": "String", "required": true}
+              },
+              "required": false
+            },
+            "actor_subject": {
+              "type": "Record",
+              "attributes": {
+                "value": {"type": "String", "required": true},
+                "provenance": {"type": "String", "required": true}
+              },
+              "required": false
+            },
+            "auth_time": {
+              "type": "Record",
+              "attributes": {
+                "value": {"type": "Long", "required": true},
+                "provenance": {"type": "String", "required": true}
+              },
+              "required": false
+            },
+            "expires_at": {
+              "type": "Record",
+              "attributes": {
+                "value": {"type": "Long", "required": true},
+                "provenance": {"type": "String", "required": true}
+              },
+              "required": false
+            }
+          }
+        }
+      },
+      "service": {
+        "shape": {"type": "Record", "attributes": {}}
+      },
+      "counter": {
+        "shape": {
+          "type": "Record",
+          "attributes": {
+            "classification": {
+              "type": "Record",
+              "attributes": {
+                "value": {"type": "String", "required": true},
+                "provenance": {"type": "String", "required": true}
+              },
+              "required": true
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "http.request": {
+        "appliesTo": {
+          "principalTypes": ["Anonymous", "principal"],
+          "resourceTypes": ["service"],
+          "context": {
+            "type": "Record",
+            "attributes": {
+              "http_method": {
+                "type": "Record",
+                "attributes": {
+                  "value": {"type": "String", "required": true},
+                  "provenance": {"type": "String", "required": true}
+                },
+                "required": true
+              },
+              "http_path": {
+                "type": "Record",
+                "attributes": {
+                  "value": {"type": "String", "required": true},
+                  "provenance": {"type": "String", "required": true}
+                },
+                "required": true
+              }
+            }
+          }
+        }
+      },
+      "counter.increment": {
+        "appliesTo": {
+          "principalTypes": ["principal"],
+          "resourceTypes": ["counter"],
+          "context": {"type": "Record", "attributes": {}}
+        }
+      }
+    }
+  }
+}

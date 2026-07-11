@@ -1,0 +1,76 @@
+[release]
+version = "0.1.0-alpha.3"
+channel = "alpha"
+publish = false
+
+[rust]
+msrv = "1.93.0"
+current_stable = "stable"
+component_target = "wasm32-wasip2"
+native_ci_target = "x86_64-unknown-linux-gnu"
+
+[wasi]
+http = "0.3.0"
+wasip2_crate = "0.14.7"
+wasip3_crate = "0.7.0"
+wit_bindgen = "0.59.0"
+
+[runtimes]
+wasmtime = "46.0.1"
+spin_stable = "4.0.2"
+spin_main_version = "4.1.0-pre0"
+spin_main_revision = "c34c584dbf77b3a3528ad0536aa9ce4761b9f772"
+spin_main_final_wasi_terminal = true
+spin_main_final_wasi_outbound_http = true
+spin_main_precomposed_default_features = false
+spin_main_native_middleware = false
+spin_sdk = "6.0.0"
+spin_middleware_revision = "27451471b8ba0faeffa01c5a4ddd6daee9a9d526"
+spin_final_wasi_blocking = false
+
+[tools]
+wasm_tools = "1.253.0"
+wac = "0.10.1"
+cargo_audit = "0.22.1"
+cargo_deny = "0.20.2"
+cargo_cyclonedx = "0.5.9"
+cargo_fuzz = "0.13.2"
+cargo_semver_checks = "0.48.0"
+fuzz_rust = "nightly-2026-03-06"
+cosign = "3.1.1"
+oras = "1.3.2"
+spicedb = "1.54.0"
+zed = "1.1.1"
+
+[browser_integration]
+wasm_bindgen = "0.2.126"
+wasm_bindgen_wasi_fix = "0.2.123"
+
+[tool_artifacts]
+spicedb_darwin_amd64_sha256 = "f99e1c15bc411d066e7d2dd1a700a97c768f9f645e5827972c2603b29c8f2a63"
+spicedb_darwin_arm64_sha256 = "af91d56cc8093f5dd003ef21fb46715c7803ec3c6b81a30f25bf5d05a2881ec7"
+spicedb_linux_amd64_sha256 = "ba276d5c7e222dfdd06700a1514f614e38a4bd95eccbe2be129433155d8a7c9b"
+spicedb_linux_arm64_sha256 = "b58da5caabcfe6ebed6a5f1b875ca0c59655e3787d01b9f03db722f1c33ea3ad"
+zed_darwin_amd64_sha256 = "43454c28de34a68018b105076b71f4f43d8142b76c907d7e019594fbecaa129f"
+zed_darwin_arm64_sha256 = "67247f0054ea07c12dd1853393f4611ca2f1791319a43ad28e303d0e2bedcedf"
+zed_linux_amd64_sha256 = "2a0901904302a9f59bf35f96dd904897b7664f79a8cc2eede594422468ceb34b"
+zed_linux_arm64_sha256 = "e5a71c403adff0f87f73684ab375dd87683449c4cf531ce6c1beef8cf5c50871"
+
+[protocols]
+authzen = "1.0-final"
+
+[baselines]
+initial_alpha_contract = "043f5b6"
+
+[providers]
+cedar_policy = "4.11.2"
+
+[dependencies]
+wasi_http_middleware = "0.2.0-alpha.3"
+wasi_http_middleware_revision = "006352a4d334cef06e7a5f8bdafe8968861cab8b"
+
+[support]
+wasmtime_final_wasi = true
+spin_final_wasi = false
+spin_main_final_wasi_terminal = "experimental"
+spin_middleware = false

@@ -1,0 +1,33 @@
+{
+  "subject": {
+    "type": "anonymous",
+    "id": "anonymous",
+    "properties": {"wasi_authz": {"state": "anonymous"}}
+  },
+  "action": {
+    "name": "http.request",
+    "properties": {"wasi_authz": {}}
+  },
+  "resource": {
+    "type": "service",
+    "id": "leptos-wasi-counter",
+    "properties": {"wasi_authz": {}}
+  },
+  "context": {
+    "wasi_authz": {
+      "attributes": [
+        {
+          "name": "http_method",
+          "value": {"type": "string", "value": "GET"},
+          "provenance": "gateway"
+        },
+        {
+          "name": "http_path",
+          "value": {"type": "string", "value": "/"},
+          "provenance": "gateway"
+        }
+      ],
+      "request_id": "cold-start-probe"
+    }
+  }
+}

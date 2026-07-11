@@ -1,0 +1,12 @@
+{
+  "decision": true,
+  "context": {
+    "wasi_authz": {
+      "decision_id": "decision-1",
+      "policy_revision": "policy-1",
+      "model": "cedar",
+      "model_version": "4.11.2",
+      "reason_code": "cedar.allow"
+    }
+  }
+}

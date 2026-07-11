@@ -1,0 +1,26 @@
+[package]
+name = "wasi-authz-spicedb-pdp-component"
+description = "Final-WASIp3 AuthZEN service backed by SpiceDB"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+bytes.workspace = true
+http.workspace = true
+http-body-util.workspace = true
+wasi-authz-client = { workspace = true, features = ["wasip3"] }
+wasi-authz-contract.workspace = true
+wasi-authz-spicedb = { path = "../../crates/wasi-authz-spicedb", version = "=0.1.0-alpha.3" }
+wasip3.workspace = true
+
+[lints]
+workspace = true

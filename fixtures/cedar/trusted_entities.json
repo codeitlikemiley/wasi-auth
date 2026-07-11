@@ -1,0 +1,36 @@
+[
+  {
+    "uid": {
+      "type": "user",
+      "id": "v1_aHR0cHM6Ly9pZGVudGl0eS5leGFtcGxlAGFsaWNl"
+    },
+    "attrs": {},
+    "parents": [
+      {
+        "type": "Role",
+        "id": "reader"
+      }
+    ]
+  },
+  {
+    "uid": {
+      "type": "Role",
+      "id": "reader"
+    },
+    "attrs": {},
+    "parents": [
+      {
+        "type": "Role",
+        "id": "employee"
+      }
+    ]
+  },
+  {
+    "uid": {
+      "type": "Role",
+      "id": "employee"
+    },
+    "attrs": {},
+    "parents": []
+  }
+]

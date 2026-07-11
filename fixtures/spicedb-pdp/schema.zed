@@ -1,0 +1,10 @@
+definition principal {}
+
+definition group {
+    relation member: principal | group#member
+}
+
+definition counter {
+    relation incrementer: principal | group#member
+    permission increment = incrementer
+}

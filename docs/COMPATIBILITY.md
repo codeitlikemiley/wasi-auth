@@ -1,0 +1,65 @@
+# Compatibility
+
+| Surface | Status in `0.1.0-alpha.3` |
+|---|---|
+| Rust | MSRV 1.93; current stable is tested separately |
+| AuthZEN Authorization API | Final 1.0 bounded access-evaluation profile |
+| Unknown standard members | Ignored as AuthZEN requires |
+| `wasi_authz` extension | Strictly parsed and crate-versioned; unknown members rejected |
+| Decision obligations | Null/empty array/object ignored; non-empty or scalar rejected fail-closed |
+| Decision caching | Unsupported |
+| Native Rust | Supported |
+| WASIp2 outbound HTTP | Additive `wasip2` client feature with an injected cancellation-safe pollable waiter |
+| WASIp3 outbound HTTP | Additive `wasip3` client feature using `wasip3` 0.7.0 and final `wasi:http@0.3.0` |
+| Component bindings | `wit-bindgen` 0.59.0; `wasip3` also carries its own internal binding-generator dependency |
+| Browser bindings | `wasm-bindgen` 0.2.126 in the locked Leptos/browser graph; unrelated to the WASI HTTP ABI |
+| Wasmtime | `46.0.1`, final-WASI component contract |
+| Spin 4.0.2 | Tagged compatibility canary; final-WASI linking is unavailable |
+| Spin main `c34c584...` (`4.1.0-pre0`) | Experimental final-WASI terminal/outbound-HTTP canary; native middleware is still RC-only and no tagged support is claimed |
+| Cedar | Embedded provider and native reference PDP |
+| SpiceDB | CheckPermission adapter tested with `1.54.0` |
+| Leptos | Typed request/server-function helpers |
+| Non-HTTP triggers | Reuse contract/provider; trigger-specific PEP required |
+
+The AuthZEN specification permits extensions and requires unknown standard
+members to be ignored. This project follows that rule outside its own reserved
+namespace. Inside `wasi_authz`, strict parsing prevents unrecognized
+enforcement instructions from crossing the trust boundary.
+
+Exact versions and the unpublished sibling source revision live in
+[`compatibility.toml`](../compatibility.toml). The authoritative operational
+matrix is [Production support](SUPPORT.md).
+
+The browser and component binding versions serve different targets.
+`wasm-bindgen` supports the Leptos browser artifact, while `wit-bindgen` and
+`wasip3` define the component-facing final-WASI contract. Updating one is not
+evidence that the other ABI or runtime lane is compatible.
+
+## WASIp2 alpha API correction
+
+The unpublished pre-release shape `Wasip2Transport::new()` used blocking
+Preview 2 stream adapters and separate per-phase timeouts. It has intentionally
+been removed. Construct the transport with the owning runtime's waiter instead:
+
+```ignore
+let transport = Wasip2Transport::new(LeptosPollableWaiter);
+```
+
+`LeptosPollableWaiter` implements `PollableWaiter` by delegating to
+`leptos_wasi::wasip2::WaitPoll`; the complete adapter is in the transport's
+Rustdoc. Other executors must provide equivalent cancellation-on-drop behavior.
+There is no supported blocking compatibility constructor.
+
+## WASIp3 component lifecycle
+
+The WASIp3 transport constructs final-WASI request resources directly. It
+concurrently drives body upload, the outbound send, and the transmission result
+under one absolute deadline, then collects a bounded response and awaits and
+discards provider trailers before declaring the exchange complete. It does not
+depend on a second executor hidden inside `http_compat`.
+
+Response metadata is fail-closed: duplicate headers are preserved, sensitive
+headers are marked sensitive, and `Content-Length` must be one decimal value
+that is within the response limit and exactly matches the collected body.
+Malformed, duplicate, oversized, or mismatched lengths are protocol failures.
+Host error strings are never returned through the transport error surface.

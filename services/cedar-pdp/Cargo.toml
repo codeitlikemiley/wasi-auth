@@ -1,0 +1,20 @@
+[package]
+name = "wasi-authz-cedar-pdp"
+description = "Deployable reference AuthZEN service backed by Cedar"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+http.workspace = true
+wasi-authz-cedar = { path = "../../crates/wasi-authz-cedar", version = "=0.1.0-alpha.3" }
+wasi-authz-client.workspace = true
+wasi-authz-contract.workspace = true
+
+[lints]
+workspace = true
