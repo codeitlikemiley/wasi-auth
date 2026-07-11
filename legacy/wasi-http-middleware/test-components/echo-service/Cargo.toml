@@ -1,0 +1,22 @@
+[package]
+name = "wasi-http-middleware-echo-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Terminal WASIp3 HTTP fixture for middleware conformance tests"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+http.workspace = true
+wasi-http-metadata.workspace = true
+wasip3 = { workspace = true, features = ["async-spawn"] }
+wit-bindgen.workspace = true
+
+[lints]
+workspace = true
