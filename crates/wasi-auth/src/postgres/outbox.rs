@@ -53,8 +53,8 @@ impl PublicBaseUrl {
         Ok(Self(value.trim_end_matches('/').to_owned()))
     }
 
-    fn verification_url(&self, token: &str) -> String {
-        format!("{}/verify-email?token={token}", self.0)
+    fn one_time_url(&self, path: &str, token: &str) -> String {
+        format!("{}{path}?token={token}", self.0)
     }
 }
 
@@ -97,7 +97,7 @@ impl Drop for OutboxLease {
 }
 
 #[derive(Deserialize)]
-struct VerificationMailPayload {
+struct MailPayload {
     version: u8,
     kind: String,
     recipient: String,
@@ -105,7 +105,7 @@ struct VerificationMailPayload {
     redirect_uri: String,
 }
 
-impl Drop for VerificationMailPayload {
+impl Drop for MailPayload {
     fn drop(&mut self) {
         self.token.zeroize();
     }
@@ -253,23 +253,39 @@ where
                 .open(&lease.key_version, &lease.payload_ciphertext)
                 .map_err(|_| ())?,
         );
-        let payload =
-            serde_json::from_slice::<VerificationMailPayload>(&plaintext).map_err(|_| ())?;
+        let payload = serde_json::from_slice::<MailPayload>(&plaintext).map_err(|_| ())?;
         if payload.version != 1
-            || payload.kind != "email_verification"
             || !payload.redirect_uri.starts_with('/')
             || payload.redirect_uri.starts_with("//")
         {
             return Err(());
         }
+        let (kind, subject, path) = match payload.kind.as_str() {
+            "email_verification" => (
+                EmailKind::Verification,
+                "Verify your email",
+                "/verify-email",
+            ),
+            "password_reset" => (
+                EmailKind::PasswordReset,
+                "Reset your password",
+                "/reset-password",
+            ),
+            "invitation" => (
+                EmailKind::Invitation,
+                "Organization invitation",
+                "/invitations/accept",
+            ),
+            _ => return Err(()),
+        };
         let recipient = Recipient::new(payload.recipient.clone()).map_err(|_| ())?;
         EmailMessage::new(
-            EmailKind::Verification,
+            kind,
             recipient,
-            "Verify your email",
+            subject,
             format!(
-                "Open this one-time verification link: {}",
-                self.public_base_url.verification_url(&payload.token)
+                "Open this one-time link: {}",
+                self.public_base_url.one_time_url(path, &payload.token)
             ),
             lease.deduplication_key.clone(),
         )

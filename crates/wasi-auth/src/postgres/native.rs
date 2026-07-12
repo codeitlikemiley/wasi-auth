@@ -58,6 +58,14 @@ impl NativePostgresTransport {
 impl PostgresTransport for NativePostgresTransport {
     type Error = NativePostgresError;
 
+    fn violates_constraint(error: &Self::Error, constraint: &str) -> bool {
+        matches!(
+            error,
+            NativePostgresError::Postgres(error)
+                if error.as_db_error().and_then(|error| error.constraint()) == Some(constraint)
+        )
+    }
+
     async fn query(
         &self,
         sql: &'static str,

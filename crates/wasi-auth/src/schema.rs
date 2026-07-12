@@ -59,10 +59,34 @@ pub const POSTGRES_OUTBOX_0002: SchemaMigration = SchemaMigration {
     sql: include_str!("../migrations/postgres/0002_outbox_delivery_id.sql"),
 };
 
+/// Organization-management integrity and stable audit cursor extension.
+pub const POSTGRES_MANAGEMENT_0003: SchemaMigration = SchemaMigration {
+    version: "0003_management_integrity",
+    sql: include_str!("../migrations/postgres/0003_management_integrity.sql"),
+};
+
+/// Database-enforced active-organization owner invariant.
+pub const POSTGRES_OWNER_INVARIANT_0004: SchemaMigration = SchemaMigration {
+    version: "0004_owner_invariant",
+    sql: include_str!("../migrations/postgres/0004_owner_invariant.sql"),
+};
+
+/// Owner-trigger authorization-revision integration and existing-data guard.
+pub const POSTGRES_OWNER_TRIGGER_0005: SchemaMigration = SchemaMigration {
+    version: "0005_owner_trigger_revision",
+    sql: include_str!("../migrations/postgres/0005_owner_trigger_revision.sql"),
+};
+
 /// Returns the complete ordered relational-kernel migration catalog.
 #[must_use]
 pub const fn schema_migrations() -> &'static [SchemaMigration] {
-    &[POSTGRES_RELATIONAL_0001, POSTGRES_OUTBOX_0002]
+    &[
+        POSTGRES_RELATIONAL_0001,
+        POSTGRES_OUTBOX_0002,
+        POSTGRES_MANAGEMENT_0003,
+        POSTGRES_OWNER_INVARIANT_0004,
+        POSTGRES_OWNER_TRIGGER_0005,
+    ]
 }
 
 /// Validates applied history and returns the pending suffix.
@@ -123,7 +147,13 @@ mod tests {
     fn empty_database_plans_complete_schema() {
         assert_eq!(
             plan_schema(&[]),
-            Ok(vec![POSTGRES_RELATIONAL_0001, POSTGRES_OUTBOX_0002])
+            Ok(vec![
+                POSTGRES_RELATIONAL_0001,
+                POSTGRES_OUTBOX_0002,
+                POSTGRES_MANAGEMENT_0003,
+                POSTGRES_OWNER_INVARIANT_0004,
+                POSTGRES_OWNER_TRIGGER_0005,
+            ])
         );
     }
 
@@ -137,6 +167,18 @@ mod tests {
             AppliedSchemaMigration {
                 version: POSTGRES_OUTBOX_0002.version().to_owned(),
                 checksum: POSTGRES_OUTBOX_0002.checksum_hex(),
+            },
+            AppliedSchemaMigration {
+                version: POSTGRES_MANAGEMENT_0003.version().to_owned(),
+                checksum: POSTGRES_MANAGEMENT_0003.checksum_hex(),
+            },
+            AppliedSchemaMigration {
+                version: POSTGRES_OWNER_INVARIANT_0004.version().to_owned(),
+                checksum: POSTGRES_OWNER_INVARIANT_0004.checksum_hex(),
+            },
+            AppliedSchemaMigration {
+                version: POSTGRES_OWNER_TRIGGER_0005.version().to_owned(),
+                checksum: POSTGRES_OWNER_TRIGGER_0005.checksum_hex(),
             },
         ];
 

@@ -33,8 +33,14 @@ const IDEMPOTENCY_TTL_MS: u64 = 24 * 60 * 60 * 1_000;
 const OUTBOX_AAD: &[u8] = b"wasi-auth:email-verification:v1";
 const LOAD_PASSWORD_LOGIN_SQL: &str = include_str!("load_password_login.sql");
 const ISSUE_PASSWORD_SESSION_SQL: &str = include_str!("issue_password_session.sql");
+const LOAD_PASSWORD_BY_USER_SQL: &str = include_str!("load_password_by_user.sql");
+const CHANGE_PASSWORD_SQL: &str = include_str!("change_password.sql");
 const VERIFY_EMAIL_SQL: &str = include_str!("verify_email.sql");
+const RESEND_EMAIL_VERIFICATION_SQL: &str = include_str!("resend_email_verification.sql");
+const START_PASSWORD_RESET_SQL: &str = include_str!("start_password_reset.sql");
+const COMPLETE_PASSWORD_RESET_SQL: &str = include_str!("complete_password_reset.sql");
 const DEFAULT_SESSION_TTL_MS: u64 = 60 * 60 * 1_000;
+const PASSWORD_RESET_TTL_MS: u64 = 15 * 60 * 1_000;
 const DUMMY_PASSWORD_HASH: &str =
     "argon2id$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
@@ -124,7 +130,7 @@ impl OutboxSealingKey {
         Ok(Self { key_version, key })
     }
 
-    fn seal(
+    pub(crate) fn seal(
         &self,
         nonce: [u8; OUTBOX_NONCE_BYTES],
         plaintext: &[u8],
@@ -192,6 +198,41 @@ pub struct PasswordRegistrationRequest {
     email: String,
     password: String,
     redirect_uri: String,
+}
+
+/// Generic email-verification resend input.
+pub struct EmailVerificationResendRequest {
+    email: String,
+    request_id: RequestId,
+    redirect_uri: String,
+}
+
+impl EmailVerificationResendRequest {
+    /// Constructs a resend request. The workflow always returns a generic
+    /// accepted response so account state cannot be enumerated.
+    #[must_use]
+    pub fn new(
+        email: impl Into<String>,
+        request_id: RequestId,
+        redirect_uri: impl Into<String>,
+    ) -> Self {
+        Self {
+            email: email.into(),
+            request_id,
+            redirect_uri: redirect_uri.into(),
+        }
+    }
+}
+
+impl fmt::Debug for EmailVerificationResendRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("EmailVerificationResendRequest")
+            .field("email", &"[REDACTED]")
+            .field("request_id", &self.request_id)
+            .field("redirect_uri", &self.redirect_uri)
+            .finish()
+    }
 }
 
 impl PasswordRegistrationRequest {
@@ -281,6 +322,55 @@ impl Drop for PasswordLoginRequest {
     }
 }
 
+/// Step-up protected password-change input.
+pub struct PasswordChangeRequest {
+    user_id: UserId,
+    session_id: SessionId,
+    current_password: String,
+    new_password: String,
+    request_id: RequestId,
+}
+
+impl PasswordChangeRequest {
+    /// Constructs a password-change request from verified identity.
+    #[must_use]
+    pub fn new(
+        user_id: UserId,
+        session_id: SessionId,
+        current_password: impl Into<String>,
+        new_password: impl Into<String>,
+        request_id: RequestId,
+    ) -> Self {
+        Self {
+            user_id,
+            session_id,
+            current_password: current_password.into(),
+            new_password: new_password.into(),
+            request_id,
+        }
+    }
+}
+
+impl fmt::Debug for PasswordChangeRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PasswordChangeRequest")
+            .field("user_id", &self.user_id)
+            .field("session_id", &self.session_id)
+            .field("current_password", &"[REDACTED]")
+            .field("new_password", &"[REDACTED]")
+            .field("request_id", &self.request_id)
+            .finish()
+    }
+}
+
+impl Drop for PasswordChangeRequest {
+    fn drop(&mut self) {
+        self.current_password.zeroize();
+        self.new_password.zeroize();
+    }
+}
+
 /// Opaque email-verification completion input.
 pub struct EmailVerificationRequest {
     token: String,
@@ -321,6 +411,89 @@ impl Drop for EmailVerificationRequest {
     }
 }
 
+/// Privacy-preserving password-reset start input.
+#[derive(Clone)]
+pub struct PasswordResetStartRequest {
+    /// Account email. The result never reveals whether it exists.
+    pub email: String,
+    /// Validated local redirect after completion.
+    pub redirect_uri: String,
+    /// Request correlation identifier.
+    pub request_id: RequestId,
+}
+
+impl PasswordResetStartRequest {
+    /// Constructs a reset-start request.
+    #[must_use]
+    pub fn new(
+        email: impl Into<String>,
+        redirect_uri: impl Into<String>,
+        request_id: RequestId,
+    ) -> Self {
+        Self {
+            email: email.into(),
+            redirect_uri: redirect_uri.into(),
+            request_id,
+        }
+    }
+}
+
+impl fmt::Debug for PasswordResetStartRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PasswordResetStartRequest")
+            .field("email", &"[REDACTED]")
+            .field("redirect_uri", &self.redirect_uri)
+            .field("request_id", &self.request_id)
+            .finish()
+    }
+}
+
+/// Password-reset completion input containing one-time secrets.
+pub struct PasswordResetCompleteRequest {
+    token: String,
+    new_password: String,
+    request_id: RequestId,
+    redirect_uri: String,
+}
+
+impl PasswordResetCompleteRequest {
+    /// Constructs a password-reset completion request.
+    #[must_use]
+    pub fn new(
+        token: impl Into<String>,
+        new_password: impl Into<String>,
+        request_id: RequestId,
+        redirect_uri: impl Into<String>,
+    ) -> Self {
+        Self {
+            token: token.into(),
+            new_password: new_password.into(),
+            request_id,
+            redirect_uri: redirect_uri.into(),
+        }
+    }
+}
+
+impl fmt::Debug for PasswordResetCompleteRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PasswordResetCompleteRequest")
+            .field("token", &"[REDACTED]")
+            .field("new_password", &"[REDACTED]")
+            .field("request_id", &self.request_id)
+            .field("redirect_uri", &self.redirect_uri)
+            .finish()
+    }
+}
+
+impl Drop for PasswordResetCompleteRequest {
+    fn drop(&mut self) {
+        self.token.zeroize();
+        self.new_password.zeroize();
+    }
+}
+
 /// Successful browser password-login result.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PasswordLoginReceipt {
@@ -344,6 +517,30 @@ pub struct EmailVerificationReceipt {
     /// Session expiry in Unix milliseconds.
     pub expires_at_ms: u64,
     /// Whether the same active result was replayed after a transport retry.
+    pub replayed: bool,
+    /// Validated local redirect path.
+    pub redirect_uri: String,
+}
+
+/// Generic password-reset start result.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PasswordResetStartReceipt {
+    /// Always true for a structurally valid public request.
+    pub accepted: bool,
+    /// Public reset-token lifetime.
+    pub expires_in_seconds: u64,
+}
+
+/// Successful password reset and session rotation result.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PasswordResetReceipt {
+    /// Issued or replayed session identifier.
+    pub session_id: SessionId,
+    /// Reset account identifier.
+    pub user_id: UserId,
+    /// Session expiry in Unix milliseconds.
+    pub expires_at_ms: u64,
+    /// Whether a transport retry replayed the same active result.
     pub replayed: bool,
     /// Validated local redirect path.
     pub redirect_uri: String,
@@ -488,6 +685,69 @@ where
             .await
             .map_err(PasswordRegistrationError::Store)
     }
+
+    /// Rotates the verification token and queues another message when the
+    /// account is still pending. Missing, active, and rate-limited accounts
+    /// produce the same successful result and no mail.
+    ///
+    /// # Errors
+    ///
+    /// Returns validation, randomness, crypto, or PostgreSQL failures.
+    pub async fn resend_verification(
+        &self,
+        request: EmailVerificationResendRequest,
+    ) -> Result<(), PasswordRegistrationError<T::Error>> {
+        validate_resend_request(&request)?;
+        let now_ms = self.clock.now_unix_seconds().saturating_mul(1_000);
+        let normalized_email = request.email.trim().to_ascii_lowercase();
+        let mut token = [0_u8; VERIFICATION_TOKEN_BYTES];
+        let mut nonce = [0_u8; OUTBOX_NONCE_BYTES];
+        fill(&self.randomness, &mut token)?;
+        fill(&self.randomness, &mut nonce)?;
+        let token_text = URL_SAFE_NO_PAD.encode(token);
+        let token_hash: [u8; 32] = Sha256::digest(token_text.as_bytes()).into();
+        let mail_payload = serde_json::to_vec(&json!({
+            "version": 1,
+            "kind": "email_verification",
+            "recipient": normalized_email,
+            "token": token_text,
+            "redirect_uri": request.redirect_uri,
+        }))
+        .map_err(|_| PasswordRegistrationError::Crypto)?;
+        let outbox_payload = self
+            .outbox_key
+            .seal(nonce, &mail_payload)
+            .map_err(|_| PasswordRegistrationError::Crypto)?;
+        let outbox_id = uuid_v7(now_ms, &self.randomness)
+            .map_err(|_| PasswordRegistrationError::RandomnessUnavailable)?;
+        let audit_id = uuid_v7(now_ms, &self.randomness)
+            .map_err(|_| PasswordRegistrationError::RandomnessUnavailable)?;
+        let email_hash = URL_SAFE_NO_PAD.encode(Sha256::digest(normalized_email.as_bytes()));
+        self.store
+            .transport()
+            .query(
+                RESEND_EMAIL_VERIFICATION_SQL,
+                vec![
+                    PgValue::Text(normalized_email),
+                    PgValue::Bytes(token_hash.to_vec()),
+                    PgValue::Text(request.redirect_uri),
+                    PgValue::I64(u64_to_i64(now_ms.saturating_add(EMAIL_VERIFICATION_TTL_MS))),
+                    PgValue::Text(outbox_id.to_string()),
+                    PgValue::Text(format!("email-verification-resend:{outbox_id}")),
+                    PgValue::Text(outbox_payload.key_version),
+                    PgValue::Bytes(outbox_payload.ciphertext),
+                    PgValue::Text(audit_id.to_string()),
+                    PgValue::Text(request.request_id.as_str().to_owned()),
+                    PgValue::I64(u64_to_i64(now_ms)),
+                    PgValue::Text(format!("verification-resend:{email_hash}")),
+                ],
+            )
+            .await
+            .map_err(|error| {
+                PasswordRegistrationError::Store(PostgresStoreError::Transport(error))
+            })?;
+        Ok(())
+    }
 }
 
 /// Password authentication service using one read and one atomic write.
@@ -613,6 +873,71 @@ where
         })
     }
 
+    /// Changes a password after current-password and AAL2 session validation,
+    /// rotates the account security revision, and revokes every other session.
+    ///
+    /// # Errors
+    ///
+    /// Returns invalid request/credentials, randomness, cryptography, malformed
+    /// row, or PostgreSQL failures.
+    pub async fn change_password(
+        &self,
+        request: PasswordChangeRequest,
+    ) -> Result<(), PasswordLoginError<T::Error>> {
+        if request.current_password.is_empty()
+            || !(15..=128).contains(&request.new_password.chars().count())
+            || request.current_password == request.new_password
+        {
+            return Err(PasswordLoginError::InvalidRequest);
+        }
+        let record = self.load_record_by_user(&request.user_id).await?;
+        let candidate_hash = record
+            .as_ref()
+            .map_or(DUMMY_PASSWORD_HASH, |record| record.password_hash.as_str());
+        let verified = verify_password(&request.current_password, candidate_hash, self.argon2)
+            .map_err(|_| PasswordLoginError::Crypto)?;
+        let Some(record) = record else {
+            return Err(PasswordLoginError::InvalidCredentials);
+        };
+        if !verified || record.status != "active" {
+            return Err(PasswordLoginError::InvalidCredentials);
+        }
+        let now_ms = self.clock.now_unix_seconds().saturating_mul(1_000);
+        let mut salt = [0_u8; PASSWORD_SALT_BYTES];
+        self.randomness
+            .fill_bytes(&mut salt)
+            .map_err(|_| PasswordLoginError::RandomnessUnavailable)?;
+        let new_hash = hash_password(&request.new_password, salt, self.argon2)
+            .map_err(|_| PasswordLoginError::Crypto)?;
+        let audit_id = uuid_v7(now_ms, &self.randomness)
+            .map_err(|_| PasswordLoginError::RandomnessUnavailable)?;
+        let rows = self
+            .store
+            .transport()
+            .query(
+                CHANGE_PASSWORD_SQL,
+                vec![
+                    PgValue::Text(request.user_id.as_str().to_owned()),
+                    PgValue::Text(request.session_id.as_str().to_owned()),
+                    PgValue::Text(record.password_hash.clone()),
+                    PgValue::Text(new_hash),
+                    PgValue::I64(u64_to_i64(now_ms)),
+                    PgValue::Text(audit_id.to_string()),
+                    PgValue::Text(request.request_id.as_str().to_owned()),
+                ],
+            )
+            .await
+            .map_err(PasswordLoginError::Transport)?;
+        if rows
+            .first()
+            .is_some_and(|row| row.required_text("outcome").ok() == Some("changed"))
+        {
+            Ok(())
+        } else {
+            Err(PasswordLoginError::InvalidCredentials)
+        }
+    }
+
     async fn load_record(
         &self,
         normalized_email: &str,
@@ -623,6 +948,30 @@ where
             .query(
                 LOAD_PASSWORD_LOGIN_SQL,
                 vec![PgValue::Text(normalized_email.to_owned())],
+            )
+            .await
+            .map_err(PasswordLoginError::Transport)?;
+        rows.first()
+            .map(|row| {
+                Ok(PasswordLoginRecord {
+                    user_id: UserId::new(row.required_text("user_id")?)?,
+                    status: row.required_text("status")?.to_owned(),
+                    password_hash: row.required_text("password_hash")?.to_owned(),
+                })
+            })
+            .transpose()
+    }
+
+    async fn load_record_by_user(
+        &self,
+        user_id: &UserId,
+    ) -> Result<Option<PasswordLoginRecord>, PasswordLoginError<T::Error>> {
+        let rows = self
+            .store
+            .transport()
+            .query(
+                LOAD_PASSWORD_BY_USER_SQL,
+                vec![PgValue::Text(user_id.as_str().to_owned())],
             )
             .await
             .map_err(PasswordLoginError::Transport)?;
@@ -741,6 +1090,190 @@ where
     }
 }
 
+/// Password reset start/completion and session-rotation service.
+pub struct PasswordResetService<T, C, R> {
+    store: PostgresAuthStore<T>,
+    clock: C,
+    randomness: R,
+    argon2: Argon2Policy,
+    outbox_key: OutboxSealingKey,
+    session_ttl_ms: u64,
+}
+
+impl<T, C, R> PasswordResetService<T, C, R> {
+    /// Assembles the service with a one-hour post-reset session lifetime.
+    #[must_use]
+    pub const fn new(
+        store: PostgresAuthStore<T>,
+        clock: C,
+        randomness: R,
+        argon2: Argon2Policy,
+        outbox_key: OutboxSealingKey,
+    ) -> Self {
+        Self {
+            store,
+            clock,
+            randomness,
+            argon2,
+            outbox_key,
+            session_ttl_ms: DEFAULT_SESSION_TTL_MS,
+        }
+    }
+
+    /// Overrides the post-reset session lifetime after bounded validation.
+    ///
+    /// # Errors
+    ///
+    /// Rejects values outside five minutes through 24 hours.
+    pub fn with_session_ttl_seconds(
+        mut self,
+        seconds: u64,
+    ) -> Result<Self, PasswordResetError<T::Error>>
+    where
+        T: PostgresTransport,
+    {
+        if !(5 * 60..=24 * 60 * 60).contains(&seconds) {
+            return Err(PasswordResetError::InvalidConfiguration);
+        }
+        self.session_ttl_ms = seconds.saturating_mul(1_000);
+        Ok(self)
+    }
+
+    /// Returns the relational store used by this service.
+    #[must_use]
+    pub const fn store(&self) -> &PostgresAuthStore<T> {
+        &self.store
+    }
+}
+
+impl<T, C, R> PasswordResetService<T, C, R>
+where
+    T: PostgresTransport,
+    C: Clock,
+    R: RandomSource,
+{
+    /// Queues reset mail when an eligible account exists while returning the
+    /// same accepted result for unknown or unavailable accounts.
+    ///
+    /// # Errors
+    ///
+    /// Returns validation, randomness, crypto, or PostgreSQL failures.
+    pub async fn start(
+        &self,
+        request: PasswordResetStartRequest,
+    ) -> Result<PasswordResetStartReceipt, PasswordResetError<T::Error>> {
+        validate_reset_start(&request)?;
+        let normalized_email = request.email.trim().to_ascii_lowercase();
+        let now_ms = self.clock.now_unix_seconds().saturating_mul(1_000);
+        let mut raw_token = [0_u8; VERIFICATION_TOKEN_BYTES];
+        let mut outbox_nonce = [0_u8; OUTBOX_NONCE_BYTES];
+        self.randomness
+            .fill_bytes(&mut raw_token)
+            .map_err(|_| PasswordResetError::RandomnessUnavailable)?;
+        self.randomness
+            .fill_bytes(&mut outbox_nonce)
+            .map_err(|_| PasswordResetError::RandomnessUnavailable)?;
+        let token = URL_SAFE_NO_PAD.encode(raw_token);
+        let token_hash = Sha256::digest(token.as_bytes()).to_vec();
+        let outbox_id = uuid_v7(now_ms, &self.randomness)
+            .map_err(|_| PasswordResetError::RandomnessUnavailable)?;
+        let audit_id = uuid_v7(now_ms, &self.randomness)
+            .map_err(|_| PasswordResetError::RandomnessUnavailable)?;
+        let payload = serde_json::to_vec(&json!({
+            "version": 1,
+            "kind": "password_reset",
+            "recipient": normalized_email,
+            "token": token,
+            "redirect_uri": request.redirect_uri,
+        }))
+        .map_err(|_| PasswordResetError::Crypto)?;
+        let sealed = self
+            .outbox_key
+            .seal(outbox_nonce, &payload)
+            .map_err(|_| PasswordResetError::Crypto)?;
+        self.store
+            .transport()
+            .query(
+                START_PASSWORD_RESET_SQL,
+                vec![
+                    PgValue::Text(normalized_email),
+                    PgValue::Bytes(token_hash),
+                    PgValue::Text(request.redirect_uri),
+                    PgValue::I64(u64_to_i64(now_ms.saturating_add(PASSWORD_RESET_TTL_MS))),
+                    PgValue::Text(outbox_id.to_string()),
+                    PgValue::Text(format!("password-reset:{outbox_id}")),
+                    PgValue::Text(sealed.key_version),
+                    PgValue::Bytes(sealed.ciphertext),
+                    PgValue::Text(audit_id.to_string()),
+                    PgValue::Text(request.request_id.as_str().to_owned()),
+                    PgValue::I64(u64_to_i64(now_ms)),
+                ],
+            )
+            .await
+            .map_err(PasswordResetError::Transport)?;
+        Ok(PasswordResetStartReceipt {
+            accepted: true,
+            expires_in_seconds: PASSWORD_RESET_TTL_MS / 1_000,
+        })
+    }
+
+    /// Consumes a reset token, changes the password, increments the account
+    /// security revision, revokes every prior session/refresh token, and issues
+    /// one new session in a single statement.
+    ///
+    /// # Errors
+    ///
+    /// Returns request, token, randomness, crypto, row, context, or PostgreSQL
+    /// failures.
+    pub async fn complete(
+        &self,
+        request: PasswordResetCompleteRequest,
+    ) -> Result<PasswordResetReceipt, PasswordResetError<T::Error>> {
+        validate_reset_complete(&request)?;
+        let now_ms = self.clock.now_unix_seconds().saturating_mul(1_000);
+        let mut salt = [0_u8; PASSWORD_SALT_BYTES];
+        self.randomness
+            .fill_bytes(&mut salt)
+            .map_err(|_| PasswordResetError::RandomnessUnavailable)?;
+        let password_hash = hash_password(&request.new_password, salt, self.argon2)
+            .map_err(|_| PasswordResetError::Crypto)?;
+        let session_id = uuid_v7(now_ms, &self.randomness)
+            .map_err(|_| PasswordResetError::RandomnessUnavailable)?;
+        let audit_id = uuid_v7(now_ms, &self.randomness)
+            .map_err(|_| PasswordResetError::RandomnessUnavailable)?;
+        let rows = self
+            .store
+            .transport()
+            .query(
+                COMPLETE_PASSWORD_RESET_SQL,
+                vec![
+                    PgValue::Bytes(Sha256::digest(request.token.trim().as_bytes()).to_vec()),
+                    PgValue::I64(u64_to_i64(now_ms)),
+                    PgValue::Text(password_hash),
+                    PgValue::Text(session_id.to_string()),
+                    PgValue::I64(u64_to_i64(now_ms.saturating_add(self.session_ttl_ms))),
+                    PgValue::Text(audit_id.to_string()),
+                    PgValue::Text(request.request_id.as_str().to_owned()),
+                ],
+            )
+            .await
+            .map_err(PasswordResetError::Transport)?;
+        let row = rows.first().ok_or(PasswordResetError::InvalidToken)?;
+        let replayed = match row.required_text("outcome")? {
+            "created" => false,
+            "replayed" => true,
+            _ => return Err(PasswordResetError::InvalidToken),
+        };
+        Ok(PasswordResetReceipt {
+            session_id: SessionId::new(row.required_text("session_id")?)?,
+            user_id: UserId::new(row.required_text("user_id")?)?,
+            expires_at_ms: i64_to_u64(row.required_i64("expires_at_ms")?)?,
+            replayed,
+            redirect_uri: request.redirect_uri.clone(),
+        })
+    }
+}
+
 fn validate_request<E>(
     request: &PasswordRegistrationRequest,
 ) -> Result<(), PasswordRegistrationError<E>>
@@ -784,6 +1317,27 @@ where
     Ok(())
 }
 
+fn validate_resend_request<E>(
+    request: &EmailVerificationResendRequest,
+) -> Result<(), PasswordRegistrationError<E>>
+where
+    E: StdError + Send + Sync + 'static,
+{
+    let email = request.email.trim();
+    if email.len() > 320
+        || email.split_once('@').is_none_or(|(local, domain)| {
+            local.is_empty() || domain.is_empty() || !domain.contains('.')
+        })
+        || request.redirect_uri.is_empty()
+        || !request.redirect_uri.starts_with('/')
+        || request.redirect_uri.starts_with("//")
+        || request.redirect_uri.chars().any(char::is_control)
+    {
+        return Err(PasswordRegistrationError::InvalidRequest);
+    }
+    Ok(())
+}
+
 fn validate_verification_request<E>(
     request: &EmailVerificationRequest,
 ) -> Result<(), EmailVerificationError<E>>
@@ -799,6 +1353,45 @@ where
         || request.redirect_uri.chars().any(char::is_control)
     {
         return Err(EmailVerificationError::InvalidRequest);
+    }
+    Ok(())
+}
+
+fn validate_reset_start<E>(request: &PasswordResetStartRequest) -> Result<(), PasswordResetError<E>>
+where
+    E: StdError + Send + Sync + 'static,
+{
+    let email = request.email.trim();
+    if email.len() > 320
+        || email.split_once('@').is_none_or(|(local, domain)| {
+            local.is_empty() || domain.is_empty() || !domain.contains('.')
+        })
+        || request.redirect_uri.is_empty()
+        || !request.redirect_uri.starts_with('/')
+        || request.redirect_uri.starts_with("//")
+        || request.redirect_uri.chars().any(char::is_control)
+    {
+        return Err(PasswordResetError::InvalidRequest);
+    }
+    Ok(())
+}
+
+fn validate_reset_complete<E>(
+    request: &PasswordResetCompleteRequest,
+) -> Result<(), PasswordResetError<E>>
+where
+    E: StdError + Send + Sync + 'static,
+{
+    if request.token.trim().len() < 32
+        || request.token.len() > 512
+        || request.token.chars().any(char::is_control)
+        || !(15..=128).contains(&request.new_password.chars().count())
+        || request.redirect_uri.is_empty()
+        || !request.redirect_uri.starts_with('/')
+        || request.redirect_uri.starts_with("//")
+        || request.redirect_uri.chars().any(char::is_control)
+    {
+        return Err(PasswordResetError::InvalidRequest);
     }
     Ok(())
 }
@@ -1021,6 +1614,45 @@ pub enum EmailVerificationError<E: StdError + Send + Sync + 'static> {
 }
 
 impl<E> From<crate::context::ContextError> for EmailVerificationError<E>
+where
+    E: StdError + Send + Sync + 'static,
+{
+    fn from(_: crate::context::ContextError) -> Self {
+        Self::Context
+    }
+}
+
+/// Password-reset workflow failure.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum PasswordResetError<E: StdError + Send + Sync + 'static> {
+    /// Public request fields violated bounds or redirect rules.
+    #[error("password reset request is invalid")]
+    InvalidRequest,
+    /// Session lifetime or cryptographic configuration is invalid.
+    #[error("password reset configuration is invalid")]
+    InvalidConfiguration,
+    /// Opaque token is absent, expired, or no longer replayable.
+    #[error("password reset token is invalid or expired")]
+    InvalidToken,
+    /// Host cryptographic randomness was unavailable.
+    #[error("cryptographic randomness is unavailable")]
+    RandomnessUnavailable,
+    /// Password hashing or outbox encryption failed.
+    #[error("password reset cryptography failed")]
+    Crypto,
+    /// PostgreSQL transport failed.
+    #[error("PostgreSQL auth transport failed: {0}")]
+    Transport(#[source] E),
+    /// PostgreSQL returned malformed data.
+    #[error(transparent)]
+    Row(#[from] RowDecodeError),
+    /// Stored identity violated bounded context rules.
+    #[error("stored password reset identity is invalid")]
+    Context,
+}
+
+impl<E> From<crate::context::ContextError> for PasswordResetError<E>
 where
     E: StdError + Send + Sync + 'static,
 {

@@ -10,11 +10,14 @@ use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
 
+pub mod management;
 #[cfg(feature = "postgres-native")]
 pub mod native;
 pub mod organizations;
 #[cfg(feature = "password")]
 pub mod outbox;
+pub mod rate_limits;
+pub mod sessions;
 #[cfg(feature = "postgres-spin")]
 pub mod spin;
 #[cfg(feature = "password")]
@@ -122,6 +125,13 @@ impl PgRow {
 pub trait PostgresTransport: Sync {
     /// Transport-specific error.
     type Error: StdError + Send + Sync + 'static;
+
+    /// Reports whether a host error names a specific database constraint.
+    /// Transports without structured diagnostics may conservatively inspect
+    /// their bounded, parameter-free error text.
+    fn violates_constraint(_error: &Self::Error, _constraint: &str) -> bool {
+        false
+    }
 
     /// Executes one parameterized PostgreSQL query and materializes its bounded
     /// result rows.

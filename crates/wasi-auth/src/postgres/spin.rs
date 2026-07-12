@@ -41,6 +41,10 @@ impl SpinPostgresTransport {
 impl PostgresTransport for SpinPostgresTransport {
     type Error = SpinPostgresError;
 
+    fn violates_constraint(error: &Self::Error, constraint: &str) -> bool {
+        matches!(error, SpinPostgresError::Host(message) if message.contains(constraint))
+    }
+
     async fn query(
         &self,
         sql: &'static str,
