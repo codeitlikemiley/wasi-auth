@@ -263,6 +263,7 @@ jobs:
           workspaces: wasi-auth
       - run: cargo install wasm-tools --locked --version 1.253.0
       - run: cargo install cargo-cyclonedx --locked --version 0.5.9
+      - run: python3 scripts/test-normalize-sbom.py
       - run: bash scripts/build-components.sh
       - run: bash scripts/build-native-pdp.sh
         env:

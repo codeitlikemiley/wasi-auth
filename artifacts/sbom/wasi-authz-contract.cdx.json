@@ -533,7 +533,7 @@
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18"
       ],
-      "ref": "path+file://./crates/wasi-authz-contract#0.1.0-alpha.3"
+      "ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.1"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#equivalent@1.0.2"
@@ -644,25 +644,25 @@
     ],
     "component": {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "path+file://./crates/wasi-authz-contract#0.1.0-alpha.3",
+      "bom-ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.1",
       "components": [
         {
-          "bom-ref": "path+file://./crates/wasi-authz-contract#0.1.0-alpha.3 bin-target-0",
+          "bom-ref": "path+file://./crates/wasi-authz-contract#0.1.0-rc.1 bin-target-0",
           "name": "wasi_authz_contract",
-          "purl": "pkg:cargo/wasi-authz-contract@0.1.0-alpha.3?download_url=file://.#src/lib.rs",
+          "purl": "pkg:cargo/wasi-authz-contract@0.1.0-rc.1?download_url=file://.#src/lib.rs",
           "type": "library",
-          "version": "0.1.0-alpha.3"
+          "version": "0.1.0-rc.1"
         }
       ],
       "description": "Bounded AuthZEN 1.0 authorization request and decision types",
       "externalReferences": [
         {
           "type": "website",
-          "url": "https://github.com/codeitlikemiley/wasi-authz"
+          "url": "https://github.com/codeitlikemiley/wasi-auth"
         },
         {
           "type": "vcs",
-          "url": "https://github.com/codeitlikemiley/wasi-authz"
+          "url": "https://github.com/codeitlikemiley/wasi-auth"
         }
       ],
       "licenses": [
@@ -671,10 +671,10 @@
         }
       ],
       "name": "wasi-authz-contract",
-      "purl": "pkg:cargo/wasi-authz-contract@0.1.0-alpha.3?download_url=file://.",
+      "purl": "pkg:cargo/wasi-authz-contract@0.1.0-rc.1",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-alpha.3"
+      "version": "0.1.0-rc.1"
     },
     "properties": [
       {
@@ -690,7 +690,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:f1234a84-778d-55df-8c29-f7295d4918a2",
+  "serialNumber": "urn:uuid:823b7bac-fd32-57f5-b42c-98315856b979",
   "specVersion": "1.5",
   "version": 1
 }

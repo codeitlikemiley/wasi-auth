@@ -2,11 +2,14 @@
 
 `scripts/build-components.sh`, `build-native-pdp.sh`, checksum generators,
 `generate-sbom.sh`, and `check-component-contracts.sh` produce the local
-release inputs. The repository tracks normalized CycloneDX 1.5 SBOMs, portable
-WASM SHA-256 metadata, and exact WIT reports. The native Cedar PDP is named and
-checksummed with its Rust target triple so artifacts from different operating
-systems cannot be confused. `check-native-reproducibility.sh` performs a clean
-second package build and requires the target-qualified binary digest to match.
+release inputs. The repository tracks normalized CycloneDX 1.5 SBOMs, exact
+WIT reports, and SHA-256 metadata for the canonical Ubuntu 24.04/Rust 1.93 WASM
+build. The component is portable, but its digest is build-host-specific; only
+the pinned Linux CI lane refreshes the tracked checksum. The native Cedar PDP
+is named and checksummed with its Rust target triple so artifacts from different
+operating systems cannot be confused. `check-native-reproducibility.sh`
+performs a clean second package build and requires the target-qualified binary
+digest to match.
 
 `scripts/dry-run-supply-chain.sh` then:
 

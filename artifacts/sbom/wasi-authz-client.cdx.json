@@ -3,16 +3,16 @@
   "components": [
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "path+file://./crates/wasi-authz-contract#0.1.0-alpha.3",
+      "bom-ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.1",
       "description": "Bounded AuthZEN 1.0 authorization request and decision types",
       "externalReferences": [
         {
           "type": "website",
-          "url": "https://github.com/codeitlikemiley/wasi-authz"
+          "url": "https://github.com/codeitlikemiley/wasi-auth"
         },
         {
           "type": "vcs",
-          "url": "https://github.com/codeitlikemiley/wasi-authz"
+          "url": "https://github.com/codeitlikemiley/wasi-auth"
         }
       ],
       "licenses": [
@@ -21,10 +21,41 @@
         }
       ],
       "name": "wasi-authz-contract",
-      "purl": "pkg:cargo/wasi-authz-contract@0.1.0-alpha.3?download_url=file://../wasi-authz-contract",
+      "purl": "pkg:cargo/wasi-authz-contract@0.1.0-rc.1",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-alpha.3"
+      "version": "0.1.0-rc.1"
+    },
+    {
+      "author": "David Tolnay <dtolnay@gmail.com>",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.103",
+      "description": "Flexible concrete Error type built on std::error::Error",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.rs/anyhow"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/anyhow"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "anyhow",
+      "purl": "pkg:cargo/anyhow@1.0.103",
+      "scope": "required",
+      "type": "library",
+      "version": "1.0.103"
     },
     {
       "author": "The Rust Project Developers",
@@ -438,6 +469,32 @@
       "version": "0.17.1"
     },
     {
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0",
+      "description": "heck is a case conversion library.",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/withoutboats/heck"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "heck",
+      "purl": "pkg:cargo/heck@0.5.0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.5.0"
+    },
+    {
       "author": "Carl Lerche <me@carllerche.com>, Lucio Franco <luciofranco14@gmail.com>, Sean McArthur <sean@seanmonstar.com>",
       "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#http-body-util@0.1.3",
       "description": "Combinators and adapters for HTTP request or response bodies. ",
@@ -531,6 +588,37 @@
       "version": "1.4.2"
     },
     {
+      "author": "Nick Fitzgerald <fitzgen@gmail.com>, Aleksey Kladov <aleksey.kladov@gmail.com>",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#id-arena@2.3.0",
+      "description": "A simple, id-based arena.",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.rs/id-arena"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/fitzgen/id-arena"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3d3067d79b975e8844ca9eb072e16b31c3c1c36928edf9c6789548c524d0d954"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "id-arena",
+      "purl": "pkg:cargo/id-arena@2.3.0",
+      "scope": "required",
+      "type": "library",
+      "version": "2.3.0"
+    },
+    {
       "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
       "description": "A hash table with consistent order and fast iteration.",
       "externalReferences": [
@@ -590,6 +678,99 @@
       "scope": "required",
       "type": "library",
       "version": "1.0.18"
+    },
+    {
+      "author": "Bryant Luk <code@bryantluk.com>",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#leb128fmt@0.1.0",
+      "description": "A library to encode and decode LEB128 compressed integers.",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.rs/leb128fmt"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/bluk/leb128fmt"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "leb128fmt",
+      "purl": "pkg:cargo/leb128fmt@0.1.0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.1.0"
+    },
+    {
+      "author": "The Rust Project Developers",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.33",
+      "description": "A lightweight logging facade for Rust ",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.rs/log"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/log"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "log",
+      "purl": "pkg:cargo/log@0.4.33",
+      "scope": "required",
+      "type": "library",
+      "version": "0.4.33"
+    },
+    {
+      "author": "David Tolnay <dtolnay@gmail.com>",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#macro-string@0.2.0",
+      "description": "Eager evaluation of macros like `concat!` and `env!`",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.rs/macro-string"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/macro-string"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "59a9dbbfc75d2688ed057456ce8a3ee3f48d12eec09229f560f3643b9f275653"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "macro-string",
+      "purl": "pkg:cargo/macro-string@0.2.0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.2.0"
     },
     {
       "author": "Andrew Gallant <jamslam@gmail.com>, bluss",
@@ -653,6 +834,41 @@
       "version": "0.2.17"
     },
     {
+      "author": "David Tolnay <dtolnay@gmail.com>",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#prettyplease@0.2.37",
+      "description": "A minimal `syn` syntax tree pretty-printer",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.rs/prettyplease"
+        },
+        {
+          "type": "other",
+          "url": "prettyplease02"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/prettyplease"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "prettyplease",
+      "purl": "pkg:cargo/prettyplease@0.2.37",
+      "scope": "required",
+      "type": "library",
+      "version": "0.2.37"
+    },
+    {
       "author": "David Tolnay <dtolnay@gmail.com>, Alex Crichton <alex@alexcrichton.com>",
       "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
       "description": "A substitute implementation of the compiler's `proc_macro` API to decouple token-based libraries from the procedural macro use case.",
@@ -713,6 +929,37 @@
       "scope": "required",
       "type": "library",
       "version": "1.0.46"
+    },
+    {
+      "author": "David Tolnay <dtolnay@gmail.com>",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#semver@1.0.28",
+      "description": "Parser and evaluator for Cargo's flavor of Semantic Versioning",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.rs/semver"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/semver"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "semver",
+      "purl": "pkg:cargo/semver@1.0.28",
+      "scope": "required",
+      "type": "library",
+      "version": "1.0.28"
     },
     {
       "author": "Erick Tryzelaar <erick.tryzelaar@gmail.com>, David Tolnay <dtolnay@gmail.com>",
@@ -998,6 +1245,41 @@
       "version": "1.0.24"
     },
     {
+      "author": "erick.tryzelaar <erick.tryzelaar@gmail.com>, kwantam <kwantam@gmail.com>, Manish Goregaokar <manishsmail@gmail.com>",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#unicode-xid@0.2.6",
+      "description": "Determine whether characters have the XID_Start or XID_Continue properties according to Unicode Standard Annex #31. ",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://unicode-rs.github.io/unicode-xid"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/unicode-rs/unicode-xid"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/unicode-rs/unicode-xid"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "unicode-xid",
+      "purl": "pkg:cargo/unicode-xid@0.2.6",
+      "scope": "required",
+      "type": "library",
+      "version": "0.2.6"
+    },
+    {
       "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#wasip3@0.7.0+wasi-0.3.0",
       "description": "WASIp3 API bindings for Rust",
       "externalReferences": [
@@ -1026,6 +1308,191 @@
       "scope": "required",
       "type": "library",
       "version": "0.7.0+wasi-0.3.0"
+    },
+    {
+      "author": "Nick Fitzgerald <fitzgen@gmail.com>",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#wasm-encoder@0.247.0",
+      "description": "A low-level WebAssembly encoder. ",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.rs/wasm-encoder"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasm-encoder"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasm-encoder"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "30b6733b8b91d010a6ac5b0fb237dc46a19650bc4c67db66857e2e787d437204"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+        }
+      ],
+      "name": "wasm-encoder",
+      "purl": "pkg:cargo/wasm-encoder@0.247.0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.247.0"
+    },
+    {
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#wasm-metadata@0.247.0",
+      "description": "Read and manipulate WebAssembly metadata",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasm-metadata"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "665fe59e56cc9b419ca6fcca56673e3421d1a5011e3b65caf6b726fd9e041d10"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+        }
+      ],
+      "name": "wasm-metadata",
+      "purl": "pkg:cargo/wasm-metadata@0.247.0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.247.0"
+    },
+    {
+      "author": "Yury Delendik <ydelendik@mozilla.com>",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#wasmparser@0.247.0",
+      "description": "A simple event-driven library for parsing WebAssembly binary files. ",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasmparser"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasmparser"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8e6fb4c2bee46c5ea4d40f8cdb5c131725cd976718ec56f1c8e82fbde5fa2a80"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+        }
+      ],
+      "name": "wasmparser",
+      "purl": "pkg:cargo/wasmparser@0.247.0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.247.0"
+    },
+    {
+      "author": "Alex Crichton <alex@alexcrichton.com>",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#wit-bindgen-core@0.57.1",
+      "description": "Low-level support for bindings generation based on WIT files for use with `wit-bindgen-cli` and other languages. ",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/bytecodealliance/wit-bindgen"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wit-bindgen"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "02dee27a2dc20d1008016c742ec9fc6ea498492994ba3750be7454cbc97ff04c"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+        }
+      ],
+      "name": "wit-bindgen-core",
+      "purl": "pkg:cargo/wit-bindgen-core@0.57.1",
+      "scope": "required",
+      "type": "library",
+      "version": "0.57.1"
+    },
+    {
+      "author": "Alex Crichton <alex@alexcrichton.com>",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#wit-bindgen-rust-macro@0.57.1",
+      "description": "Procedural macro paired with the `wit-bindgen` crate. ",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/bytecodealliance/wit-bindgen"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wit-bindgen"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "af9237d678e3513ad24e96fe98beacdc0db6405284ba2a2400418cf0d42caa89"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+        }
+      ],
+      "name": "wit-bindgen-rust-macro",
+      "purl": "pkg:cargo/wit-bindgen-rust-macro@0.57.1",
+      "scope": "required",
+      "type": "library",
+      "version": "0.57.1"
+    },
+    {
+      "author": "Alex Crichton <alex@alexcrichton.com>",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#wit-bindgen-rust@0.57.1",
+      "description": "Rust bindings generator for WIT and the component model, typically used through the `wit-bindgen` crate's `generate!` macro. ",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/bytecodealliance/wit-bindgen"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wit-bindgen"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b5007dae772945b7a5003d69d90a3a4a78929d41f19d004e980c4259a6af4484"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+        }
+      ],
+      "name": "wit-bindgen-rust",
+      "purl": "pkg:cargo/wit-bindgen-rust@0.57.1",
+      "scope": "required",
+      "type": "library",
+      "version": "0.57.1"
     },
     {
       "author": "Alex Crichton <alex@alexcrichton.com>",
@@ -1057,6 +1524,76 @@
       "scope": "required",
       "type": "library",
       "version": "0.57.1"
+    },
+    {
+      "author": "Peter Huene <peter@huene.dev>",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#wit-component@0.247.0",
+      "description": "Tooling for working with `*.wit` and component files together. ",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.rs/wit-component"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wit-component"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wit-component"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9d567162a6b9843080e5e0053f696623ff694bae8ae017c9ec536d1873bbe3d8"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+        }
+      ],
+      "name": "wit-component",
+      "purl": "pkg:cargo/wit-component@0.247.0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.247.0"
+    },
+    {
+      "author": "Alex Crichton <alex@alexcrichton.com>",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#wit-parser@0.247.0",
+      "description": "Tooling for parsing `*.wit` files and working with their contents. ",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.rs/wit-parser"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wit-parser"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wit-parser"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8ffe4064318cdf3c08cb99343b44c039fcefe61ccdf58aa9975285f13d74d1fc"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+        }
+      ],
+      "name": "wit-parser",
+      "purl": "pkg:cargo/wit-parser@0.247.0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.247.0"
     },
     {
       "author": "David Tolnay <dtolnay@gmail.com>",
@@ -1098,10 +1635,10 @@
         "registry+https://github.com/rust-lang/crates.io-index#http@1.4.2",
         "registry+https://github.com/rust-lang/crates.io-index#http-body-util@0.1.3",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
-        "path+file://./crates/wasi-authz-contract#0.1.0-alpha.3",
+        "pkg:cargo/wasi-authz-contract@0.1.0-rc.1",
         "registry+https://github.com/rust-lang/crates.io-index#wasip3@0.7.0+wasi-0.3.0"
       ],
-      "ref": "path+file://./crates/wasi-authz-client#0.1.0-alpha.3"
+      "ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.1"
     },
     {
       "dependsOn": [
@@ -1109,7 +1646,10 @@
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18"
       ],
-      "ref": "path+file://./crates/wasi-authz-contract#0.1.0-alpha.3"
+      "ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.1"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.103"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.13.0"
@@ -1191,6 +1731,9 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.17.1"
     },
     {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0"
+    },
+    {
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#bytes@1.12.1",
         "registry+https://github.com/rust-lang/crates.io-index#futures-core@0.3.32",
@@ -1215,6 +1758,9 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#http@1.4.2"
     },
     {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#id-arena@2.3.0"
+    },
+    {
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#equivalent@1.0.2",
         "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.17.1",
@@ -1227,10 +1773,31 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#itoa@1.0.18"
     },
     {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#leb128fmt@0.1.0"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.33"
+    },
+    {
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
+        "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.46",
+        "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.118"
+      ],
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#macro-string@0.2.0"
+    },
+    {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.3"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17"
+    },
+    {
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
+        "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.118"
+      ],
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#prettyplease@0.2.37"
     },
     {
       "dependsOn": [
@@ -1243,6 +1810,9 @@
         "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106"
       ],
       "ref": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.46"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#semver@1.0.28"
     },
     {
       "dependsOn": [
@@ -1305,6 +1875,9 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.24"
     },
     {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#unicode-xid@0.2.6"
+    },
+    {
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#bytes@1.12.1",
         "registry+https://github.com/rust-lang/crates.io-index#http@1.4.2",
@@ -1316,10 +1889,102 @@
     },
     {
       "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#leb128fmt@0.1.0",
+        "registry+https://github.com/rust-lang/crates.io-index#wasmparser@0.247.0"
+      ],
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#wasm-encoder@0.247.0"
+    },
+    {
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.103",
+        "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
+        "registry+https://github.com/rust-lang/crates.io-index#wasm-encoder@0.247.0",
+        "registry+https://github.com/rust-lang/crates.io-index#wasmparser@0.247.0"
+      ],
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#wasm-metadata@0.247.0"
+    },
+    {
+      "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.13.0",
-        "registry+https://github.com/rust-lang/crates.io-index#futures@0.3.32"
+        "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.17.1",
+        "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
+        "registry+https://github.com/rust-lang/crates.io-index#semver@1.0.28"
+      ],
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#wasmparser@0.247.0"
+    },
+    {
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.103",
+        "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0",
+        "registry+https://github.com/rust-lang/crates.io-index#wit-parser@0.247.0"
+      ],
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#wit-bindgen-core@0.57.1"
+    },
+    {
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.103",
+        "registry+https://github.com/rust-lang/crates.io-index#macro-string@0.2.0",
+        "registry+https://github.com/rust-lang/crates.io-index#prettyplease@0.2.37",
+        "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
+        "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.46",
+        "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.118",
+        "registry+https://github.com/rust-lang/crates.io-index#wit-bindgen-core@0.57.1",
+        "registry+https://github.com/rust-lang/crates.io-index#wit-bindgen-rust@0.57.1"
+      ],
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#wit-bindgen-rust-macro@0.57.1"
+    },
+    {
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.103",
+        "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0",
+        "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
+        "registry+https://github.com/rust-lang/crates.io-index#prettyplease@0.2.37",
+        "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.118",
+        "registry+https://github.com/rust-lang/crates.io-index#wasm-metadata@0.247.0",
+        "registry+https://github.com/rust-lang/crates.io-index#wit-bindgen-core@0.57.1",
+        "registry+https://github.com/rust-lang/crates.io-index#wit-component@0.247.0"
+      ],
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#wit-bindgen-rust@0.57.1"
+    },
+    {
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.13.0",
+        "registry+https://github.com/rust-lang/crates.io-index#futures@0.3.32",
+        "registry+https://github.com/rust-lang/crates.io-index#wit-bindgen-rust-macro@0.57.1"
       ],
       "ref": "registry+https://github.com/rust-lang/crates.io-index#wit-bindgen@0.57.1"
+    },
+    {
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.103",
+        "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.13.0",
+        "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
+        "registry+https://github.com/rust-lang/crates.io-index#log@0.4.33",
+        "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+        "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.228",
+        "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
+        "registry+https://github.com/rust-lang/crates.io-index#wasm-encoder@0.247.0",
+        "registry+https://github.com/rust-lang/crates.io-index#wasm-metadata@0.247.0",
+        "registry+https://github.com/rust-lang/crates.io-index#wasmparser@0.247.0",
+        "registry+https://github.com/rust-lang/crates.io-index#wit-parser@0.247.0"
+      ],
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#wit-component@0.247.0"
+    },
+    {
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.103",
+        "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.17.1",
+        "registry+https://github.com/rust-lang/crates.io-index#id-arena@2.3.0",
+        "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
+        "registry+https://github.com/rust-lang/crates.io-index#log@0.4.33",
+        "registry+https://github.com/rust-lang/crates.io-index#semver@1.0.28",
+        "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+        "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.228",
+        "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
+        "registry+https://github.com/rust-lang/crates.io-index#unicode-xid@0.2.6",
+        "registry+https://github.com/rust-lang/crates.io-index#wasmparser@0.247.0"
+      ],
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#wit-parser@0.247.0"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.21"
@@ -1334,25 +1999,25 @@
     ],
     "component": {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "path+file://./crates/wasi-authz-client#0.1.0-alpha.3",
+      "bom-ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.1",
       "components": [
         {
-          "bom-ref": "path+file://./crates/wasi-authz-client#0.1.0-alpha.3 bin-target-0",
+          "bom-ref": "path+file://./crates/wasi-authz-client#0.1.0-rc.1 bin-target-0",
           "name": "wasi_authz_client",
-          "purl": "pkg:cargo/wasi-authz-client@0.1.0-alpha.3?download_url=file://.#src/lib.rs",
+          "purl": "pkg:cargo/wasi-authz-client@0.1.0-rc.1?download_url=file://.#src/lib.rs",
           "type": "library",
-          "version": "0.1.0-alpha.3"
+          "version": "0.1.0-rc.1"
         }
       ],
       "description": "Transport-neutral AuthZEN client with additive WASIp2 and WASIp3 transports",
       "externalReferences": [
         {
           "type": "website",
-          "url": "https://github.com/codeitlikemiley/wasi-authz"
+          "url": "https://github.com/codeitlikemiley/wasi-auth"
         },
         {
           "type": "vcs",
-          "url": "https://github.com/codeitlikemiley/wasi-authz"
+          "url": "https://github.com/codeitlikemiley/wasi-auth"
         }
       ],
       "licenses": [
@@ -1361,10 +2026,10 @@
         }
       ],
       "name": "wasi-authz-client",
-      "purl": "pkg:cargo/wasi-authz-client@0.1.0-alpha.3?download_url=file://.",
+      "purl": "pkg:cargo/wasi-authz-client@0.1.0-rc.1",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-alpha.3"
+      "version": "0.1.0-rc.1"
     },
     "properties": [
       {
@@ -1380,7 +2045,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:5dc3e5a9-531b-5032-b984-bb1a7efd220c",
+  "serialNumber": "urn:uuid:9e986425-4180-5d70-9dba-b8a6d56a23ff",
   "specVersion": "1.5",
   "version": 1
 }
