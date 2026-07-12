@@ -10,16 +10,30 @@ use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
 
+#[cfg(any(feature = "oauth", feature = "passkeys"))]
+pub mod flows;
 pub mod management;
+#[cfg(all(feature = "mfa", feature = "password"))]
+pub mod mfa;
 #[cfg(feature = "postgres-native")]
 pub mod native;
+#[cfg(feature = "oauth")]
+pub mod oauth;
 pub mod organizations;
 #[cfg(feature = "password")]
 pub mod outbox;
+#[cfg(feature = "passkeys")]
+pub mod passkeys;
+#[cfg(feature = "cedar")]
+pub mod policy;
 pub mod rate_limits;
 pub mod sessions;
+#[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+pub mod signing;
 #[cfg(feature = "postgres-spin")]
 pub mod spin;
+#[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+pub mod tokens;
 #[cfg(feature = "password")]
 pub mod workflows;
 
@@ -90,7 +104,7 @@ impl PgRow {
         self.i64(column)?.ok_or(RowDecodeError::Missing(column))
     }
 
-    #[cfg(feature = "password")]
+    #[cfg(any(feature = "password", feature = "oauth", feature = "passkeys"))]
     fn bytes(&self, column: &'static str) -> Result<Option<&[u8]>, RowDecodeError> {
         match self.values.get(column) {
             Some(PgValue::Bytes(value)) => Ok(Some(value)),
@@ -99,7 +113,7 @@ impl PgRow {
         }
     }
 
-    #[cfg(feature = "password")]
+    #[cfg(any(feature = "password", feature = "oauth", feature = "passkeys"))]
     fn required_bytes(&self, column: &'static str) -> Result<&[u8], RowDecodeError> {
         self.bytes(column)?.ok_or(RowDecodeError::Missing(column))
     }

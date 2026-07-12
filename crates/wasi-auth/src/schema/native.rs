@@ -13,6 +13,7 @@ const MIGRATION_ADVISORY_LOCK: i64 = 0x7761_7369_6175_7468;
 /// Required tables in the production relational kernel.
 pub const REQUIRED_RELATIONAL_TABLES: &[&str] = &[
     "auth_audit_log",
+    "auth_application_redirects",
     "auth_external_identities",
     "auth_flows",
     "auth_idempotency",

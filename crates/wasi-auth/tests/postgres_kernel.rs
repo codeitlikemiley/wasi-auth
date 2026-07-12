@@ -3,12 +3,18 @@
 
 #[cfg(feature = "password")]
 use std::convert::Infallible;
+#[cfg(all(feature = "password", feature = "jwt", feature = "ddd-cqrs"))]
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{error::Error, sync::Mutex};
 
 #[cfg(feature = "password")]
 use argon2::{Algorithm, Argon2, Params, Version};
 #[cfg(feature = "password")]
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+#[cfg(all(feature = "password", feature = "mfa"))]
+use hmac::{Hmac, Mac};
+#[cfg(all(feature = "password", feature = "mfa"))]
+use sha1::Sha1;
 #[cfg(feature = "password")]
 use sha2::{Digest, Sha256};
 use tokio::runtime::Builder;
@@ -17,8 +23,31 @@ use uuid::Uuid;
 use wasi_auth::context::UserId;
 use wasi_auth::context::{RequestId, SessionId};
 use wasi_auth::postgres::native::NativePostgresTransport;
+#[cfg(all(feature = "password", feature = "oauth", feature = "cedar"))]
+use wasi_auth::postgres::policy::PolicyBundleService;
+#[cfg(all(feature = "password", feature = "jwt", feature = "ddd-cqrs"))]
+use wasi_auth::postgres::tokens::{
+    JwtKeyRing, RefreshSealingKey, TokenService, TokenServiceConfig, TokenServiceError,
+};
 use wasi_auth::postgres::{
     CommandContext, PostgresAuthStore, RegisterPasswordCommand, SealedPayload,
+};
+#[cfg(all(feature = "password", feature = "oauth"))]
+use wasi_auth::postgres::{
+    flows::FlowSealingKey,
+    oauth::{OAuthFlowService, OAuthProviderService, OAuthServiceConfig, VerifiedOAuthIdentity},
+};
+#[cfg(all(
+    feature = "password",
+    feature = "oauth",
+    feature = "jwt",
+    feature = "ddd-cqrs"
+))]
+use wasi_auth::postgres::{signing::SigningKeyService, tokens::JwtKeyRing as ManagedJwtKeyRing};
+#[cfg(all(feature = "password", feature = "mfa"))]
+use wasi_auth::{
+    authentication::mfa::TotpConfig,
+    postgres::mfa::{MfaKeyMaterial, MfaService},
 };
 #[cfg(feature = "password")]
 use wasi_auth::{
@@ -51,7 +80,9 @@ fn live_postgres_registration_and_context_contract() -> Result<(), Box<dyn Error
     let Ok(database_url) = std::env::var("WASI_AUTH_POSTGRES_TEST_URL") else {
         return Ok(());
     };
-    let _live_database = LIVE_DB_LOCK.lock().expect("live database lock");
+    let _live_database = LIVE_DB_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     Builder::new_current_thread().enable_io().build()?.block_on(async {
         let transport = NativePostgresTransport::connect(&database_url).await?;
         let store = PostgresAuthStore::new(transport.clone());
@@ -160,7 +191,9 @@ fn live_postgres_verification_replay_and_password_login() -> Result<(), Box<dyn 
     let Ok(database_url) = std::env::var("WASI_AUTH_POSTGRES_TEST_URL") else {
         return Ok(());
     };
-    let _live_database = LIVE_DB_LOCK.lock().expect("live database lock");
+    let _live_database = LIVE_DB_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     Builder::new_current_thread()
         .enable_io()
         .build()?
@@ -641,7 +674,9 @@ fn live_postgres_registration_mail_outbox_contract() -> Result<(), Box<dyn Error
     let Ok(database_url) = std::env::var("WASI_AUTH_POSTGRES_TEST_URL") else {
         return Ok(());
     };
-    let _live_database = LIVE_DB_LOCK.lock().expect("live database lock");
+    let _live_database = LIVE_DB_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     Builder::new_current_thread()
         .enable_io()
         .build()?
@@ -725,7 +760,12 @@ fn live_postgres_registration_mail_outbox_contract() -> Result<(), Box<dyn Error
                 )
                 .await?;
             assert_eq!(row.get::<_, String>("status"), "delivered");
-            assert_eq!(row.get::<_, String>("delivery_id"), "capture-1");
+            let delivery_id = row.get::<_, String>("delivery_id");
+            assert!(
+                messages
+                    .iter()
+                    .any(|message| message.delivery_id().as_str() == delivery_id)
+            );
 
             Ok::<_, Box<dyn Error>>(())
         })
@@ -737,7 +777,9 @@ fn live_postgres_final_owner_concurrency_contract() -> Result<(), Box<dyn Error>
     let Ok(database_url) = std::env::var("WASI_AUTH_POSTGRES_TEST_URL") else {
         return Ok(());
     };
-    let _live_database = LIVE_DB_LOCK.lock().expect("live database lock");
+    let _live_database = LIVE_DB_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     Builder::new_current_thread()
         .enable_io()
         .build()?
@@ -873,6 +915,477 @@ fn live_postgres_final_owner_concurrency_contract() -> Result<(), Box<dyn Error>
         })
 }
 
+#[cfg(all(feature = "password", feature = "jwt", feature = "ddd-cqrs"))]
+#[test]
+fn live_postgres_refresh_rotation_and_reuse_contract() -> Result<(), Box<dyn Error>> {
+    let Ok(database_url) = std::env::var("WASI_AUTH_POSTGRES_TEST_URL") else {
+        return Ok(());
+    };
+    let _live_database = LIVE_DB_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    Builder::new_current_thread()
+        .enable_io()
+        .build()?
+        .block_on(async {
+            let transport = NativePostgresTransport::connect(&database_url).await?;
+            let store = PostgresAuthStore::new(transport.clone());
+            let user_id = Uuid::now_v7();
+            let unique = user_id.simple().to_string();
+            store
+                .register_password(registration_command_with_credentials(
+                    user_id,
+                    &unique,
+                    &format!("token-registration-{unique}"),
+                    password_hash("token contract correct horse battery staple")?,
+                    Sha256::digest(format!("token-verification-{unique}").as_bytes()).into(),
+                )?)
+                .await?;
+            let session_uuid = Uuid::now_v7();
+            let now_seconds = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+            let now_ms = i64::try_from(now_seconds.saturating_mul(1_000))?;
+            transport
+                .client()
+                .execute(
+                    "UPDATE auth_users SET status = 'active' WHERE user_id = $1",
+                    &[&user_id],
+                )
+                .await?;
+            transport
+                .client()
+                .execute(
+                    "INSERT INTO auth_sessions \
+                     (session_id, user_id, assurance, session_revision, user_security_revision, \
+                      expires_at_ms, created_at_ms, updated_at_ms) \
+                     VALUES ($1, $2, 'aal1', 1, 1, $3, $4, $4)",
+                    &[&session_uuid, &user_id, &(now_ms + 3_600_000), &now_ms],
+                )
+                .await?;
+            let service = TokenService::new(
+                PostgresAuthStore::new(transport.clone()),
+                ExplicitClock(now_seconds),
+                TestRandom::new(),
+                JwtKeyRing::development_hs256("contract-hs256", vec![83_u8; 32])?,
+                RefreshSealingKey::new("refresh-contract-v1", [89_u8; 32])?,
+                TokenServiceConfig::new("https://issuer.example", "contract-api", 60, 300, 300)?,
+            );
+            let session_id = SessionId::new(session_uuid.to_string())?;
+            let initial = service
+                .issue(
+                    &session_id,
+                    &RequestId::new(format!("token-issue-{unique}"))?,
+                )
+                .await?;
+            let (access, refresh, expires) = initial.into_parts();
+            assert_eq!(expires, 60);
+            let verified = service
+                .verify(&access, &RequestId::new(format!("token-verify-{unique}"))?)
+                .await?;
+            assert_eq!(verified.user_id, user_id.to_string());
+
+            let rotated = service
+                .refresh(
+                    Some(&session_id),
+                    &refresh,
+                    &RequestId::new(format!("token-refresh-{unique}"))?,
+                )
+                .await?;
+            let (rotated_access, rotated_refresh, rotated_expires) = rotated.into_parts();
+            let replayed = service
+                .refresh(
+                    Some(&session_id),
+                    &refresh,
+                    &RequestId::new(format!("token-refresh-replay-{unique}"))?,
+                )
+                .await?;
+            let replayed = replayed.into_parts();
+            assert_eq!(
+                replayed,
+                (
+                    rotated_access.clone(),
+                    rotated_refresh.clone(),
+                    rotated_expires,
+                )
+            );
+
+            let refresh_hash = Sha256::digest(refresh.as_bytes()).to_vec();
+            transport
+                .client()
+                .execute(
+                    "UPDATE auth_refresh_tokens SET replay_until_ms = $1 WHERE token_hash = $2",
+                    &[&(now_ms - 1), &refresh_hash],
+                )
+                .await?;
+            assert!(matches!(
+                service
+                    .refresh(
+                        Some(&session_id),
+                        &refresh,
+                        &RequestId::new(format!("token-reuse-{unique}"))?,
+                    )
+                    .await,
+                Err(TokenServiceError::ReuseDetected)
+            ));
+            assert!(
+                service
+                    .verify(
+                        &rotated_access,
+                        &RequestId::new(format!("token-after-reuse-{unique}"))?,
+                    )
+                    .await
+                    .is_err()
+            );
+
+            Ok::<_, Box<dyn Error>>(())
+        })
+}
+
+#[cfg(all(feature = "password", feature = "mfa"))]
+#[test]
+fn live_postgres_mfa_enrollment_and_recovery_contract() -> Result<(), Box<dyn Error>> {
+    let Ok(database_url) = std::env::var("WASI_AUTH_POSTGRES_TEST_URL") else {
+        return Ok(());
+    };
+    let _live_database = LIVE_DB_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    Builder::new_current_thread()
+        .enable_io()
+        .build()?
+        .block_on(async {
+            let transport = NativePostgresTransport::connect(&database_url).await?;
+            let store = PostgresAuthStore::new(transport.clone());
+            let user_id = Uuid::now_v7();
+            let unique = user_id.simple().to_string();
+            store
+                .register_password(registration_command_with_credentials(
+                    user_id,
+                    &unique,
+                    &format!("mfa-registration-{unique}"),
+                    password_hash("mfa contract correct horse battery staple")?,
+                    Sha256::digest(format!("mfa-verification-{unique}").as_bytes()).into(),
+                )?)
+                .await?;
+            let session_uuid = Uuid::now_v7();
+            let now_ms = 1_700_000_000_000_i64;
+            transport
+                .client()
+                .execute(
+                    "UPDATE auth_users SET status = 'active' WHERE user_id = $1",
+                    &[&user_id],
+                )
+                .await?;
+            transport
+                .client()
+                .execute(
+                    "INSERT INTO auth_sessions \
+                     (session_id, user_id, assurance, session_revision, user_security_revision, \
+                      expires_at_ms, created_at_ms, updated_at_ms) \
+                     VALUES ($1, $2, 'aal1', 1, 1, $3, $4, $4)",
+                    &[&session_uuid, &user_id, &(now_ms + 3_600_000), &now_ms],
+                )
+                .await?;
+            let service = MfaService::new(
+                PostgresAuthStore::new(transport.clone()),
+                FixedClock,
+                TestRandom::new(),
+                MfaKeyMaterial::new("mfa-contract-v1", [101_u8; 32], [103_u8; 32])?,
+                TotpConfig::default(),
+                "WASI Auth Contract",
+            )?;
+            let session_id = SessionId::new(session_uuid.to_string())?;
+            let initial = service.status(&session_id).await?;
+            assert!(!initial.totp_enrolled);
+            let enrollment = service
+                .start(&session_id, &RequestId::new(format!("mfa-start-{unique}"))?)
+                .await?;
+            let code = totp_test_code(&decode_base32(&enrollment.secret_base32)?, 1_700_000_000, 6);
+            let confirmation = service
+                .confirm(
+                    &session_id,
+                    &code,
+                    &RequestId::new(format!("mfa-confirm-{unique}"))?,
+                )
+                .await?;
+            assert_eq!(confirmation.recovery_codes.len(), 10);
+            let recovery_code = confirmation.recovery_codes[0].clone();
+            let status = service.status(&session_id).await?;
+            assert!(status.totp_enrolled);
+            assert_eq!(status.recovery_codes_remaining, 10);
+            assert_eq!(status.assurance, "aal2");
+
+            transport
+                .client()
+                .execute(
+                    "UPDATE auth_sessions SET assurance = 'aal1' WHERE session_id = $1",
+                    &[&session_uuid],
+                )
+                .await?;
+            service
+                .verify_step_up(
+                    &session_id,
+                    &code,
+                    &RequestId::new(format!("mfa-totp-step-up-{unique}"))?,
+                )
+                .await?;
+            transport
+                .client()
+                .execute(
+                    "UPDATE auth_sessions SET assurance = 'aal1' WHERE session_id = $1",
+                    &[&session_uuid],
+                )
+                .await?;
+            service
+                .use_recovery_code(
+                    &session_id,
+                    &recovery_code,
+                    &RequestId::new(format!("mfa-recovery-step-up-{unique}"))?,
+                )
+                .await?;
+            assert!(
+                service
+                    .use_recovery_code(
+                        &session_id,
+                        &recovery_code,
+                        &RequestId::new(format!("mfa-recovery-replay-{unique}"))?,
+                    )
+                    .await
+                    .is_err()
+            );
+
+            Ok::<_, Box<dyn Error>>(())
+        })
+}
+
+#[cfg(all(feature = "password", feature = "oauth"))]
+#[test]
+fn live_postgres_oauth_state_identity_and_replay_contract() -> Result<(), Box<dyn Error>> {
+    let Ok(database_url) = std::env::var("WASI_AUTH_POSTGRES_TEST_URL") else {
+        return Ok(());
+    };
+    let _live_database = LIVE_DB_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    Builder::new_current_thread()
+        .enable_io()
+        .build()?
+        .block_on(async {
+            let transport = NativePostgresTransport::connect(&database_url).await?;
+            let service = OAuthFlowService::new(
+                PostgresAuthStore::new(transport.clone()),
+                FixedClock,
+                TestRandom::new(),
+                FlowSealingKey::new("oauth-contract-v1", [113_u8; 32])?,
+                OAuthServiceConfig::new(300, 3_600)?,
+            );
+            let unique = Uuid::now_v7().simple().to_string();
+            let started = service.start("google", "/organizations").await?;
+            let (state, nonce, challenge) = started.into_parts();
+            assert_ne!(state, nonce);
+            assert_eq!(nonce.len(), 43);
+            assert_eq!(challenge.len(), 43);
+
+            let pending = service.load_callback("google", &state).await?;
+            assert_eq!(pending.provider_id(), "google");
+            assert_eq!(pending.redirect_path(), "/organizations");
+            assert_eq!(pending.nonce(), nonce);
+            assert_eq!(pending.pkce_verifier().len(), 43);
+            let completion = service
+                .complete(
+                    pending,
+                    VerifiedOAuthIdentity {
+                        provider_id: "google".to_owned(),
+                        provider_subject: format!("subject-{unique}"),
+                        email: Some(format!("oauth-{unique}@example.com")),
+                        email_verified: true,
+                        profile: serde_json::json!({"name":"OAuth Contract"}),
+                    },
+                    &RequestId::new(format!("oauth-complete-{unique}"))?,
+                )
+                .await?;
+            assert_eq!(completion.redirect_path, "/organizations");
+            assert_eq!(
+                completion.primary_email,
+                format!("oauth-{unique}@example.com")
+            );
+            assert!(
+                service.load_callback("google", &state).await.is_err(),
+                "consumed OAuth state must not replay"
+            );
+            let context = PostgresAuthStore::new(transport.clone())
+                .load_verified_session(
+                    &completion.session_id,
+                    RequestId::new(format!("oauth-session-{unique}"))?,
+                    FixedClock.now_unix_seconds(),
+                )
+                .await?;
+            assert_eq!(
+                context.context().auth().principal().user_id().as_str(),
+                completion.user_id
+            );
+            let completion_user = Uuid::parse_str(&completion.user_id)?;
+            let completion_session = Uuid::parse_str(completion.session_id.as_str())?;
+            transport
+                .client()
+                .execute(
+                    "UPDATE auth_sessions SET assurance = 'aal2' WHERE session_id = $1",
+                    &[&completion_session],
+                )
+                .await?;
+            transport
+                .client()
+                .execute(
+                    "INSERT INTO auth_system_administrators \
+                     (user_id, granted_by, granted_at_ms, revoked_at_ms) \
+                     VALUES ($1, $1, $2, NULL) \
+                     ON CONFLICT (user_id) DO UPDATE SET revoked_at_ms = NULL",
+                    &[&completion_user, &1_700_000_000_000_i64],
+                )
+                .await?;
+            let providers = OAuthProviderService::new(
+                PostgresAuthStore::new(transport.clone()),
+                FixedClock,
+                TestRandom::new(),
+            );
+            let provider = providers
+                .save(
+                    &completion.session_id,
+                    "google",
+                    "Google",
+                    true,
+                    &RequestId::new(format!("oauth-provider-{unique}"))?,
+                )
+                .await?;
+            assert!(provider.enabled);
+            assert!(providers.list().await?.iter().any(|item| item == &provider));
+            let redirects = providers
+                .replace_redirects(
+                    &completion.session_id,
+                    &[
+                        "/".to_owned(),
+                        "/after-oauth".to_owned(),
+                        "/organizations".to_owned(),
+                    ],
+                    &RequestId::new(format!("oauth-redirects-{unique}"))?,
+                )
+                .await?;
+            assert_eq!(redirects.len(), 3);
+            assert!(service.start("google", "/after-oauth").await.is_ok());
+            assert!(service.start("google", "/not-allowed").await.is_err());
+
+            #[cfg(all(feature = "jwt", feature = "ddd-cqrs"))]
+            {
+                let first_kid = format!("contract-a-{unique}");
+                let second_kid = format!("contract-b-{unique}");
+                let key_json = serde_json::json!([
+                    {
+                        "kid": first_kid,
+                        "alg": "HS256",
+                        "status": "active",
+                        "secret": "contract-signing-secret-a-00000000000000000000000000000000"
+                    },
+                    {
+                        "kid": second_kid,
+                        "alg": "HS256",
+                        "status": "next",
+                        "secret": "contract-signing-secret-b-00000000000000000000000000000000"
+                    }
+                ]);
+                let mut key_ring = ManagedJwtKeyRing::from_json(&key_json.to_string(), false)?;
+                let signing = SigningKeyService::new(
+                    PostgresAuthStore::new(transport.clone()),
+                    FixedClock,
+                    TestRandom::new(),
+                );
+                signing.synchronize(&key_ring, "contract-v1").await?;
+                let rotation = signing
+                    .rotate(
+                        &completion.session_id,
+                        &second_kid,
+                        true,
+                        &RequestId::new(format!("signing-rotate-{unique}"))?,
+                    )
+                    .await?;
+                assert_eq!(rotation.key.key_id, second_kid);
+                assert_eq!(
+                    rotation.previous_key_id.as_deref(),
+                    Some(first_kid.as_str())
+                );
+                signing.apply_authoritative_statuses(&mut key_ring).await?;
+                assert!(
+                    key_ring
+                        .descriptors()
+                        .iter()
+                        .any(|descriptor| descriptor.kid == second_kid
+                            && descriptor.status == "active")
+                );
+            }
+
+            #[cfg(feature = "cedar")]
+            {
+                let policies = PolicyBundleService::new(
+                    PostgresAuthStore::new(transport.clone()),
+                    FixedClock,
+                    TestRandom::new(),
+                );
+                let published = policies
+                    .publish(
+                        &completion.session_id,
+                        "{}",
+                        "permit(principal, action, resource);",
+                        serde_json::json!([]),
+                        &RequestId::new(format!("policy-publish-{unique}"))?,
+                    )
+                    .await?;
+                assert_eq!(published.status, "active");
+                assert!(
+                    policies
+                        .list(10)
+                        .await?
+                        .iter()
+                        .any(|policy| policy.policy_revision == published.policy_revision)
+                );
+            }
+
+            Ok::<_, Box<dyn Error>>(())
+        })
+}
+
+#[cfg(all(feature = "password", feature = "mfa"))]
+fn decode_base32(value: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+    const ALPHABET: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    let mut accumulator = 0_u32;
+    let mut bits = 0_u8;
+    let mut output = Vec::new();
+    for character in value.chars() {
+        let digit = ALPHABET
+            .find(character)
+            .ok_or_else(|| std::io::Error::other("invalid base32"))? as u32;
+        accumulator = (accumulator << 5) | digit;
+        bits += 5;
+        if bits >= 8 {
+            bits -= 8;
+            output.push((accumulator >> bits) as u8);
+            accumulator &= (1_u32 << bits).saturating_sub(1);
+        }
+    }
+    Ok(output)
+}
+
+#[cfg(all(feature = "password", feature = "mfa"))]
+fn totp_test_code(secret: &[u8], unix_seconds: u64, digits: u32) -> String {
+    let mut mac = Hmac::<Sha1>::new_from_slice(secret).expect("HMAC key");
+    mac.update(&(unix_seconds / 30).to_be_bytes());
+    let digest = mac.finalize().into_bytes();
+    let offset = usize::from(digest[digest.len() - 1] & 0x0f);
+    let binary = (u32::from(digest[offset] & 0x7f) << 24)
+        | (u32::from(digest[offset + 1]) << 16)
+        | (u32::from(digest[offset + 2]) << 8)
+        | u32::from(digest[offset + 3]);
+    let value = binary % 10_u32.pow(digits);
+    format!("{value:0width$}", width = digits as usize)
+}
+
 fn registration_command(
     user_id: Uuid,
     unique: &str,
@@ -942,6 +1455,17 @@ struct FixedClock;
 impl Clock for FixedClock {
     fn now_unix_seconds(&self) -> u64 {
         1_700_000_000
+    }
+}
+
+#[cfg(all(feature = "password", feature = "jwt", feature = "ddd-cqrs"))]
+#[derive(Clone, Copy, Debug)]
+struct ExplicitClock(u64);
+
+#[cfg(all(feature = "password", feature = "jwt", feature = "ddd-cqrs"))]
+impl Clock for ExplicitClock {
+    fn now_unix_seconds(&self) -> u64 {
+        self.0
     }
 }
 

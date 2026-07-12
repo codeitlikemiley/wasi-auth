@@ -36,7 +36,16 @@ mod tests {
     fn exposes_the_relational_catalog() {
         assert_eq!(
             catalog_versions(),
-            vec!["0001_relational_kernel", "0002_outbox_delivery_id"]
+            vec![
+                "0001_relational_kernel",
+                "0002_outbox_delivery_id",
+                "0003_management_integrity",
+                "0004_owner_invariant",
+                "0005_owner_trigger_revision",
+                "0006_oauth_provider_defaults",
+                "0007_signing_key_references",
+                "0008_fullstack_redirects",
+            ]
         );
     }
 }

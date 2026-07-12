@@ -77,6 +77,24 @@ pub const POSTGRES_OWNER_TRIGGER_0005: SchemaMigration = SchemaMigration {
     sql: include_str!("../migrations/postgres/0005_owner_trigger_revision.sql"),
 };
 
+/// OAuth provider defaults and exact application redirect allowlist.
+pub const POSTGRES_OAUTH_DEFAULTS_0006: SchemaMigration = SchemaMigration {
+    version: "0006_oauth_provider_defaults",
+    sql: include_str!("../migrations/postgres/0006_oauth_provider_defaults.sql"),
+};
+
+/// Signing-key lifecycle metadata backed by external secret references.
+pub const POSTGRES_SIGNING_KEYS_0007: SchemaMigration = SchemaMigration {
+    version: "0007_signing_key_references",
+    sql: include_str!("../migrations/postgres/0007_signing_key_references.sql"),
+};
+
+/// Canonical fullstack account and dashboard redirect paths.
+pub const POSTGRES_FULLSTACK_REDIRECTS_0008: SchemaMigration = SchemaMigration {
+    version: "0008_fullstack_redirects",
+    sql: include_str!("../migrations/postgres/0008_fullstack_redirects.sql"),
+};
+
 /// Returns the complete ordered relational-kernel migration catalog.
 #[must_use]
 pub const fn schema_migrations() -> &'static [SchemaMigration] {
@@ -86,6 +104,9 @@ pub const fn schema_migrations() -> &'static [SchemaMigration] {
         POSTGRES_MANAGEMENT_0003,
         POSTGRES_OWNER_INVARIANT_0004,
         POSTGRES_OWNER_TRIGGER_0005,
+        POSTGRES_OAUTH_DEFAULTS_0006,
+        POSTGRES_SIGNING_KEYS_0007,
+        POSTGRES_FULLSTACK_REDIRECTS_0008,
     ]
 }
 
@@ -153,6 +174,9 @@ mod tests {
                 POSTGRES_MANAGEMENT_0003,
                 POSTGRES_OWNER_INVARIANT_0004,
                 POSTGRES_OWNER_TRIGGER_0005,
+                POSTGRES_OAUTH_DEFAULTS_0006,
+                POSTGRES_SIGNING_KEYS_0007,
+                POSTGRES_FULLSTACK_REDIRECTS_0008,
             ])
         );
     }
@@ -179,6 +203,18 @@ mod tests {
             AppliedSchemaMigration {
                 version: POSTGRES_OWNER_TRIGGER_0005.version().to_owned(),
                 checksum: POSTGRES_OWNER_TRIGGER_0005.checksum_hex(),
+            },
+            AppliedSchemaMigration {
+                version: POSTGRES_OAUTH_DEFAULTS_0006.version().to_owned(),
+                checksum: POSTGRES_OAUTH_DEFAULTS_0006.checksum_hex(),
+            },
+            AppliedSchemaMigration {
+                version: POSTGRES_SIGNING_KEYS_0007.version().to_owned(),
+                checksum: POSTGRES_SIGNING_KEYS_0007.checksum_hex(),
+            },
+            AppliedSchemaMigration {
+                version: POSTGRES_FULLSTACK_REDIRECTS_0008.version().to_owned(),
+                checksum: POSTGRES_FULLSTACK_REDIRECTS_0008.checksum_hex(),
             },
         ];
 
