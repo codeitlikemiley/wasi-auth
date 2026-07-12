@@ -296,6 +296,7 @@ pub struct VerifiedRequestContext {
 }
 
 impl VerifiedRequestContext {
+    #[cfg(feature = "http")]
     pub(crate) const fn from_verified(
         auth: VerifiedAuthContext,
         authorization: AuthorizationSnapshot,

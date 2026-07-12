@@ -1,10 +1,10 @@
 # Production support matrix
 
-`0.1.0-alpha.4` is a production-hardening alpha. “Supported” below means the
-named contract has an executable release gate; it does not remove the alpha
-stability warning.
+`0.1.0-rc.1` is a production release candidate. “Supported” below means the
+named contract has an executable release gate; stable promotion still requires
+the complete default-profile matrix.
 
-| Surface | Alpha status | Release evidence |
+| Surface | RC status | Release evidence |
 |---|---|---|
 | Bounded AuthZEN 1.0 contract | Supported | Golden, negative, property, and fuzz tests |
 | Native Rust PEP/client | Supported | Rust 1.93 MSRV and current-stable lanes |
@@ -53,7 +53,7 @@ completed 2,586,955 responses at 4,311.53 responses/s with zero cancellations
 or hangs and no final-quarter RSS breach, but recorded 1,005,636 unexpected
 statuses, 42,793 transport failures, and 81.407 ms successful-response total
 p99. Native trusted ingress, embedded Cedar, and direct SpiceDB therefore
-remain alpha deployment profiles. The tracked diagnostic summary is
+remain unpromoted deployment profiles. The tracked diagnostic summary is
 `reports/runtime/trusted-ingress-wasmtime-46.0.1-darwin-arm64-2026-07-12.json`;
 its dirty-source marker means it is not signed release provenance.
 

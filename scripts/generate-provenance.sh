@@ -13,9 +13,8 @@ require_file "${REPORT_ROOT}/wit/cedar-pdp.wit"
 require_file "${REPORT_ROOT}/wit/spicedb-pdp.wit"
 version="$(compat_value version)"
 revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
-middleware_revision="$(compat_value wasi_http_middleware_revision)"
 output="${1:-${ARTIFACT_ROOT}/provenance.intoto.json}"
 python3 "${REPO_ROOT}/scripts/generate-provenance.py" \
-    "${REPO_ROOT}" "${version}" "${revision}" "${middleware_revision}" \
+    "${REPO_ROOT}" "${version}" "${revision}" \
     "${ARTIFACT_ROOT}/RELEASE-SHA256SUMS" "${REPORT_ROOT}/wit" "${output}"
 echo "wrote ${output}"

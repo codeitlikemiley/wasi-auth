@@ -1,6 +1,6 @@
-# Alpha release process
+# Release-candidate process
 
-The prepared version is `0.1.0-alpha.4`. No command in the implementation phase
+The prepared version is `0.1.0-rc.1`. No command in the implementation phase
 creates a remote, tag, registry push, or crates.io publication.
 
 ## Source order
@@ -16,7 +16,7 @@ The legacy authorization packages, Leptos bridge, HTTP PEP, Cedar/SpiceDB PDP
 components, and native Cedar PDP are all `publish = false` compatibility or
 deployment artifacts.
 
-There is no prior public `wasi-auth` release, so this alpha becomes the first
+There is no prior public `wasi-auth` release, so this RC becomes the first
 SemVer baseline. `scripts/check-alpha-api-inventory.sh` remains a private
 compatibility regression inventory and does not create additional supported
 packages.
@@ -26,10 +26,10 @@ packages.
 The package graph, rather than repository ownership, determines publication
 order:
 
-1. `leptos_wasi 0.4.2-alpha.3`;
-2. the `ddd_cqrs_es 0.3.0-alpha.1` library;
-3. `wasi-auth 0.1.0-alpha.4`;
-4. `ddd-cqrs-es-cli 0.3.0-alpha.1`; and
+1. `leptos-wasi-runtime 0.4.2-rc.1`, aliased as `leptos_wasi`;
+2. the `ddd_cqrs_es 0.3.0-rc.1` library;
+3. `wasi-auth 0.1.0-rc.1`;
+4. `ddd-cqrs-es-cli 0.3.0-rc.1`; and
 5. generated fullstack consumers.
 
 `wasi-auth` optionally depends on `ddd_cqrs_es`, so the DDD library must exist
@@ -40,7 +40,7 @@ proof of publishability.
 
 The earlier proposed `leptos_wasi 0.4.0-alpha.3` number is not reusable because
 the local release history already contains `0.4.0` and `0.4.1`.
-`0.4.2-alpha.3` preserves monotonic SemVer history for the final-WASI/islands
+`0.4.2-rc.1` preserves monotonic SemVer history for the final-WASI/islands
 work.
 
 Before requesting a release, regenerate metadata and require no diff:

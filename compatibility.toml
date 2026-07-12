@@ -1,7 +1,7 @@
 [release]
-version = "0.1.0-alpha.4"
-channel = "alpha"
-publish = false
+version = "0.1.0-rc.1"
+channel = "rc"
+publish = true
 
 [rust]
 msrv = "1.93.0"
@@ -19,13 +19,15 @@ wit_bindgen = "0.59.0"
 wasmtime = "46.0.1"
 spin_stable = "4.0.2"
 spin_main_version = "4.1.0-pre0"
+spin_main_repository = "https://github.com/codeitlikemiley/spin"
 spin_main_revision = "c34c584dbf77b3a3528ad0536aa9ce4761b9f772"
+spin_main_tag = "final-wasi-0.7-runtime-4.1.0-pre0"
 spin_main_final_wasi_terminal = true
 spin_main_final_wasi_outbound_http = true
 spin_main_precomposed_default_features = false
 spin_main_native_middleware = false
 spin_sdk = "6.0.0"
-spin_sdk_revision = "f0c4aeb2c2c44804906a9bc818397050b45c622d"
+spin_sdk_revision = "a02d330fe9357be2d18e6deef400511195ce6f7f"
 spin_middleware_revision = "27451471b8ba0faeffa01c5a4ddd6daee9a9d526"
 spin_final_wasi_blocking = false
 
@@ -73,5 +75,5 @@ wasi_http_middleware_revision = "006352a4d334cef06e7a5f8bdafe8968861cab8b"
 [support]
 wasmtime_final_wasi = true
 spin_final_wasi = false
-spin_main_final_wasi_terminal = "experimental"
+spin_main_final_wasi_terminal = "release-candidate"
 spin_middleware = false

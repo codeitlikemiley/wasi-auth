@@ -45,4 +45,6 @@ skip-tree = []
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = []
+# Temporary maintained fork for final-WASI Spin support. The dependency is
+# additionally pinned to an immutable revision in Cargo.toml and Cargo.lock.
+allow-git = ["https://github.com/codeitlikemiley/spin-rust-sdk"]

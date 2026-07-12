@@ -65,7 +65,7 @@ argon2 = { version = "0.5.3", default-features = false, features = ["alloc"], op
 base64 = { workspace = true, optional = true }
 bytes = { workspace = true, optional = true }
 cedar-policy = { workspace = true, optional = true }
-ddd_cqrs_es = { version = ">=0.2.6, <0.4.0", default-features = false, optional = true }
+ddd_cqrs_es = { version = ">=0.3.0-rc.1, <0.4.0", default-features = false, optional = true }
 http = { workspace = true, optional = true }
 http-body = { workspace = true, optional = true }
 hmac = { version = "0.12.1", optional = true }

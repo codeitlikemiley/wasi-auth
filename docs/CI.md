@@ -26,10 +26,10 @@ dedicated `spicedb-live` job executes it explicitly.
 The legacy API inventory is not a SemVer compatibility claim. The compatibility
 packages are private and the gate only detects behavioral drift from
 [`reports/semver/alpha-api-inventory.md`](../reports/semver/alpha-api-inventory.md).
-The final `wasi-auth 0.1.0-alpha.4` revision becomes the public baseline for
+The final `wasi-auth 0.1.0-rc.1` revision becomes the public baseline for
 subsequent release checks.
 
-Before `ddd_cqrs_es 0.3.0-alpha.1` is published, coordinated source CI may set
+Before `ddd_cqrs_es 0.3.0-rc.1` is published, coordinated source CI may set
 `DDD_CQRS_ES_SOURCE` to that checkout. The package command receives the patch
 through Cargo configuration, so no path enters the publishable manifest or
 archive. `PACKAGE_STRUCTURAL_ONLY=1` exists for archive inspection only and is

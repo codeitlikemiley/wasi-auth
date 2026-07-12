@@ -1,6 +1,6 @@
 # Compatibility
 
-| Surface | Status in `0.1.0-alpha.4` |
+| Surface | Status in `0.1.0-rc.1` |
 |---|---|
 | Rust | MSRV 1.93; current stable is tested separately |
 | AuthZEN Authorization API | Final 1.0 bounded access-evaluation profile |
@@ -15,8 +15,8 @@
 | Browser bindings | `wasm-bindgen` 0.2.126 in the locked Leptos/browser graph; unrelated to the WASI HTTP ABI |
 | Wasmtime | `46.0.1`, final-WASI component contract |
 | Spin 4.0.2 | Tagged compatibility canary; final-WASI linking is unavailable |
-| Spin main `c34c584...` (`4.1.0-pre0`) | Experimental final-WASI terminal/outbound-HTTP canary; native middleware is still RC-only and no tagged support is claimed |
-| Spin SDK | Git revision `f0c4aeb2c2c44804906a9bc818397050b45c622d`; final-WASI and Tonic gRPC canary only |
+| Maintained Spin fork `c34c584...` (`4.1.0-pre0`) | Release-candidate final-WASI terminal/outbound-HTTP lane; WAC middleware remains experimental and no upstream tagged support is claimed |
+| Spin SDK | Git revision `a02d330fe9357be2d18e6deef400511195ce6f7f`; Rust 1.93 final-WASI and Tonic gRPC lane |
 | Cedar | Embedded provider and native reference PDP |
 | SpiceDB | CheckPermission adapter tested with `1.54.0` |
 | Leptos | Current 0.8 line, islands-compatible request/server-function helpers |
@@ -27,7 +27,7 @@ members to be ignored. This project follows that rule outside its own reserved
 namespace. Inside `wasi_authz`, strict parsing prevents unrecognized
 enforcement instructions from crossing the trust boundary.
 
-Exact versions and the unpublished sibling source revision live in
+Exact versions and the imported middleware history revision live in
 [`compatibility.toml`](../compatibility.toml). The authoritative operational
 matrix is [Production support](SUPPORT.md).
 

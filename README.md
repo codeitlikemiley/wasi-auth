@@ -6,16 +6,16 @@ multi-tenant organizations, native HTTP security policy, embedded Cedar,
 optional direct SpiceDB, Leptos context, and Spin gRPC request support behind
 an empty-by-default feature graph.
 
-Current version: `0.1.0-alpha.4`.
+Current version: `0.1.0-rc.1`.
 
 The standalone crate baseline is Rust 1.93, `wasip3` 0.7.0 with final
 `wasi:http@0.3.0`, and Wasmtime 46.0.1. Tagged Spin 4.0.2 cannot link the
 final-WASI components. Spin consumers are pinned to SDK revision
-`f0c4aeb2c2c44804906a9bc818397050b45c622d` until a tagged release contains
+`a02d330fe9357be2d18e6deef400511195ce6f7f` until a tagged upstream release contains
 the required final-WASI and gRPC graph. That immutable SDK manifest declares
-Rust 1.94, so Spin applications require Rust 1.94 or newer even though the
-host-independent `wasi-auth` API retains Rust 1.93 compatibility. Pinned Spin
-`main` remains a canary, not a supported deployment runtime. The
+Rust 1.93. The maintained Spin runtime fork is pinned to
+`c34c584dbf77b3a3528ad0536aa9ce4761b9f772`; it is the release-candidate
+terminal lane, while WAC-composed middleware remains experimental. The
 Leptos/browser dependency graph is locked to `wasm-bindgen` 0.2.126; that
 browser binding version is independent of the WASI component ABI.
 
@@ -26,7 +26,7 @@ also private workspace packages.
 
 ```toml
 [dependencies]
-wasi-auth = { version = "0.1.0-alpha.4", default-features = false, features = [
+wasi-auth = { version = "0.1.0-rc.1", default-features = false, features = [
   "fullstack-spin",
   "storage-postgres",
   "mail-smtp",
