@@ -16,6 +16,8 @@ the required final-WASI and gRPC graph. That immutable SDK manifest declares
 Rust 1.93. The maintained Spin runtime fork is pinned to
 `c34c584dbf77b3a3528ad0536aa9ce4761b9f772`; it is the release-candidate
 terminal lane, while WAC-composed middleware remains experimental. The
+library and SDK MSRV is Rust 1.93; the native Spin host requires Rust 1.94
+because its Wasmtime 46 dependency graph declares that floor. The
 Leptos/browser dependency graph is locked to `wasm-bindgen` 0.2.126; that
 browser binding version is independent of the WASI component ABI.
 
@@ -28,14 +30,14 @@ also private workspace packages.
 [dependencies]
 wasi-auth = { version = "0.1.0-rc.1", default-features = false, features = [
   "fullstack-spin",
-  "storage-postgres",
+  "postgres-spin",
   "mail-smtp",
 ] }
 ```
 
-Development templates use `storage-spin-sqlite` and `mail-capture` instead.
-Production startup must select PostgreSQL and either SMTP or the documented
-HTTP webhook adapter.
+Development templates use PostgreSQL and `mail-capture`. Production startup
+selects PostgreSQL and the documented HTTP webhook adapter;
+SMTP delivery runs in the external native worker.
 
 The workspace also builds experimental, separately deployable final-WASIp3
 coarse HTTP PEP, Cedar PDP, and SpiceDB PDP components. Production applications
@@ -48,14 +50,31 @@ remote AuthZEN PDPs are compatibility features only. Embedded Cedar is the
 default decision provider; SpiceDB calls are direct and opt-in. Anything other
 than an explicit valid allow decision fails closed.
 
-The publishable API is organized into `context`, `authentication`,
-`authorization`, `http`, `cedar`, `spicedb`, `leptos`, `spin_grpc`, `ddd`,
-`mail`, and `testkit`. `AuthApplicationBuilder` uses typestate so a store,
-authorizer, mailer, secret store, clock, and randomness source are all required
-at compile time. `AuthUnitOfWork` commits sanitized events, projections,
-secret mutations, idempotency state, and mail or relationship outbox intents
-as one bounded mutation; its test adapter proves rollback at every stage and
-idempotent replay.
+The private `wasi-auth-ingress` service is distributed as a signed binary/OCI
+artifact, not as a second public crate. It terminates public HTTP, REST, and
+gRPC traffic, validates credentials through a prepared native PostgreSQL pool,
+and sends the loopback-only Spin backend a five-second HMAC envelope bound to
+audience, method, path, and request ID. Migration
+`0009_context_invalidation` publishes transactional cache invalidations; the
+ingress refuses startup if the trigger set is incomplete. The default REST
+Cedar check executes in the ingress from the same strictly validated policy
+bundle, removing an unnecessary second HTTP hop. See
+[Native trusted ingress](services/trusted-ingress/README.md).
+
+Authentication is implemented by the PostgreSQL relational command kernel.
+Each product mutation is one bounded, parameterized SQL statement that owns
+its row locks, optimistic checks, credential changes, idempotency result,
+authorization revision, audit record, and durable outbox insertion. It is not
+event sourced. The optional `ddd` and legacy `AuthUnitOfWork` APIs are
+transition adapters for business aggregates and are not the authentication
+source of truth.
+
+Mail and optional SpiceDB delivery share the encrypted `auth_outbox` table.
+The reusable workers lease with `FOR UPDATE SKIP LOCKED`, retry with bounded
+backoff, dead-letter poison records, and acknowledge provider delivery tokens.
+The current generated RC dispatches bounded batches after requests; stable
+promotion requires moving those same workers into the native background
+process so delivery no longer depends on request traffic.
 
 Install the checksum-pinned SpiceDB and `zed` binaries and run the live
 relationship matrix with:
@@ -67,5 +86,6 @@ make test-spicedb-live
 
 See [Architecture](docs/ARCHITECTURE.md),
 [Compatibility](docs/COMPATIBILITY.md), [Production support](docs/SUPPORT.md),
+[Performance](docs/PERFORMANCE.md),
 [Security](SECURITY.md), [Relationship consistency](docs/CONSISTENCY.md), and
 [Release process](docs/RELEASE.md).

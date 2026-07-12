@@ -61,9 +61,37 @@ bash scripts/check-packages.sh
 bash scripts/dry-run-supply-chain.sh
 ```
 
+The generated fullstack consumer must additionally pass its protected-path
+paired benchmark, five-sample absolute benchmark, and soak against the exact
+candidate artifacts:
+
+```bash
+bash scripts/benchmark_ingress_overhead.sh
+bash scripts/benchmark_fullstack.sh
+INGRESS_PID=<pid> SPIN_PID=<pid> bash scripts/soak_fullstack.sh
+```
+
+Every command writes machine-readable JSON and exits nonzero for status,
+transport, p99, revocation, memory-growth, or log-redaction failure. Do not
+substitute an anonymous proxy microbenchmark for the protected-path comparison.
+The current local RC evidence is indexed from [Performance](PERFORMANCE.md);
+signed release provenance must repeat the same commands from a clean tree.
+
 During coordinated pre-publication integration only, run
 `DDD_CQRS_ES_SOURCE=/absolute/path/to/ddd bash scripts/check-packages.sh`.
 Cargo receives that source as external configuration and verifies the archive;
 the packaged manifest remains registry-only. `PACKAGE_STRUCTURAL_ONLY=1`
 deliberately skips Cargo's build verification and therefore cannot satisfy this
 release gate.
+
+The same coordinated checkout is mandatory for the relational live gate:
+
+```bash
+WASI_AUTH_POSTGRES_TEST_URL=postgresql://... \
+DDD_CQRS_ES_SOURCE=/absolute/path/to/ddd \
+  bash scripts/test-postgres-kernel-live.sh
+```
+
+This is a transition constraint, not the target dependency direction. After
+the compatibility DDD modules leave the public crate, publication becomes
+`leptos-wasi-runtime -> wasi-auth -> ddd_cqrs_es -> ddd-cqrs-es-cli`.

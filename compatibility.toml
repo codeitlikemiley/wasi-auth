@@ -72,6 +72,10 @@ cedar_policy = "4.11.2"
 wasi_http_middleware = "0.2.0-alpha.3"
 wasi_http_middleware_revision = "006352a4d334cef06e7a5f8bdafe8968861cab8b"
 
+[coordinated_sources]
+ddd_repository = "codeitlikemiley/ddd-cqrs-es"
+ddd_revision = "737fa95c3c286a7904aca1f5ba59f342877a9579"
+
 [support]
 wasmtime_final_wasi = true
 spin_final_wasi = false
