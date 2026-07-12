@@ -111,31 +111,12 @@ new_audit AS (
     JOIN selected_session ON TRUE
     RETURNING audit_id
 ),
-created AS (
+result AS (
     SELECT revision_result.organization_id, revision_result.name, revision_result.status,
            revision_result.created_at_ms, accepted_membership.role_id
     FROM revision_result
     JOIN accepted_membership ON TRUE
     JOIN new_audit ON TRUE
-),
-replayed AS (
-    SELECT organizations.organization_id, organizations.name, organizations.status,
-           organizations.created_at_ms, memberships.role_id
-    FROM locked_invitation
-    JOIN actor ON locked_invitation.accepted_by = actor.user_id
-    JOIN auth_organizations AS organizations
-      ON organizations.organization_id = locked_invitation.organization_id
-    JOIN auth_memberships AS memberships
-      ON memberships.organization_id = organizations.organization_id
-     AND memberships.user_id = actor.user_id
-     AND memberships.status = 'active'
-    WHERE locked_invitation.status = 'accepted'
-      AND organizations.status = 'active'
-),
-result AS (
-    SELECT * FROM created
-    UNION ALL
-    SELECT * FROM replayed
 )
 SELECT result.organization_id::text AS organization_id,
        result.name, result.status, result.created_at_ms,

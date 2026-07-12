@@ -12,6 +12,7 @@ members = [
     "crates/wasi-authz-spicedb",
     "crates/wasi-authz-testkit",
     "services/cedar-pdp",
+    "services/trusted-ingress",
     "tools/wasi-auth-migrate",
 ]
 resolver = "2"
@@ -49,7 +50,9 @@ wasi-http-metadata = { path = "legacy/wasi-http-middleware/crates/metadata", ver
 wasi-http-policy-core = { path = "legacy/wasi-http-middleware/crates/policy-core", version = "=0.2.0-alpha.3" }
 wasi-http-middleware-component-support = { path = "legacy/wasi-http-middleware/crates/component-support", version = "=0.2.0-alpha.3" }
 wasip3 = { version = "=0.7.0", features = ["http-compat"] }
-wit-bindgen = { version = "=0.59.0", features = ["async-spawn"] }
+# Keep the component runtime identical to the generator embedded by tagged
+# `wasip3 0.7.0`; mixed versions duplicate async stream intrinsics.
+wit-bindgen = { version = "=0.57.1", features = ["async-spawn"] }
 
 [workspace.lints.rust]
 future-incompatible = "warn"

@@ -4,11 +4,20 @@ use std::{error::Error as StdError, fmt};
 
 use http::Uri;
 use serde::Deserialize;
+#[cfg(feature = "spicedb")]
+use serde::Serialize;
 use thiserror::Error;
 use uuid::Uuid;
 use zeroize::{Zeroize, Zeroizing};
 
+#[cfg(feature = "spicedb")]
+use super::SealedPayload;
 use super::{PgValue, PostgresAuthStore, PostgresTransport, RowDecodeError};
+#[cfg(feature = "spicedb")]
+use crate::{
+    authentication::RelationshipOutboxIntent,
+    spicedb::{SpiceDbRelationshipWriter, SpiceDbTransport},
+};
 use crate::{
     authentication::{Clock, RandomSource},
     mail::{EmailKind, EmailMessage, Mailer, Recipient},
@@ -18,8 +27,14 @@ use crate::{
 const LEASE_OUTBOX_SQL: &str = include_str!("lease_outbox.sql");
 const COMPLETE_OUTBOX_SQL: &str = include_str!("complete_outbox.sql");
 const RETRY_OUTBOX_SQL: &str = include_str!("retry_outbox.sql");
+#[cfg(feature = "mail-capture")]
+const LOAD_RECENT_DELIVERED_MAIL_SQL: &str = include_str!("load_recent_delivered_mail.sql");
 const MAIL_LEASE_MS: u64 = 30_000;
 const MAX_MAIL_BATCH: usize = 25;
+#[cfg(feature = "spicedb")]
+const RELATIONSHIP_LEASE_MS: u64 = 30_000;
+#[cfg(feature = "spicedb")]
+const MAX_RELATIONSHIP_BATCH: usize = 100;
 const MAX_ATTEMPTS: u64 = 8;
 const UUID_RANDOM_BYTES: usize = 10;
 
@@ -104,6 +119,56 @@ struct MailPayload {
     token: String,
     redirect_uri: String,
 }
+
+#[cfg(feature = "spicedb")]
+#[derive(Deserialize, Serialize)]
+struct RelationshipPayload {
+    version: u8,
+    intent: RelationshipOutboxIntent,
+}
+
+#[cfg(feature = "spicedb")]
+impl OutboxSealingKey {
+    /// Encrypts one versioned relationship intent for insertion by a typed,
+    /// transactional PostgreSQL command.
+    ///
+    /// The returned payload contains no plaintext relationship data. Callers
+    /// must insert it into `auth_outbox` in the same statement that commits the
+    /// corresponding authorization revision; this helper is not an enqueue
+    /// operation by itself.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when randomness, serialization, or encryption fails.
+    pub fn seal_relationship_intent<R>(
+        &self,
+        randomness: &R,
+        intent: &RelationshipOutboxIntent,
+    ) -> Result<SealedPayload, RelationshipPayloadError>
+    where
+        R: RandomSource,
+    {
+        let mut nonce = [0_u8; 12];
+        randomness
+            .fill_bytes(&mut nonce)
+            .map_err(|_| RelationshipPayloadError)?;
+        let plaintext = Zeroizing::new(
+            serde_json::to_vec(&RelationshipPayload {
+                version: 1,
+                intent: intent.clone(),
+            })
+            .map_err(|_| RelationshipPayloadError)?,
+        );
+        self.seal_relationship(nonce, &plaintext)
+            .map_err(|_| RelationshipPayloadError)
+    }
+}
+
+/// Relationship outbox payload construction failed closed.
+#[cfg(feature = "spicedb")]
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+#[error("relationship outbox payload could not be sealed")]
+pub struct RelationshipPayloadError;
 
 impl Drop for MailPayload {
     fn drop(&mut self) {
@@ -221,6 +286,47 @@ where
         Ok(report)
     }
 
+    /// Reconstructs the most recent matching development message from the
+    /// encrypted durable outbox.
+    ///
+    /// This avoids relying on process-local capture state, which is not stable
+    /// across pooled or short-lived component instances. Callers must still
+    /// gate this operation behind validated development configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns a transport, row-decoding, or encrypted-payload failure.
+    #[cfg(feature = "mail-capture")]
+    pub async fn latest_delivered_for_development(
+        &self,
+        recipient: &Recipient,
+        kind: EmailKind,
+    ) -> Result<Option<EmailMessage>, MailOutboxError<T::Error>> {
+        let rows = self
+            .store
+            .transport()
+            .query(LOAD_RECENT_DELIVERED_MAIL_SQL, Vec::new())
+            .await
+            .map_err(MailOutboxError::Transport)?;
+        for row in &rows {
+            let ciphertext = row.required_bytes("payload_ciphertext")?;
+            if ciphertext.is_empty() || ciphertext.len() > 256 * 1_024 {
+                return Err(MailOutboxError::InvalidRow);
+            }
+            let message = self
+                .message_from_encrypted(
+                    row.required_text("deduplication_key")?,
+                    row.required_text("key_version")?,
+                    ciphertext,
+                )
+                .map_err(|_| MailOutboxError::InvalidRow)?;
+            if message.recipient() == recipient && message.kind() == kind {
+                return Ok(Some(message));
+            }
+        }
+        Ok(None)
+    }
+
     async fn lease(
         &self,
         batch_size: usize,
@@ -248,9 +354,22 @@ where
     }
 
     fn message(&self, lease: &OutboxLease) -> Result<EmailMessage, ()> {
+        self.message_from_encrypted(
+            &lease.deduplication_key,
+            &lease.key_version,
+            &lease.payload_ciphertext,
+        )
+    }
+
+    fn message_from_encrypted(
+        &self,
+        deduplication_key: &str,
+        key_version: &str,
+        payload_ciphertext: &[u8],
+    ) -> Result<EmailMessage, ()> {
         let plaintext = Zeroizing::new(
             self.sealing_key
-                .open(&lease.key_version, &lease.payload_ciphertext)
+                .open(key_version, payload_ciphertext)
                 .map_err(|_| ())?,
         );
         let payload = serde_json::from_slice::<MailPayload>(&plaintext).map_err(|_| ())?;
@@ -283,11 +402,8 @@ where
             kind,
             recipient,
             subject,
-            format!(
-                "Open this one-time link: {}",
-                self.public_base_url.one_time_url(path, &payload.token)
-            ),
-            lease.deduplication_key.clone(),
+            self.public_base_url.one_time_url(path, &payload.token),
+            deduplication_key.to_owned(),
         )
         .map_err(|_| ())
     }
@@ -384,6 +500,298 @@ where
     })
 }
 
+/// One bounded relationship-dispatch pass result.
+#[cfg(feature = "spicedb")]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct RelationshipDispatchReport {
+    /// Rows leased for this pass.
+    pub leased: usize,
+    /// Relationship writes acknowledged in PostgreSQL.
+    pub delivered: usize,
+    /// Failures returned to the pending queue.
+    pub retried: usize,
+    /// Poison or repeatedly failing rows moved to the dead-letter state.
+    pub dead_lettered: usize,
+}
+
+/// Durable relationship outbox worker backed by the canonical `auth_outbox`.
+#[cfg(feature = "spicedb")]
+pub struct RelationshipOutboxWorker<T, C, R> {
+    store: PostgresAuthStore<T>,
+    clock: C,
+    randomness: R,
+    sealing_key: OutboxSealingKey,
+}
+
+#[cfg(feature = "spicedb")]
+impl<T, C, R> RelationshipOutboxWorker<T, C, R> {
+    /// Assembles the worker from concrete runtime dependencies.
+    #[must_use]
+    pub const fn new(
+        store: PostgresAuthStore<T>,
+        clock: C,
+        randomness: R,
+        sealing_key: OutboxSealingKey,
+    ) -> Self {
+        Self {
+            store,
+            clock,
+            randomness,
+            sealing_key,
+        }
+    }
+
+    /// Returns the relational store used by this worker.
+    #[must_use]
+    pub const fn store(&self) -> &PostgresAuthStore<T> {
+        &self.store
+    }
+}
+
+#[cfg(feature = "spicedb")]
+impl<T, C, R> RelationshipOutboxWorker<T, C, R>
+where
+    T: PostgresTransport,
+    C: Clock,
+    R: RandomSource,
+{
+    /// Leases and dispatches a bounded relationship batch.
+    ///
+    /// SpiceDB writes are at-least-once. `TOUCH` and `DELETE` operations make
+    /// retry after a lost database acknowledgement safe. Invalid encrypted
+    /// payloads are retried with the same bounded dead-letter policy as mail.
+    ///
+    /// # Errors
+    ///
+    /// Returns invalid batch, randomness, row, or PostgreSQL failures. Provider
+    /// failures are persisted as retry/dead-letter outcomes.
+    pub async fn dispatch<S>(
+        &self,
+        writer: &SpiceDbRelationshipWriter<S>,
+        batch_size: usize,
+    ) -> Result<RelationshipDispatchReport, RelationshipOutboxError<T::Error>>
+    where
+        S: SpiceDbTransport,
+    {
+        if batch_size == 0 || batch_size > MAX_RELATIONSHIP_BATCH {
+            return Err(RelationshipOutboxError::InvalidBatch);
+        }
+        let now_ms = self.clock.now_unix_seconds().saturating_mul(1_000);
+        let leases = self.lease_relationships(batch_size, now_ms).await?;
+        let mut report = RelationshipDispatchReport {
+            leased: leases.len(),
+            ..RelationshipDispatchReport::default()
+        };
+        let mut valid = Vec::with_capacity(leases.len());
+        for lease in leases {
+            match self.relationship(&lease) {
+                Ok(intent) => valid.push((lease, intent)),
+                Err(()) => {
+                    let dead = self
+                        .retry_relationship(&lease, "invalid_payload", now_ms)
+                        .await?;
+                    if dead {
+                        report.dead_lettered += 1;
+                    } else {
+                        report.retried += 1;
+                    }
+                }
+            }
+        }
+        if valid.is_empty() {
+            return Ok(report);
+        }
+
+        let intents = valid
+            .iter()
+            .map(|(_, intent)| intent.clone())
+            .collect::<Vec<_>>();
+        match writer.write(&intents).await {
+            Ok(receipt) => {
+                for (lease, _) in &valid {
+                    self.complete_relationship(lease, receipt.consistency_token(), now_ms)
+                        .await?;
+                    report.delivered += 1;
+                }
+            }
+            Err(_) => {
+                for (lease, _) in &valid {
+                    let dead = self
+                        .retry_relationship(lease, "provider_failure", now_ms)
+                        .await?;
+                    if dead {
+                        report.dead_lettered += 1;
+                    } else {
+                        report.retried += 1;
+                    }
+                }
+            }
+        }
+        Ok(report)
+    }
+
+    async fn lease_relationships(
+        &self,
+        batch_size: usize,
+        now_ms: u64,
+    ) -> Result<Vec<OutboxLease>, RelationshipOutboxError<T::Error>> {
+        let lease_id = uuid_v7(now_ms, &self.randomness)
+            .map_err(|_| RelationshipOutboxError::RandomnessUnavailable)?;
+        self.store
+            .transport()
+            .query(
+                LEASE_OUTBOX_SQL,
+                vec![
+                    PgValue::Text("relationship".to_owned()),
+                    PgValue::I64(u64_to_i64(now_ms)),
+                    PgValue::I64(i64::try_from(batch_size).unwrap_or(i64::MAX)),
+                    PgValue::Text(lease_id.to_string()),
+                    PgValue::I64(u64_to_i64(now_ms.saturating_add(RELATIONSHIP_LEASE_MS))),
+                ],
+            )
+            .await
+            .map_err(RelationshipOutboxError::Transport)?
+            .iter()
+            .map(decode_relationship_lease)
+            .collect()
+    }
+
+    fn relationship(&self, lease: &OutboxLease) -> Result<RelationshipOutboxIntent, ()> {
+        let plaintext = Zeroizing::new(
+            self.sealing_key
+                .open_relationship(&lease.key_version, &lease.payload_ciphertext)
+                .map_err(|_| ())?,
+        );
+        let payload = serde_json::from_slice::<RelationshipPayload>(&plaintext).map_err(|_| ())?;
+        if payload.version != 1 {
+            return Err(());
+        }
+        Ok(payload.intent)
+    }
+
+    async fn complete_relationship(
+        &self,
+        lease: &OutboxLease,
+        consistency_token: &str,
+        now_ms: u64,
+    ) -> Result<(), RelationshipOutboxError<T::Error>> {
+        if consistency_token.is_empty()
+            || consistency_token.len() > 4_096
+            || consistency_token.chars().any(char::is_control)
+        {
+            return Err(RelationshipOutboxError::InvalidConsistencyToken);
+        }
+        let rows = self
+            .store
+            .transport()
+            .query(
+                COMPLETE_OUTBOX_SQL,
+                vec![
+                    PgValue::Text(lease.outbox_id.to_string()),
+                    PgValue::Text(lease.lease_id.to_string()),
+                    PgValue::I64(u64_to_i64(now_ms)),
+                    PgValue::Text(consistency_token.to_owned()),
+                ],
+            )
+            .await
+            .map_err(RelationshipOutboxError::Transport)?;
+        if rows
+            .first()
+            .is_some_and(|row| row.required_text("outcome").ok() == Some("delivered"))
+        {
+            Ok(())
+        } else {
+            Err(RelationshipOutboxError::LeaseLost)
+        }
+    }
+
+    async fn retry_relationship(
+        &self,
+        lease: &OutboxLease,
+        error_code: &'static str,
+        now_ms: u64,
+    ) -> Result<bool, RelationshipOutboxError<T::Error>> {
+        let exponent = lease.attempt_count.min(10) as u32;
+        let delay_ms = 1_000_u64.saturating_mul(2_u64.saturating_pow(exponent));
+        let rows = self
+            .store
+            .transport()
+            .query(
+                RETRY_OUTBOX_SQL,
+                vec![
+                    PgValue::Text(lease.outbox_id.to_string()),
+                    PgValue::Text(lease.lease_id.to_string()),
+                    PgValue::I64(u64_to_i64(now_ms)),
+                    PgValue::I64(u64_to_i64(now_ms.saturating_add(delay_ms))),
+                    PgValue::Text(error_code.to_owned()),
+                    PgValue::I64(u64_to_i64(MAX_ATTEMPTS)),
+                ],
+            )
+            .await
+            .map_err(RelationshipOutboxError::Transport)?;
+        match rows.first().map(|row| row.required_text("outcome")) {
+            Some(Ok("pending")) => Ok(false),
+            Some(Ok("dead_letter")) => Ok(true),
+            _ => Err(RelationshipOutboxError::LeaseLost),
+        }
+    }
+}
+
+#[cfg(feature = "spicedb")]
+fn decode_relationship_lease<E>(
+    row: &super::PgRow,
+) -> Result<OutboxLease, RelationshipOutboxError<E>>
+where
+    E: StdError + Send + Sync + 'static,
+{
+    if row.required_text("kind")? != "relationship" {
+        return Err(RelationshipOutboxError::InvalidRow);
+    }
+    let ciphertext = row.required_bytes("payload_ciphertext")?;
+    if ciphertext.is_empty() || ciphertext.len() > 256 * 1_024 {
+        return Err(RelationshipOutboxError::InvalidRow);
+    }
+    Ok(OutboxLease {
+        outbox_id: Uuid::parse_str(row.required_text("outbox_id")?)
+            .map_err(|_| RelationshipOutboxError::InvalidRow)?,
+        deduplication_key: row.required_text("deduplication_key")?.to_owned(),
+        key_version: row.required_text("key_version")?.to_owned(),
+        payload_ciphertext: ciphertext.to_vec(),
+        attempt_count: u64::try_from(row.required_i64("attempt_count")?)
+            .map_err(|_| RelationshipOutboxError::InvalidRow)?,
+        lease_id: Uuid::parse_str(row.required_text("lease_id")?)
+            .map_err(|_| RelationshipOutboxError::InvalidRow)?,
+    })
+}
+
+/// Durable relationship worker failure.
+#[cfg(feature = "spicedb")]
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum RelationshipOutboxError<E: StdError + Send + Sync + 'static> {
+    /// Requested lease batch was empty or exceeded 100 records.
+    #[error("relationship outbox batch size is invalid")]
+    InvalidBatch,
+    /// Host cryptographic randomness was unavailable.
+    #[error("cryptographic randomness is unavailable")]
+    RandomnessUnavailable,
+    /// PostgreSQL transport failed.
+    #[error("PostgreSQL relationship outbox transport failed: {0}")]
+    Transport(#[source] E),
+    /// PostgreSQL returned a malformed outbox row.
+    #[error("PostgreSQL returned a malformed relationship outbox row")]
+    InvalidRow,
+    /// PostgreSQL returned a typed row-decoding failure.
+    #[error(transparent)]
+    Row(#[from] RowDecodeError),
+    /// SpiceDB returned an invalid consistency token.
+    #[error("SpiceDB consistency token is invalid")]
+    InvalidConsistencyToken,
+    /// A different worker took or completed the lease.
+    #[error("relationship outbox lease is no longer owned by this worker")]
+    LeaseLost,
+}
+
 fn uuid_v7<R>(now_ms: u64, randomness: &R) -> Result<Uuid, ()>
 where
     R: RandomSource,
@@ -429,4 +837,174 @@ pub enum MailOutboxError<E: StdError + Send + Sync + 'static> {
     /// A different worker took or completed the lease.
     #[error("mail outbox lease is no longer owned by this worker")]
     LeaseLost,
+}
+
+#[cfg(all(test, feature = "spicedb"))]
+mod tests {
+    use std::{
+        collections::VecDeque,
+        convert::Infallible,
+        io,
+        sync::{Arc, Mutex},
+    };
+
+    use futures::executor::block_on;
+    use http::{Response, StatusCode, header::CONTENT_TYPE};
+
+    use super::*;
+    use crate::{
+        authentication::RelationshipOperation,
+        postgres::PgRow,
+        spicedb::{SpiceDbBearerToken, SpiceDbWriteEndpoint},
+    };
+
+    #[derive(Clone, Copy, Debug)]
+    struct FixedClock;
+
+    impl Clock for FixedClock {
+        fn now_unix_seconds(&self) -> u64 {
+            1_700_000_000
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct FixedRandom;
+
+    impl RandomSource for FixedRandom {
+        type Error = Infallible;
+
+        fn fill_bytes(&self, destination: &mut [u8]) -> Result<(), Self::Error> {
+            destination.fill(7);
+            Ok(())
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct FakePostgres {
+        state: Arc<Mutex<FakePostgresState>>,
+    }
+
+    #[derive(Default)]
+    struct FakePostgresState {
+        responses: VecDeque<Vec<PgRow>>,
+        calls: Vec<(&'static str, Vec<PgValue>)>,
+    }
+
+    impl PostgresTransport for FakePostgres {
+        type Error = io::Error;
+
+        async fn query(
+            &self,
+            sql: &'static str,
+            parameters: Vec<PgValue>,
+        ) -> Result<Vec<PgRow>, Self::Error> {
+            let mut state = self.state.lock().expect("fake postgres lock");
+            state.calls.push((sql, parameters));
+            state.responses.pop_front().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::UnexpectedEof, "missing fake response")
+            })
+        }
+    }
+
+    #[derive(Default)]
+    struct FakeSpiceDb;
+
+    impl SpiceDbTransport for FakeSpiceDb {
+        type Error = io::Error;
+
+        async fn send(
+            &self,
+            _request: http::Request<Vec<u8>>,
+        ) -> Result<Response<Vec<u8>>, Self::Error> {
+            Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header(CONTENT_TYPE, "application/json")
+                .body(br#"{"writtenAt":{"token":"zed-relationship-one"}}"#.to_vec())
+                .expect("fake SpiceDB response"))
+        }
+    }
+
+    #[test]
+    fn relationship_worker_uses_canonical_encrypted_outbox() {
+        let sealing_key = OutboxSealingKey::new("outbox-v1", [11; 32]).expect("valid sealing key");
+        let intent = RelationshipOutboxIntent {
+            operation: RelationshipOperation::Grant,
+            resource: "organization:org-one".to_owned(),
+            relation: "member".to_owned(),
+            subject: "user:user-one".to_owned(),
+            resource_revision: 7,
+            consistency_token: None,
+        };
+        let sealed = sealing_key
+            .seal_relationship_intent(&FixedRandom, &intent)
+            .expect("sealed relationship intent");
+        assert!(
+            sealing_key
+                .open(sealed.key_version(), sealed.ciphertext())
+                .is_err(),
+            "mail and relationship authenticated-data domains must differ"
+        );
+
+        let outbox_id = Uuid::now_v7();
+        let lease_id = Uuid::now_v7();
+        let postgres = FakePostgres::default();
+        {
+            let mut state = postgres.state.lock().expect("fake postgres lock");
+            state.responses.push_back(vec![PgRow::new([
+                ("outbox_id".to_owned(), PgValue::Text(outbox_id.to_string())),
+                ("kind".to_owned(), PgValue::Text("relationship".to_owned())),
+                (
+                    "deduplication_key".to_owned(),
+                    PgValue::Text("relationship:org-one:user-one:7".to_owned()),
+                ),
+                (
+                    "key_version".to_owned(),
+                    PgValue::Text(sealed.key_version().to_owned()),
+                ),
+                (
+                    "payload_ciphertext".to_owned(),
+                    PgValue::Bytes(sealed.ciphertext().to_vec()),
+                ),
+                ("attempt_count".to_owned(), PgValue::I64(1)),
+                ("lease_id".to_owned(), PgValue::Text(lease_id.to_string())),
+            ])]);
+            state.responses.push_back(vec![PgRow::new([(
+                "outcome".to_owned(),
+                PgValue::Text("delivered".to_owned()),
+            )])]);
+        }
+
+        let worker = RelationshipOutboxWorker::new(
+            PostgresAuthStore::new(postgres.clone()),
+            FixedClock,
+            FixedRandom,
+            sealing_key,
+        );
+        let writer = SpiceDbRelationshipWriter::new(
+            SpiceDbWriteEndpoint::new("https://spicedb.example.test/v1/relationships/write")
+                .expect("write endpoint"),
+            SpiceDbBearerToken::new("provider-secret").expect("bearer token"),
+            FakeSpiceDb,
+        );
+        let report = block_on(worker.dispatch(&writer, 100)).expect("dispatch relationship");
+
+        assert_eq!(
+            report,
+            RelationshipDispatchReport {
+                leased: 1,
+                delivered: 1,
+                retried: 0,
+                dead_lettered: 0,
+            }
+        );
+        let state = postgres.state.lock().expect("fake postgres lock");
+        assert_eq!(state.calls.len(), 2);
+        assert_eq!(state.calls[0].0, LEASE_OUTBOX_SQL);
+        assert_eq!(
+            state.calls[0].1.first(),
+            Some(&PgValue::Text("relationship".to_owned()))
+        );
+        assert_eq!(state.calls[1].0, COMPLETE_OUTBOX_SQL);
+        assert!(state.responses.is_empty());
+    }
 }

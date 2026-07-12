@@ -1,30 +1,17 @@
 WITH token_candidate AS MATERIALIZED (
-    SELECT token_hash, user_id, consumed_at_ms, payload
+    SELECT token_hash, user_id
     FROM auth_one_time_tokens
     WHERE token_hash = $1
       AND purpose = 'email_verification'
       AND expires_at_ms >= $2
+      AND consumed_at_ms IS NULL
     FOR UPDATE
-),
-replayed AS (
-    SELECT sessions.session_id, sessions.user_id, sessions.expires_at_ms
-    FROM token_candidate
-    JOIN auth_sessions AS sessions
-      ON sessions.session_id = NULLIF(token_candidate.payload->>'result_session_id', '')::uuid
-    JOIN auth_users AS users ON users.user_id = sessions.user_id
-    WHERE token_candidate.consumed_at_ms IS NOT NULL
-      AND sessions.revoked_at_ms IS NULL
-      AND sessions.expires_at_ms > $2
-      AND sessions.user_security_revision = users.security_revision
-      AND users.status = 'active'
 ),
 consumed AS (
     UPDATE auth_one_time_tokens AS tokens
-    SET consumed_at_ms = $2,
-        payload = jsonb_set(tokens.payload, '{result_session_id}', to_jsonb($3::text), TRUE)
+    SET consumed_at_ms = $2
     FROM token_candidate
     WHERE tokens.token_hash = token_candidate.token_hash
-      AND token_candidate.consumed_at_ms IS NULL
     RETURNING tokens.user_id
 ),
 activated AS (
@@ -65,11 +52,4 @@ SELECT
     new_session.expires_at_ms
 FROM new_session
 JOIN new_audit ON TRUE
-UNION ALL
-SELECT
-    'replayed'::text AS outcome,
-    replayed.session_id::text AS session_id,
-    replayed.user_id::text AS user_id,
-    replayed.expires_at_ms
-FROM replayed
 LIMIT 1

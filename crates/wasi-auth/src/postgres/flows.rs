@@ -109,16 +109,22 @@ impl Drop for FlowSealingKey {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum FlowKind {
+    #[cfg(feature = "oauth")]
     OAuth,
+    #[cfg(feature = "passkeys")]
     WebauthnRegistration,
+    #[cfg(feature = "passkeys")]
     WebauthnAuthentication,
 }
 
 impl FlowKind {
     const fn as_str(self) -> &'static str {
         match self {
+            #[cfg(feature = "oauth")]
             Self::OAuth => "oauth",
+            #[cfg(feature = "passkeys")]
             Self::WebauthnRegistration => "webauthn_registration",
+            #[cfg(feature = "passkeys")]
             Self::WebauthnAuthentication => "webauthn_authentication",
         }
     }
@@ -175,6 +181,7 @@ impl<T, C, R> EncryptedFlowStore<T, C, R> {
         self.store.transport()
     }
 
+    #[cfg(feature = "passkeys")]
     pub(crate) const fn store(&self) -> &PostgresAuthStore<T> {
         &self.store
     }

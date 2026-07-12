@@ -4,6 +4,8 @@ use std::collections::BTreeSet;
 use std::error::Error as StdError;
 use std::future::Future;
 
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use hmac::{Hmac, Mac};
 use http::header::{
     ACCESS_CONTROL_ALLOW_CREDENTIALS, ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS,
     ACCESS_CONTROL_ALLOW_ORIGIN, ACCESS_CONTROL_REQUEST_HEADERS, ACCESS_CONTROL_REQUEST_METHOD,
@@ -11,13 +13,16 @@ use http::header::{
     REFERRER_POLICY, STRICT_TRANSPORT_SECURITY, VARY, X_CONTENT_TYPE_OPTIONS,
 };
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Request, Response, StatusCode};
+use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use thiserror::Error;
+use zeroize::Zeroize;
 
 use crate::authentication::Clock;
 use crate::context::{
     AuthenticationAssurance, AuthorizationSnapshot, ContextError, DecisionId, OrganizationId,
-    PolicyRevision, Principal, RequestId, SessionId, ValidatedContextParts, VerifiedAuthContext,
-    VerifiedRequestContext,
+    PolicyRevision, Principal, RequestId, RoleId, SessionId, UserId, ValidatedContextParts,
+    VerifiedAuthContext, VerifiedRequestContext,
 };
 
 /// Default bounded body size for auth, REST, and unary gRPC requests.
@@ -26,10 +31,317 @@ pub const DEFAULT_MAX_REQUEST_BODY_BYTES: usize = 256 * 1024;
 pub const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-request-id");
 /// Internal identity metadata header removed from every public request.
 pub const AUTH_CONTEXT_HEADER: HeaderName = HeaderName::from_static("x-wasi-auth-context");
+/// Maximum signed trusted-context header size accepted by the guest boundary.
+pub const MAX_TRUSTED_CONTEXT_HEADER_BYTES: usize = 32 * 1024;
+const TRUSTED_CONTEXT_VERSION: u8 = 1;
+const DEFAULT_TRUSTED_CONTEXT_MAX_AGE_SECONDS: u64 = 5;
+const TRUSTED_CONTEXT_DOMAIN: &[u8] = b"wasi-auth:trusted-context:v1\0";
 const LEGACY_SESSION_HEADER: HeaderName = HeaderName::from_static("x-auth-session");
 const LEGACY_ADMIN_HEADER: HeaderName = HeaderName::from_static("x-auth-admin-token");
 /// Browser CSRF header paired with the host-only CSRF cookie.
 pub const CSRF_HEADER: HeaderName = HeaderName::from_static("x-csrf-token");
+
+/// Signed-context configuration or validation failure.
+#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
+#[non_exhaustive]
+pub enum TrustedContextError {
+    /// The key, audience, or maximum age is unsafe.
+    #[error("trusted-context configuration is invalid")]
+    InvalidConfiguration,
+    /// The envelope is malformed, oversized, or has an invalid signature.
+    #[error("trusted-context envelope is invalid")]
+    InvalidEnvelope,
+    /// The envelope is stale, from the future, or carries an expired session.
+    #[error("trusted-context envelope has expired")]
+    Expired,
+    /// The envelope was issued for another request boundary.
+    #[error("trusted-context request binding does not match")]
+    BindingMismatch,
+    /// The signed values violate the bounded request-context contract.
+    #[error("trusted-context payload is invalid")]
+    InvalidContext,
+}
+
+/// HMAC-SHA-256 codec for the native-ingress to guest trust boundary.
+///
+/// Envelopes are short-lived and bound to audience, method, path, and request
+/// ID. The key is deployment secret material shared only by the native ingress
+/// and the loopback-only Spin application.
+pub struct TrustedContextCodec {
+    audience: String,
+    key: [u8; 32],
+    max_age_seconds: u64,
+}
+
+impl TrustedContextCodec {
+    /// Constructs a codec with a five-second replay window.
+    ///
+    /// # Errors
+    ///
+    /// Rejects empty/unbounded audiences and an all-zero key.
+    pub fn new(audience: impl Into<String>, key: [u8; 32]) -> Result<Self, TrustedContextError> {
+        let audience = audience.into();
+        if audience.is_empty()
+            || audience.len() > 256
+            || audience.chars().any(char::is_control)
+            || key.iter().all(|byte| *byte == 0)
+        {
+            return Err(TrustedContextError::InvalidConfiguration);
+        }
+        Ok(Self {
+            audience,
+            key,
+            max_age_seconds: DEFAULT_TRUSTED_CONTEXT_MAX_AGE_SECONDS,
+        })
+    }
+
+    /// Overrides the bounded replay window.
+    ///
+    /// # Errors
+    ///
+    /// Rejects zero or windows longer than thirty seconds.
+    pub fn with_max_age_seconds(
+        mut self,
+        max_age_seconds: u64,
+    ) -> Result<Self, TrustedContextError> {
+        if !(1..=30).contains(&max_age_seconds) {
+            return Err(TrustedContextError::InvalidConfiguration);
+        }
+        self.max_age_seconds = max_age_seconds;
+        Ok(self)
+    }
+
+    /// Seals a verified request context for one internal request boundary.
+    ///
+    /// # Errors
+    ///
+    /// Rejects invalid path metadata, inconsistent policy revisions, expired
+    /// contexts, or envelopes that exceed the bounded header size.
+    pub fn seal(
+        &self,
+        context: &VerifiedRequestContext,
+        method: &Method,
+        path: &str,
+        now_unix_seconds: u64,
+    ) -> Result<String, TrustedContextError> {
+        validate_trusted_path(path)?;
+        if context.auth().expires_at_unix_seconds() <= now_unix_seconds {
+            return Err(TrustedContextError::Expired);
+        }
+        let auth_policy_revision = context.auth().policy_revision().map(ToString::to_string);
+        let authorization_policy_revision = context
+            .authorization()
+            .policy_revision()
+            .map(ToString::to_string);
+        if auth_policy_revision != authorization_policy_revision {
+            return Err(TrustedContextError::InvalidContext);
+        }
+        let payload = TrustedContextPayload {
+            version: TRUSTED_CONTEXT_VERSION,
+            audience: self.audience.clone(),
+            method: method.as_str().to_owned(),
+            path: path.to_owned(),
+            sealed_at_unix_seconds: now_unix_seconds,
+            user_id: context.auth().principal().user_id().to_string(),
+            issuer: context.auth().principal().issuer().to_owned(),
+            system_administrator: context.auth().principal().is_system_administrator(),
+            organization_id: context.auth().organization_id().map(ToString::to_string),
+            session_id: context.auth().session_id().to_string(),
+            request_id: context.auth().request_id().to_string(),
+            assurance: context.auth().assurance(),
+            issued_at_unix_seconds: context.auth().issued_at_unix_seconds(),
+            expires_at_unix_seconds: context.auth().expires_at_unix_seconds(),
+            decision_id: context.auth().decision_id().map(ToString::to_string),
+            policy_revision: auth_policy_revision,
+            permissions: context
+                .authorization()
+                .permissions()
+                .map(str::to_owned)
+                .collect(),
+            role_ids: context
+                .authorization()
+                .role_ids()
+                .map(ToString::to_string)
+                .collect(),
+            consistency_token: context
+                .authorization()
+                .consistency_token()
+                .map(str::to_owned),
+        };
+        let payload =
+            serde_json::to_vec(&payload).map_err(|_| TrustedContextError::InvalidEnvelope)?;
+        let payload = URL_SAFE_NO_PAD.encode(payload);
+        let signature = self.signature(payload.as_bytes())?;
+        let envelope = format!("{payload}.{}", URL_SAFE_NO_PAD.encode(signature));
+        if envelope.len() > MAX_TRUSTED_CONTEXT_HEADER_BYTES {
+            return Err(TrustedContextError::InvalidEnvelope);
+        }
+        Ok(envelope)
+    }
+
+    /// Opens and reconstructs a verified context only when signature,
+    /// freshness, audience, method, path, and request ID all match.
+    ///
+    /// # Errors
+    ///
+    /// Fails closed for malformed, stale, replayed-across-boundary, or invalid
+    /// context data.
+    pub fn open(
+        &self,
+        envelope: &str,
+        method: &Method,
+        path: &str,
+        request_id: &str,
+        now_unix_seconds: u64,
+    ) -> Result<VerifiedRequestContext, TrustedContextError> {
+        validate_trusted_path(path)?;
+        if envelope.len() > MAX_TRUSTED_CONTEXT_HEADER_BYTES {
+            return Err(TrustedContextError::InvalidEnvelope);
+        }
+        let (payload, signature) = envelope
+            .split_once('.')
+            .filter(|(_, signature)| !signature.contains('.'))
+            .ok_or(TrustedContextError::InvalidEnvelope)?;
+        let signature = URL_SAFE_NO_PAD
+            .decode(signature)
+            .map_err(|_| TrustedContextError::InvalidEnvelope)?;
+        let mut verifier = self.mac()?;
+        verifier.update(payload.as_bytes());
+        verifier
+            .verify_slice(&signature)
+            .map_err(|_| TrustedContextError::InvalidEnvelope)?;
+        let payload = URL_SAFE_NO_PAD
+            .decode(payload)
+            .map_err(|_| TrustedContextError::InvalidEnvelope)?;
+        let payload: TrustedContextPayload =
+            serde_json::from_slice(&payload).map_err(|_| TrustedContextError::InvalidEnvelope)?;
+        if payload.version != TRUSTED_CONTEXT_VERSION
+            || payload.audience != self.audience
+            || payload.method != method.as_str()
+            || payload.path != path
+            || payload.request_id != request_id
+        {
+            return Err(TrustedContextError::BindingMismatch);
+        }
+        if payload.sealed_at_unix_seconds > now_unix_seconds.saturating_add(1)
+            || now_unix_seconds.saturating_sub(payload.sealed_at_unix_seconds)
+                > self.max_age_seconds
+            || payload.expires_at_unix_seconds <= now_unix_seconds
+        {
+            return Err(TrustedContextError::Expired);
+        }
+        let policy_revision = payload
+            .policy_revision
+            .map(PolicyRevision::new)
+            .transpose()
+            .map_err(|_| TrustedContextError::InvalidContext)?;
+        let principal = Principal::new(
+            UserId::new(payload.user_id).map_err(|_| TrustedContextError::InvalidContext)?,
+            payload.issuer,
+            payload.system_administrator,
+        )
+        .map_err(|_| TrustedContextError::InvalidContext)?;
+        let auth = VerifiedAuthContext::from_validated(ValidatedContextParts {
+            principal,
+            organization_id: payload
+                .organization_id
+                .map(OrganizationId::new)
+                .transpose()
+                .map_err(|_| TrustedContextError::InvalidContext)?,
+            session_id: SessionId::new(payload.session_id)
+                .map_err(|_| TrustedContextError::InvalidContext)?,
+            request_id: RequestId::new(payload.request_id)
+                .map_err(|_| TrustedContextError::InvalidContext)?,
+            assurance: payload.assurance,
+            issued_at_unix_seconds: payload.issued_at_unix_seconds,
+            expires_at_unix_seconds: payload.expires_at_unix_seconds,
+            decision_id: payload
+                .decision_id
+                .map(DecisionId::new)
+                .transpose()
+                .map_err(|_| TrustedContextError::InvalidContext)?,
+            policy_revision: policy_revision.clone(),
+        })
+        .map_err(|_| TrustedContextError::InvalidContext)?;
+        let authorization = AuthorizationSnapshot::new(
+            payload.permissions,
+            payload
+                .role_ids
+                .into_iter()
+                .map(RoleId::new)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| TrustedContextError::InvalidContext)?,
+            policy_revision,
+            payload.consistency_token,
+        )
+        .map_err(|_| TrustedContextError::InvalidContext)?;
+        Ok(VerifiedRequestContext::from_verified(auth, authorization))
+    }
+
+    fn signature(&self, payload: &[u8]) -> Result<Vec<u8>, TrustedContextError> {
+        let mut mac = self.mac()?;
+        mac.update(payload);
+        Ok(mac.finalize().into_bytes().to_vec())
+    }
+
+    fn mac(&self) -> Result<Hmac<Sha256>, TrustedContextError> {
+        let mut mac = Hmac::<Sha256>::new_from_slice(&self.key)
+            .map_err(|_| TrustedContextError::InvalidConfiguration)?;
+        mac.update(TRUSTED_CONTEXT_DOMAIN);
+        Ok(mac)
+    }
+}
+
+impl std::fmt::Debug for TrustedContextCodec {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("TrustedContextCodec")
+            .field("audience", &self.audience)
+            .field("key", &"[REDACTED]")
+            .field("max_age_seconds", &self.max_age_seconds)
+            .finish()
+    }
+}
+
+impl Drop for TrustedContextCodec {
+    fn drop(&mut self) {
+        self.key.zeroize();
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+struct TrustedContextPayload {
+    version: u8,
+    audience: String,
+    method: String,
+    path: String,
+    sealed_at_unix_seconds: u64,
+    user_id: String,
+    issuer: String,
+    system_administrator: bool,
+    organization_id: Option<String>,
+    session_id: String,
+    request_id: String,
+    assurance: AuthenticationAssurance,
+    issued_at_unix_seconds: u64,
+    expires_at_unix_seconds: u64,
+    decision_id: Option<String>,
+    policy_revision: Option<String>,
+    permissions: Vec<String>,
+    role_ids: Vec<String>,
+    consistency_token: Option<String>,
+}
+
+fn validate_trusted_path(path: &str) -> Result<(), TrustedContextError> {
+    if path.is_empty()
+        || path.len() > 2_048
+        || !path.starts_with('/')
+        || path.chars().any(char::is_control)
+    {
+        return Err(TrustedContextError::BindingMismatch);
+    }
+    Ok(())
+}
 
 /// CORS configuration failure.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
@@ -783,6 +1095,83 @@ mod tests {
         .expect("authenticated context");
 
         assert!(context.authorization().has_permission("document.read"));
+    }
+
+    #[test]
+    fn signed_context_rejects_tampering_rebinding_and_replay() {
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check")
+            .header(AUTHORIZATION, "Bearer token")
+            .header(REQUEST_ID_HEADER, "request-signed")
+            .body(())
+            .expect("valid fixture");
+        let ingress = TrustedIngress::new(
+            TrustedIngressConfig::new("https://app.example").expect("valid fixture"),
+            FixtureAuthenticator,
+            FixtureClock,
+        );
+        let context = futures::executor::block_on(
+            ingress.authenticate_request(&request, RoutePolicy::Authenticated),
+        )
+        .expect("trusted request")
+        .expect("authenticated context");
+        let codec = TrustedContextCodec::new("fullstack-app", [7; 32]).expect("valid codec");
+        let envelope = codec
+            .seal(&context, &Method::POST, "/api/authorization/check", 100)
+            .expect("sealed context");
+
+        let opened = codec
+            .open(
+                &envelope,
+                &Method::POST,
+                "/api/authorization/check",
+                "request-signed",
+                100,
+            )
+            .expect("opened context");
+        assert_eq!(opened, context);
+
+        let mut tampered = envelope.into_bytes();
+        let last = tampered.last_mut().expect("signature byte");
+        *last = if *last == b'A' { b'B' } else { b'A' };
+        let tampered = String::from_utf8(tampered).expect("ASCII envelope");
+        assert_eq!(
+            codec.open(
+                &tampered,
+                &Method::POST,
+                "/api/authorization/check",
+                "request-signed",
+                100,
+            ),
+            Err(TrustedContextError::InvalidEnvelope)
+        );
+        assert_eq!(
+            codec.open(
+                codec
+                    .seal(&context, &Method::POST, "/api/authorization/check", 100,)
+                    .expect("sealed context")
+                    .as_str(),
+                &Method::POST,
+                "/api/authorization/batch-check",
+                "request-signed",
+                100,
+            ),
+            Err(TrustedContextError::BindingMismatch)
+        );
+        let envelope = codec
+            .seal(&context, &Method::POST, "/api/authorization/check", 100)
+            .expect("sealed context");
+        assert_eq!(
+            codec.open(
+                &envelope,
+                &Method::POST,
+                "/api/authorization/check",
+                "request-signed",
+                106,
+            ),
+            Err(TrustedContextError::Expired)
+        );
     }
 
     #[test]

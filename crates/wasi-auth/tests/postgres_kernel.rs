@@ -5,7 +5,7 @@
 use std::convert::Infallible;
 #[cfg(all(feature = "password", feature = "jwt", feature = "ddd-cqrs"))]
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::{error::Error, sync::Mutex};
+use std::{error::Error, io, sync::Mutex};
 
 #[cfg(feature = "password")]
 use argon2::{Algorithm, Argon2, Params, Version};
@@ -19,6 +19,8 @@ use sha1::Sha1;
 use sha2::{Digest, Sha256};
 use tokio::runtime::Builder;
 use uuid::Uuid;
+#[cfg(all(feature = "password", feature = "oauth", feature = "cedar"))]
+use wasi_auth::cedar::{CedarProvider, DEFAULT_APPLICATION_POLICY, DEFAULT_APPLICATION_SCHEMA};
 #[cfg(feature = "password")]
 use wasi_auth::context::UserId;
 use wasi_auth::context::{RequestId, SessionId};
@@ -26,8 +28,18 @@ use wasi_auth::postgres::native::NativePostgresTransport;
 #[cfg(all(feature = "password", feature = "oauth", feature = "cedar"))]
 use wasi_auth::postgres::policy::PolicyBundleService;
 #[cfg(all(feature = "password", feature = "jwt", feature = "ddd-cqrs"))]
+use wasi_auth::postgres::signing::SigningKeyService;
+#[cfg(all(
+    feature = "password",
+    feature = "oauth",
+    feature = "jwt",
+    feature = "ddd-cqrs"
+))]
+use wasi_auth::postgres::tokens::JwtKeyRing as ManagedJwtKeyRing;
+#[cfg(all(feature = "password", feature = "jwt", feature = "ddd-cqrs"))]
 use wasi_auth::postgres::tokens::{
-    JwtKeyRing, RefreshSealingKey, TokenService, TokenServiceConfig, TokenServiceError,
+    AccessTokenVerifier, JwtKeyRing, RefreshSealingKey, TokenService, TokenServiceConfig,
+    TokenServiceError,
 };
 use wasi_auth::postgres::{
     CommandContext, PostgresAuthStore, RegisterPasswordCommand, SealedPayload,
@@ -37,13 +49,6 @@ use wasi_auth::postgres::{
     flows::FlowSealingKey,
     oauth::{OAuthFlowService, OAuthProviderService, OAuthServiceConfig, VerifiedOAuthIdentity},
 };
-#[cfg(all(
-    feature = "password",
-    feature = "oauth",
-    feature = "jwt",
-    feature = "ddd-cqrs"
-))]
-use wasi_auth::postgres::{signing::SigningKeyService, tokens::JwtKeyRing as ManagedJwtKeyRing};
 #[cfg(all(feature = "password", feature = "mfa"))]
 use wasi_auth::{
     authentication::mfa::TotpConfig,
@@ -53,10 +58,19 @@ use wasi_auth::{
 use wasi_auth::{
     authentication::{Clock, RandomSource},
     postgres::workflows::{
-        Argon2Policy, EmailVerificationRequest, EmailVerificationResendRequest,
-        EmailVerificationService, OutboxSealingKey, PasswordChangeRequest, PasswordLoginRequest,
-        PasswordLoginService, PasswordRegistrationRequest, PasswordRegistrationService,
-        PasswordResetCompleteRequest, PasswordResetService, PasswordResetStartRequest,
+        Argon2Policy, EmailVerificationError, EmailVerificationRequest,
+        EmailVerificationResendRequest, EmailVerificationService, OutboxSealingKey,
+        PasswordChangeRequest, PasswordLoginRequest, PasswordLoginService,
+        PasswordRegistrationRequest, PasswordRegistrationService, PasswordResetCompleteRequest,
+        PasswordResetError, PasswordResetService, PasswordResetStartRequest,
+    },
+};
+#[cfg(all(feature = "password", feature = "spicedb"))]
+use wasi_auth::{
+    authentication::{RelationshipOperation, RelationshipOutboxIntent},
+    postgres::outbox::RelationshipOutboxWorker,
+    spicedb::{
+        SpiceDbBearerToken, SpiceDbRelationshipWriter, SpiceDbTransport, SpiceDbWriteEndpoint,
     },
 };
 #[cfg(feature = "password")]
@@ -75,11 +89,20 @@ use wasi_auth::{
 
 static LIVE_DB_LOCK: Mutex<()> = Mutex::new(());
 
+fn live_database_url() -> Result<String, Box<dyn Error>> {
+    std::env::var("WASI_AUTH_POSTGRES_TEST_URL").map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "WASI_AUTH_POSTGRES_TEST_URL is required for live PostgreSQL contracts",
+        )
+        .into()
+    })
+}
+
 #[test]
+#[ignore = "run through scripts/test-postgres-kernel-live.sh"]
 fn live_postgres_registration_and_context_contract() -> Result<(), Box<dyn Error>> {
-    let Ok(database_url) = std::env::var("WASI_AUTH_POSTGRES_TEST_URL") else {
-        return Ok(());
-    };
+    let database_url = live_database_url()?;
     let _live_database = LIVE_DB_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -187,10 +210,9 @@ fn live_postgres_registration_and_context_contract() -> Result<(), Box<dyn Error
 
 #[cfg(feature = "password")]
 #[test]
+#[ignore = "run through scripts/test-postgres-kernel-live.sh"]
 fn live_postgres_verification_replay_and_password_login() -> Result<(), Box<dyn Error>> {
-    let Ok(database_url) = std::env::var("WASI_AUTH_POSTGRES_TEST_URL") else {
-        return Ok(());
-    };
+    let database_url = live_database_url()?;
     let _live_database = LIVE_DB_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -233,7 +255,6 @@ fn live_postgres_verification_replay_and_password_login() -> Result<(), Box<dyn 
                     "/organizations",
                 ))
                 .await?;
-            assert!(!first.replayed);
 
             let replayed = verification
                 .verify(EmailVerificationRequest::new(
@@ -241,9 +262,11 @@ fn live_postgres_verification_replay_and_password_login() -> Result<(), Box<dyn 
                     RequestId::new(format!("verify-replay-{unique}"))?,
                     "/organizations",
                 ))
-                .await?;
-            assert!(replayed.replayed);
-            assert_eq!(replayed.session_id, first.session_id);
+                .await;
+            assert!(matches!(
+                replayed,
+                Err(EmailVerificationError::InvalidToken)
+            ));
 
             transport
                 .client()
@@ -430,11 +453,11 @@ fn live_postgres_verification_replay_and_password_login() -> Result<(), Box<dyn 
                     &invitation_token,
                     &RequestId::new(format!("accept-invitation-replay-{unique}"))?,
                 )
-                .await?;
-            assert_eq!(
-                accepted_replay.organization_id,
-                organization.organization_id
-            );
+                .await;
+            assert!(matches!(
+                accepted_replay,
+                Err(ManagementError::InvalidToken)
+            ));
             let assigned = management
                 .assign_role(
                     &first.session_id,
@@ -565,7 +588,6 @@ fn live_postgres_verification_replay_and_password_login() -> Result<(), Box<dyn 
                     "/organizations",
                 ))
                 .await?;
-            assert!(!completed_reset.replayed);
             let replayed_reset = reset_service
                 .complete(PasswordResetCompleteRequest::new(
                     reset_token,
@@ -573,9 +595,11 @@ fn live_postgres_verification_replay_and_password_login() -> Result<(), Box<dyn 
                     RequestId::new(format!("reset-replay-{unique}"))?,
                     "/organizations",
                 ))
-                .await?;
-            assert!(replayed_reset.replayed);
-            assert_eq!(replayed_reset.session_id, completed_reset.session_id);
+                .await;
+            assert!(matches!(
+                replayed_reset,
+                Err(PasswordResetError::InvalidToken)
+            ));
 
             let login = PasswordLoginService::new(
                 PostgresAuthStore::new(transport.clone()),
@@ -670,10 +694,9 @@ fn live_postgres_verification_replay_and_password_login() -> Result<(), Box<dyn 
 
 #[cfg(feature = "password")]
 #[test]
+#[ignore = "run through scripts/test-postgres-kernel-live.sh"]
 fn live_postgres_registration_mail_outbox_contract() -> Result<(), Box<dyn Error>> {
-    let Ok(database_url) = std::env::var("WASI_AUTH_POSTGRES_TEST_URL") else {
-        return Ok(());
-    };
+    let database_url = live_database_url()?;
     let _live_database = LIVE_DB_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -771,12 +794,103 @@ fn live_postgres_registration_mail_outbox_contract() -> Result<(), Box<dyn Error
         })
 }
 
+#[cfg(all(feature = "password", feature = "spicedb"))]
+#[test]
+#[ignore = "run through scripts/test-postgres-kernel-live.sh"]
+fn live_postgres_relationship_outbox_contract() -> Result<(), Box<dyn Error>> {
+    #[derive(Clone, Copy, Debug)]
+    struct FakeSpiceDb;
+
+    impl SpiceDbTransport for FakeSpiceDb {
+        type Error = io::Error;
+
+        async fn send(
+            &self,
+            _request: http::Request<Vec<u8>>,
+        ) -> Result<http::Response<Vec<u8>>, Self::Error> {
+            Ok(http::Response::builder()
+                .status(http::StatusCode::OK)
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(br#"{"writtenAt":{"token":"zed-live-contract"}}"#.to_vec())
+                .expect("fake SpiceDB response"))
+        }
+    }
+
+    let database_url = live_database_url()?;
+    let _live_database = LIVE_DB_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    Builder::new_current_thread()
+        .enable_io()
+        .build()?
+        .block_on(async {
+            let transport = NativePostgresTransport::connect(&database_url).await?;
+            let outbox_id = Uuid::now_v7();
+            let unique = outbox_id.simple().to_string();
+            let key = [29_u8; 32];
+            let sealing_key = OutboxSealingKey::new("relationship-contract-v1", key)?;
+            let intent = RelationshipOutboxIntent {
+                operation: RelationshipOperation::Grant,
+                resource: format!("organization:{unique}"),
+                relation: "member".to_owned(),
+                subject: format!("user:{unique}"),
+                resource_revision: 1,
+                consistency_token: None,
+            };
+            let sealed = sealing_key.seal_relationship_intent(&TestRandom::new(), &intent)?;
+            let now_ms = 1_700_000_000_000_i64;
+            transport
+                .client()
+                .execute(
+                    "INSERT INTO auth_outbox \
+                     (outbox_id, kind, deduplication_key, key_version, payload_ciphertext, \
+                      status, available_at_ms, created_at_ms, updated_at_ms) \
+                     VALUES ($1, 'relationship', $2, $3, $4, 'pending', $5, $5, $5)",
+                    &[
+                        &outbox_id,
+                        &format!("relationship-contract-{unique}"),
+                        &sealed.key_version(),
+                        &sealed.ciphertext(),
+                        &now_ms,
+                    ],
+                )
+                .await?;
+
+            let worker = RelationshipOutboxWorker::new(
+                PostgresAuthStore::new(transport.clone()),
+                FixedClock,
+                TestRandom::new(),
+                OutboxSealingKey::new("relationship-contract-v1", key)?,
+            );
+            let writer = SpiceDbRelationshipWriter::new(
+                SpiceDbWriteEndpoint::new("https://spicedb.example.test/v1/relationships/write")?,
+                SpiceDbBearerToken::new("provider-secret")?,
+                FakeSpiceDb,
+            );
+            let report = worker.dispatch(&writer, 100).await?;
+            assert_eq!(report.delivered, 1);
+            assert_eq!(report.retried, 0);
+            assert_eq!(report.dead_lettered, 0);
+
+            let row = transport
+                .client()
+                .query_one(
+                    "SELECT status, delivery_id FROM auth_outbox WHERE outbox_id = $1",
+                    &[&outbox_id],
+                )
+                .await?;
+            assert_eq!(row.get::<_, String>("status"), "delivered");
+            assert_eq!(row.get::<_, String>("delivery_id"), "zed-live-contract");
+
+            Ok::<_, Box<dyn Error>>(())
+        })
+}
+
 #[cfg(feature = "password")]
 #[test]
+#[ignore = "run through scripts/test-postgres-kernel-live.sh"]
 fn live_postgres_final_owner_concurrency_contract() -> Result<(), Box<dyn Error>> {
-    let Ok(database_url) = std::env::var("WASI_AUTH_POSTGRES_TEST_URL") else {
-        return Ok(());
-    };
+    let database_url = live_database_url()?;
     let _live_database = LIVE_DB_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -917,10 +1031,9 @@ fn live_postgres_final_owner_concurrency_contract() -> Result<(), Box<dyn Error>
 
 #[cfg(all(feature = "password", feature = "jwt", feature = "ddd-cqrs"))]
 #[test]
+#[ignore = "run through scripts/test-postgres-kernel-live.sh"]
 fn live_postgres_refresh_rotation_and_reuse_contract() -> Result<(), Box<dyn Error>> {
-    let Ok(database_url) = std::env::var("WASI_AUTH_POSTGRES_TEST_URL") else {
-        return Ok(());
-    };
+    let database_url = live_database_url()?;
     let _live_database = LIVE_DB_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -961,11 +1074,20 @@ fn live_postgres_refresh_rotation_and_reuse_contract() -> Result<(), Box<dyn Err
                     &[&session_uuid, &user_id, &(now_ms + 3_600_000), &now_ms],
                 )
                 .await?;
+            let signing_key_id = format!("contract-hs256-{unique}");
+            let key_ring = JwtKeyRing::development_hs256(signing_key_id.clone(), vec![83_u8; 32])?;
+            SigningKeyService::new(
+                PostgresAuthStore::new(transport.clone()),
+                ExplicitClock(now_seconds),
+                TestRandom::new(),
+            )
+            .synchronize(&key_ring, "contract-v1")
+            .await?;
             let service = TokenService::new(
                 PostgresAuthStore::new(transport.clone()),
                 ExplicitClock(now_seconds),
                 TestRandom::new(),
-                JwtKeyRing::development_hs256("contract-hs256", vec![83_u8; 32])?,
+                key_ring,
                 RefreshSealingKey::new("refresh-contract-v1", [89_u8; 32])?,
                 TokenServiceConfig::new("https://issuer.example", "contract-api", 60, 300, 300)?,
             );
@@ -982,6 +1104,65 @@ fn live_postgres_refresh_rotation_and_reuse_contract() -> Result<(), Box<dyn Err
                 .verify(&access, &RequestId::new(format!("token-verify-{unique}"))?)
                 .await?;
             assert_eq!(verified.user_id, user_id.to_string());
+            assert!(verified.role_ids.is_empty());
+            let read_only_verifier = AccessTokenVerifier::new(
+                PostgresAuthStore::new(transport.clone()),
+                ExplicitClock(now_seconds),
+                JwtKeyRing::development_hs256(signing_key_id.clone(), vec![83_u8; 32])?,
+                "https://issuer.example",
+                "contract-api",
+            )?;
+            assert_eq!(
+                read_only_verifier
+                    .verify(
+                        &access,
+                        &RequestId::new(format!("read-only-token-verify-{unique}"))?,
+                    )
+                    .await?
+                    .user_id,
+                user_id.to_string()
+            );
+
+            for (status, accepted) in [("retired", true), ("next", false), ("revoked", false)] {
+                transport
+                    .client()
+                    .execute(
+                        "UPDATE auth_signing_keys SET status = $2 WHERE key_id = $1",
+                        &[&signing_key_id, &status],
+                    )
+                    .await?;
+                let outcome = service
+                    .verify(
+                        &access,
+                        &RequestId::new(format!("token-{status}-{unique}"))?,
+                    )
+                    .await;
+                assert_eq!(outcome.is_ok(), accepted, "unexpected {status} key outcome");
+            }
+            transport
+                .client()
+                .execute(
+                    "DELETE FROM auth_signing_keys WHERE key_id = $1",
+                    &[&signing_key_id],
+                )
+                .await?;
+            assert!(
+                service
+                    .verify(
+                        &access,
+                        &RequestId::new(format!("token-missing-key-{unique}"))?,
+                    )
+                    .await
+                    .is_err()
+            );
+            let restored_key_ring = JwtKeyRing::development_hs256(signing_key_id, vec![83_u8; 32])?;
+            SigningKeyService::new(
+                PostgresAuthStore::new(transport.clone()),
+                ExplicitClock(now_seconds),
+                TestRandom::new(),
+            )
+            .synchronize(&restored_key_ring, "contract-v1")
+            .await?;
 
             let rotated = service
                 .refresh(
@@ -1042,10 +1223,9 @@ fn live_postgres_refresh_rotation_and_reuse_contract() -> Result<(), Box<dyn Err
 
 #[cfg(all(feature = "password", feature = "mfa"))]
 #[test]
+#[ignore = "run through scripts/test-postgres-kernel-live.sh"]
 fn live_postgres_mfa_enrollment_and_recovery_contract() -> Result<(), Box<dyn Error>> {
-    let Ok(database_url) = std::env::var("WASI_AUTH_POSTGRES_TEST_URL") else {
-        return Ok(());
-    };
+    let database_url = live_database_url()?;
     let _live_database = LIVE_DB_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -1159,10 +1339,9 @@ fn live_postgres_mfa_enrollment_and_recovery_contract() -> Result<(), Box<dyn Er
 
 #[cfg(all(feature = "password", feature = "oauth"))]
 #[test]
+#[ignore = "run through scripts/test-postgres-kernel-live.sh"]
 fn live_postgres_oauth_state_identity_and_replay_contract() -> Result<(), Box<dyn Error>> {
-    let Ok(database_url) = std::env::var("WASI_AUTH_POSTGRES_TEST_URL") else {
-        return Ok(());
-    };
+    let database_url = live_database_url()?;
     let _live_database = LIVE_DB_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -1331,8 +1510,8 @@ fn live_postgres_oauth_state_identity_and_replay_contract() -> Result<(), Box<dy
                 let published = policies
                     .publish(
                         &completion.session_id,
-                        "{}",
-                        "permit(principal, action, resource);",
+                        DEFAULT_APPLICATION_SCHEMA,
+                        DEFAULT_APPLICATION_POLICY,
                         serde_json::json!([]),
                         &RequestId::new(format!("policy-publish-{unique}"))?,
                     )
@@ -1344,6 +1523,23 @@ fn live_postgres_oauth_state_identity_and_replay_contract() -> Result<(), Box<dy
                         .await?
                         .iter()
                         .any(|policy| policy.policy_revision == published.policy_revision)
+                );
+                let active = PostgresAuthStore::new(transport.clone())
+                    .load_active_policy_bundle()
+                    .await?
+                    .expect("published policy must become active");
+                assert_eq!(active.policy_revision, published.policy_revision);
+                assert_eq!(active.cedar_schema, DEFAULT_APPLICATION_SCHEMA);
+                assert_eq!(active.cedar_policy, DEFAULT_APPLICATION_POLICY);
+                assert_eq!(active.entities, serde_json::json!([]));
+                assert!(
+                    CedarProvider::new_validated(
+                        &active.cedar_policy,
+                        &active.cedar_schema,
+                        &active.entities.to_string(),
+                        active.policy_revision,
+                    )
+                    .is_ok()
                 );
             }
 

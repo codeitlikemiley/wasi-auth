@@ -46,6 +46,8 @@ use crate::context::{
 const REGISTER_PASSWORD_SQL: &str = include_str!("postgres/register_password.sql");
 const REGISTRATION_REPLAY_SQL: &str = include_str!("postgres/registration_replay.sql");
 const LOAD_REQUEST_CONTEXT_SQL: &str = include_str!("postgres/load_request_context.sql");
+#[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+const LOAD_REQUEST_FINGERPRINT_SQL: &str = include_str!("postgres/load_request_fingerprint.sql");
 
 /// Parameter accepted by a PostgreSQL transport.
 #[derive(Clone, Debug, PartialEq)]
@@ -181,6 +183,18 @@ impl SealedPayload {
             key_version,
             ciphertext,
         })
+    }
+
+    /// Returns the non-secret key version needed to open this payload.
+    #[must_use]
+    pub fn key_version(&self) -> &str {
+        &self.key_version
+    }
+
+    /// Returns the authenticated ciphertext for storage in PostgreSQL.
+    #[must_use]
+    pub fn ciphertext(&self) -> &[u8] {
+        &self.ciphertext
     }
 }
 
@@ -361,6 +375,8 @@ pub struct RegistrationReceipt {
 pub struct VerifiedSession {
     context: VerifiedRequestContext,
     primary_email: String,
+    #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+    authorization_fingerprint: AuthorizationFingerprint,
 }
 
 impl VerifiedSession {
@@ -376,11 +392,35 @@ impl VerifiedSession {
         &self.primary_email
     }
 
+    #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+    pub(crate) const fn authorization_fingerprint(&self) -> &AuthorizationFingerprint {
+        &self.authorization_fingerprint
+    }
+
     /// Consumes the envelope and returns its verified request context.
     #[must_use]
     pub fn into_context(self) -> VerifiedRequestContext {
         self.context
     }
+}
+
+/// Opaque revision tuple proving which relational authorization snapshot was
+/// loaded. It is deliberately private to the authentication kernel so callers
+/// can reuse a snapshot but cannot manufacture a cache hit.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+pub(crate) struct AuthorizationFingerprint {
+    user_id: String,
+    session_id: String,
+    organization_id: Option<String>,
+    assurance: String,
+    expires_at_ms: i64,
+    session_revision: i64,
+    user_security_revision: i64,
+    organization_authorization_revision: Option<i64>,
+    role_id: Option<String>,
+    policy_revision: Option<String>,
+    system_administrator: bool,
 }
 
 /// Relational authentication store backed by one PostgreSQL transport.
@@ -498,6 +538,72 @@ where
         request_id: RequestId,
         now_unix_seconds: u64,
     ) -> Result<VerifiedSession, PostgresStoreError<T::Error>> {
+        self.load_verified_session_with_signing_key(session_id, request_id, now_unix_seconds, "")
+            .await
+    }
+
+    /// Loads an authoritative session only when the token signing key remains
+    /// active or retired in relational lifecycle state.
+    ///
+    /// This keeps immediate key revocation on the same bounded query as user,
+    /// session, organization, role, permission, and policy validation.
+    #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+    pub(crate) async fn load_verified_session_for_token(
+        &self,
+        session_id: &SessionId,
+        request_id: RequestId,
+        now_unix_seconds: u64,
+        signing_key_id: &str,
+    ) -> Result<VerifiedSession, PostgresStoreError<T::Error>> {
+        if !valid_signing_key_id(signing_key_id) {
+            return Err(PostgresStoreError::Unauthenticated);
+        }
+        self.load_verified_session_with_signing_key(
+            session_id,
+            request_id,
+            now_unix_seconds,
+            signing_key_id,
+        )
+        .await
+    }
+
+    /// Loads only the revision tuple required to prove a previously loaded
+    /// authorization snapshot is still current. Session, account,
+    /// organization, membership, policy, administrator, and signing-key
+    /// revocations all remain authoritative on every cache hit.
+    #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+    pub(crate) async fn load_authorization_fingerprint_for_token(
+        &self,
+        session_id: &SessionId,
+        now_unix_seconds: u64,
+        signing_key_id: &str,
+    ) -> Result<AuthorizationFingerprint, PostgresStoreError<T::Error>> {
+        if !valid_signing_key_id(signing_key_id) {
+            return Err(PostgresStoreError::Unauthenticated);
+        }
+        let rows = self
+            .transport
+            .query(
+                LOAD_REQUEST_FINGERPRINT_SQL,
+                vec![
+                    PgValue::Text(session_id.as_str().to_owned()),
+                    PgValue::I64(u64_to_i64(now_unix_seconds.saturating_mul(1_000))),
+                    PgValue::Text(signing_key_id.to_owned()),
+                ],
+            )
+            .await
+            .map_err(PostgresStoreError::Transport)?;
+        let row = rows.first().ok_or(PostgresStoreError::Unauthenticated)?;
+        authorization_fingerprint(row).map_err(Into::into)
+    }
+
+    async fn load_verified_session_with_signing_key(
+        &self,
+        session_id: &SessionId,
+        request_id: RequestId,
+        now_unix_seconds: u64,
+        signing_key_id: &str,
+    ) -> Result<VerifiedSession, PostgresStoreError<T::Error>> {
         let now_ms = now_unix_seconds.saturating_mul(1_000);
         let rows = self
             .transport
@@ -506,6 +612,7 @@ where
                 vec![
                     PgValue::Text(session_id.as_str().to_owned()),
                     PgValue::I64(u64_to_i64(now_ms)),
+                    PgValue::Text(signing_key_id.to_owned()),
                 ],
             )
             .await
@@ -552,6 +659,8 @@ fn verified_session(
     row: &PgRow,
     request_id: RequestId,
 ) -> Result<VerifiedSession, ContextLoadError> {
+    #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+    let authorization_fingerprint = authorization_fingerprint(row)?;
     let user_id = UserId::new(row.required_text("user_id")?)?;
     let primary_email = row.required_text("primary_email")?.to_owned();
     if primary_email.len() > 320 || primary_email.chars().any(char::is_control) {
@@ -613,6 +722,60 @@ fn verified_session(
     Ok(VerifiedSession {
         context: VerifiedRequestContext::from_verified(auth, authorization),
         primary_email,
+        #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+        authorization_fingerprint,
+    })
+}
+
+#[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+fn authorization_fingerprint(row: &PgRow) -> Result<AuthorizationFingerprint, ContextLoadError> {
+    let user_id = UserId::new(row.required_text("user_id")?)?.to_string();
+    let session_id = SessionId::new(row.required_text("session_id")?)?.to_string();
+    let organization_id = row
+        .text("organization_id")?
+        .map(OrganizationId::new)
+        .transpose()?
+        .map(|value| value.to_string());
+    let assurance = match row.required_text("assurance")? {
+        "aal1" => "aal1".to_owned(),
+        "aal2" | "aal3" => "aal2".to_owned(),
+        _ => return Err(ContextLoadError::InvalidAssurance),
+    };
+    let expires_at_ms = row.required_i64("expires_at_ms")?;
+    let session_revision = row.required_i64("session_revision")?;
+    let user_security_revision = row.required_i64("user_security_revision")?;
+    let organization_authorization_revision = row.i64("organization_authorization_revision")?;
+    let role_id = row
+        .text("role_id")?
+        .map(RoleId::new)
+        .transpose()?
+        .map(|value| value.to_string());
+    let policy_revision = row
+        .text("policy_revision")?
+        .map(PolicyRevision::new)
+        .transpose()?
+        .map(|value| value.to_string());
+    if expires_at_ms <= 0
+        || session_revision <= 0
+        || user_security_revision <= 0
+        || organization_authorization_revision.is_some_and(|revision| revision <= 0)
+        || organization_id.is_some()
+            != (organization_authorization_revision.is_some() && role_id.is_some())
+    {
+        return Err(ContextLoadError::InvalidRevision);
+    }
+    Ok(AuthorizationFingerprint {
+        user_id,
+        session_id,
+        organization_id,
+        assurance,
+        expires_at_ms,
+        session_revision,
+        user_security_revision,
+        organization_authorization_revision,
+        role_id,
+        policy_revision,
+        system_administrator: row.bool("system_administrator")?.unwrap_or(false),
     })
 }
 
@@ -651,6 +814,9 @@ enum ContextLoadError {
     InvalidPermissions,
     #[error("stored primary email is invalid")]
     InvalidEmail,
+    #[error("stored authorization revision is invalid")]
+    #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+    InvalidRevision,
 }
 
 /// PostgreSQL relational-store failure.
@@ -704,8 +870,15 @@ where
             | ContextLoadError::InvalidTimestamp
             | ContextLoadError::InvalidPermissions
             | ContextLoadError::InvalidEmail => Self::Context,
+            #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+            ContextLoadError::InvalidRevision => Self::Context,
         }
     }
+}
+
+#[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+fn valid_signing_key_id(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 128 && !value.chars().any(char::is_control)
 }
 
 fn bounded_token(value: &str, maximum: usize) -> bool {
@@ -752,8 +925,12 @@ mod tests {
 
     impl FixtureTransport {
         fn with_response(response: Vec<PgRow>) -> Self {
+            Self::with_responses([response])
+        }
+
+        fn with_responses(responses: impl IntoIterator<Item = Vec<PgRow>>) -> Self {
             Self {
-                responses: Mutex::new(VecDeque::from([response])),
+                responses: Mutex::new(responses.into_iter().collect()),
                 calls: Mutex::default(),
             }
         }
@@ -841,6 +1018,72 @@ mod tests {
 
         assert_eq!(receipt.user_id.as_str(), user_id);
         assert!(receipt.replayed);
+    }
+
+    #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+    #[test]
+    fn token_context_load_is_one_query_with_authoritative_key_lifecycle() {
+        let user_id = Uuid::now_v7().to_string();
+        let session_id = Uuid::now_v7().to_string();
+        let row = PgRow::new([
+            ("user_id".to_owned(), PgValue::Text(user_id.clone())),
+            (
+                "primary_email".to_owned(),
+                PgValue::Text("verified@example.com".to_owned()),
+            ),
+            ("session_id".to_owned(), PgValue::Text(session_id.clone())),
+            ("organization_id".to_owned(), PgValue::Null),
+            ("assurance".to_owned(), PgValue::Text("aal1".to_owned())),
+            ("created_at_ms".to_owned(), PgValue::I64(1_000)),
+            ("expires_at_ms".to_owned(), PgValue::I64(61_000)),
+            ("session_revision".to_owned(), PgValue::I64(1)),
+            ("user_security_revision".to_owned(), PgValue::I64(1)),
+            (
+                "organization_authorization_revision".to_owned(),
+                PgValue::Null,
+            ),
+            ("role_id".to_owned(), PgValue::Null),
+            (
+                "permissions".to_owned(),
+                PgValue::Json(serde_json::json!([])),
+            ),
+            ("policy_revision".to_owned(), PgValue::Null),
+            ("system_administrator".to_owned(), PgValue::Bool(false)),
+        ]);
+        let transport = FixtureTransport::with_responses([vec![row.clone()], vec![row]]);
+        let store = PostgresAuthStore::new(transport);
+
+        let verified = block_on(store.load_verified_session_for_token(
+            &SessionId::new(session_id.clone()).expect("valid session id"),
+            RequestId::new("token-context-request").expect("valid request id"),
+            2,
+            "signing-key-v1",
+        ))
+        .expect("verified token context");
+
+        assert_eq!(
+            verified.context().auth().principal().user_id().as_str(),
+            user_id
+        );
+        let calls = store.transport.calls.lock().expect("calls");
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, LOAD_REQUEST_CONTEXT_SQL);
+        assert_eq!(calls[0].1.len(), 3);
+        assert_eq!(calls[0].1[2], PgValue::Text("signing-key-v1".to_owned()));
+        assert!(LOAD_REQUEST_CONTEXT_SQL.contains("signing_key.status IN ('active', 'retired')"));
+        drop(calls);
+
+        let fingerprint = block_on(store.load_authorization_fingerprint_for_token(
+            &SessionId::new(session_id).expect("valid session id"),
+            2,
+            "signing-key-v1",
+        ))
+        .expect("authoritative fingerprint");
+        assert_eq!(fingerprint, *verified.authorization_fingerprint());
+        let calls = store.transport.calls.lock().expect("calls");
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[1].0, LOAD_REQUEST_FINGERPRINT_SQL);
+        assert!(!LOAD_REQUEST_FINGERPRINT_SQL.contains("auth_role_permissions"));
     }
 
     #[test]

@@ -45,6 +45,7 @@ mod tests {
                 "0006_oauth_provider_defaults",
                 "0007_signing_key_references",
                 "0008_fullstack_redirects",
+                "0009_context_invalidation",
             ]
         );
     }

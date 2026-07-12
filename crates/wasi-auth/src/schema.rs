@@ -95,6 +95,12 @@ pub const POSTGRES_FULLSTACK_REDIRECTS_0008: SchemaMigration = SchemaMigration {
     sql: include_str!("../migrations/postgres/0008_fullstack_redirects.sql"),
 };
 
+/// Transactional PostgreSQL notifications for native-ingress cache safety.
+pub const POSTGRES_CONTEXT_INVALIDATION_0009: SchemaMigration = SchemaMigration {
+    version: "0009_context_invalidation",
+    sql: include_str!("../migrations/postgres/0009_context_invalidation.sql"),
+};
+
 /// Returns the complete ordered relational-kernel migration catalog.
 #[must_use]
 pub const fn schema_migrations() -> &'static [SchemaMigration] {
@@ -107,6 +113,7 @@ pub const fn schema_migrations() -> &'static [SchemaMigration] {
         POSTGRES_OAUTH_DEFAULTS_0006,
         POSTGRES_SIGNING_KEYS_0007,
         POSTGRES_FULLSTACK_REDIRECTS_0008,
+        POSTGRES_CONTEXT_INVALIDATION_0009,
     ]
 }
 
@@ -177,6 +184,7 @@ mod tests {
                 POSTGRES_OAUTH_DEFAULTS_0006,
                 POSTGRES_SIGNING_KEYS_0007,
                 POSTGRES_FULLSTACK_REDIRECTS_0008,
+                POSTGRES_CONTEXT_INVALIDATION_0009,
             ])
         );
     }
@@ -215,6 +223,10 @@ mod tests {
             AppliedSchemaMigration {
                 version: POSTGRES_FULLSTACK_REDIRECTS_0008.version().to_owned(),
                 checksum: POSTGRES_FULLSTACK_REDIRECTS_0008.checksum_hex(),
+            },
+            AppliedSchemaMigration {
+                version: POSTGRES_CONTEXT_INVALIDATION_0009.version().to_owned(),
+                checksum: POSTGRES_CONTEXT_INVALIDATION_0009.checksum_hex(),
             },
         ];
 

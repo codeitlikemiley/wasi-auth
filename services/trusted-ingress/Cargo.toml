@@ -1,0 +1,24 @@
+[package]
+name = "wasi-auth-ingress"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "Native trusted ingress for wasi-auth Spin applications"
+
+[dependencies]
+axum = "0.8.9"
+base64.workspace = true
+http.workspace = true
+hyper = { version = "1.8.1", features = ["client", "http1", "http2", "server"] }
+hyper-util = { version = "0.1.20", features = ["client", "client-legacy", "http1", "http2", "server", "server-auto", "tokio"] }
+sha2 = "0.10.9"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { version = "1.52.0", features = ["macros", "net", "rt-multi-thread", "signal"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+uuid = { version = "1.23.4", features = ["v7"] }
+wasi-auth = { version = "=0.1.0-rc.1", path = "../../crates/wasi-auth", features = ["cedar", "ddd-cqrs", "http", "jwt", "password", "postgres-native"] }

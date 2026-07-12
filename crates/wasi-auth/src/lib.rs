@@ -32,8 +32,6 @@ pub mod schema;
 pub mod spicedb;
 #[cfg(feature = "spin-grpc")]
 pub mod spin_grpc;
-#[cfg(any(feature = "storage-postgres", feature = "storage-spin-sqlite"))]
-pub mod storage;
 #[cfg(any(test, feature = "testkit"))]
 pub mod testkit;
 

@@ -16,6 +16,17 @@ use crate::authorization::{
 };
 use crate::context::{AuthenticationAssurance, ContextError, PolicyRevision};
 
+/// Default bounded application-permission policy used by the fullstack
+/// template and native trusted ingress.
+pub const DEFAULT_APPLICATION_POLICY: &str = include_str!("cedar/default_application.cedar");
+
+/// Strict Cedar schema paired with [`DEFAULT_APPLICATION_POLICY`].
+pub const DEFAULT_APPLICATION_SCHEMA: &str = include_str!("cedar/default_application_schema.json");
+
+/// Revision identifier for the immutable application policy embedded in the
+/// library, native ingress, and generated fullstack application.
+pub const DEFAULT_APPLICATION_POLICY_REVISION: &str = "embedded-v1";
+
 /// Cedar policy activation or evaluation failure.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 #[non_exhaustive]
@@ -71,12 +82,18 @@ impl fmt::Debug for CedarProvider {
 }
 
 impl CedarProvider {
-    /// Parses policies and entities without schema validation for tests.
+    /// Loads a policy bundle whose exact source was strictly validated during
+    /// the artifact build or policy-publication transaction.
+    ///
+    /// This constructor deliberately omits runtime schema parsing and policy
+    /// validation. It is intended for immutable embedded bundles in
+    /// short-lived component instances; dynamic or user-supplied policy must
+    /// use [`Self::new_validated`]. Evaluation diagnostics still fail closed.
     ///
     /// # Errors
     ///
     /// Returns [`CedarError`] for invalid policy, entity, or revision data.
-    pub fn new_unvalidated_for_test(
+    pub fn new_prevalidated(
         policy_source: &str,
         trusted_entities_json: &str,
         policy_revision: impl Into<String>,
@@ -91,6 +108,19 @@ impl CedarProvider {
             policy_revision: PolicyRevision::new(policy_revision)
                 .map_err(|_| CedarError::InvalidMetadata)?,
         })
+    }
+
+    /// Parses policies and entities without schema validation for tests.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CedarError`] for invalid policy, entity, or revision data.
+    pub fn new_unvalidated_for_test(
+        policy_source: &str,
+        trusted_entities_json: &str,
+        policy_revision: impl Into<String>,
+    ) -> Result<Self, CedarError> {
+        Self::new_prevalidated(policy_source, trusted_entities_json, policy_revision)
     }
 
     /// Parses a schema, strictly validates policies, and loads trusted entities.
@@ -348,6 +378,17 @@ mod tests {
         let decision = provider.check_sync(&request).expect("policy evaluates");
 
         assert!(decision.is_allowed());
+    }
+
+    #[test]
+    fn default_application_bundle_passes_strict_validation() {
+        CedarProvider::new_validated(
+            DEFAULT_APPLICATION_POLICY,
+            DEFAULT_APPLICATION_SCHEMA,
+            "[]",
+            DEFAULT_APPLICATION_POLICY_REVISION,
+        )
+        .expect("default application policy must remain strictly valid");
     }
 
     #[test]

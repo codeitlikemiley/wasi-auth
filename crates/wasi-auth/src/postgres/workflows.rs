@@ -30,7 +30,11 @@ const OUTBOX_NONCE_BYTES: usize = 12;
 const UUID_RANDOM_BYTES: usize = 10;
 const EMAIL_VERIFICATION_TTL_MS: u64 = 24 * 60 * 60 * 1_000;
 const IDEMPOTENCY_TTL_MS: u64 = 24 * 60 * 60 * 1_000;
-const OUTBOX_AAD: &[u8] = b"wasi-auth:email-verification:v1";
+// This value is frozen because changing authenticated data would make already
+// queued mail payloads unreadable. Relationship payloads use a separate label.
+const MAIL_OUTBOX_AAD_V1: &[u8] = b"wasi-auth:email-verification:v1";
+#[cfg(feature = "spicedb")]
+const RELATIONSHIP_OUTBOX_AAD_V1: &[u8] = b"wasi-auth:relationship:v1";
 const LOAD_PASSWORD_LOGIN_SQL: &str = include_str!("load_password_login.sql");
 const ISSUE_PASSWORD_SESSION_SQL: &str = include_str!("issue_password_session.sql");
 const LOAD_PASSWORD_BY_USER_SQL: &str = include_str!("load_password_by_user.sql");
@@ -135,13 +139,31 @@ impl OutboxSealingKey {
         nonce: [u8; OUTBOX_NONCE_BYTES],
         plaintext: &[u8],
     ) -> Result<SealedPayload, PasswordCryptoError> {
+        self.seal_with_aad(nonce, plaintext, MAIL_OUTBOX_AAD_V1)
+    }
+
+    #[cfg(feature = "spicedb")]
+    pub(crate) fn seal_relationship(
+        &self,
+        nonce: [u8; OUTBOX_NONCE_BYTES],
+        plaintext: &[u8],
+    ) -> Result<SealedPayload, PasswordCryptoError> {
+        self.seal_with_aad(nonce, plaintext, RELATIONSHIP_OUTBOX_AAD_V1)
+    }
+
+    fn seal_with_aad(
+        &self,
+        nonce: [u8; OUTBOX_NONCE_BYTES],
+        plaintext: &[u8],
+        aad: &[u8],
+    ) -> Result<SealedPayload, PasswordCryptoError> {
         let cipher = Aes256Gcm::new_from_slice(&self.key).map_err(|_| PasswordCryptoError)?;
         let ciphertext = cipher
             .encrypt(
                 &Nonce::from(nonce),
                 Payload {
                     msg: plaintext,
-                    aad: OUTBOX_AAD,
+                    aad,
                 },
             )
             .map_err(|_| PasswordCryptoError)?;
@@ -156,6 +178,24 @@ impl OutboxSealingKey {
         key_version: &str,
         sealed: &[u8],
     ) -> Result<Vec<u8>, PasswordCryptoError> {
+        self.open_with_aad(key_version, sealed, MAIL_OUTBOX_AAD_V1)
+    }
+
+    #[cfg(feature = "spicedb")]
+    pub(crate) fn open_relationship(
+        &self,
+        key_version: &str,
+        sealed: &[u8],
+    ) -> Result<Vec<u8>, PasswordCryptoError> {
+        self.open_with_aad(key_version, sealed, RELATIONSHIP_OUTBOX_AAD_V1)
+    }
+
+    fn open_with_aad(
+        &self,
+        key_version: &str,
+        sealed: &[u8],
+        aad: &[u8],
+    ) -> Result<Vec<u8>, PasswordCryptoError> {
         if key_version != self.key_version || sealed.len() <= OUTBOX_NONCE_BYTES {
             return Err(PasswordCryptoError);
         }
@@ -167,7 +207,7 @@ impl OutboxSealingKey {
                 &Nonce::from(nonce),
                 Payload {
                     msg: ciphertext,
-                    aad: OUTBOX_AAD,
+                    aad,
                 },
             )
             .map_err(|_| PasswordCryptoError)
@@ -510,14 +550,12 @@ pub struct PasswordLoginReceipt {
 /// Successful email-verification session result.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EmailVerificationReceipt {
-    /// Issued or idempotently replayed session identifier.
+    /// Newly issued session identifier.
     pub session_id: SessionId,
     /// Verified global user identifier.
     pub user_id: UserId,
     /// Session expiry in Unix milliseconds.
     pub expires_at_ms: u64,
-    /// Whether the same active result was replayed after a transport retry.
-    pub replayed: bool,
     /// Validated local redirect path.
     pub redirect_uri: String,
 }
@@ -534,14 +572,12 @@ pub struct PasswordResetStartReceipt {
 /// Successful password reset and session rotation result.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PasswordResetReceipt {
-    /// Issued or replayed session identifier.
+    /// Newly issued session identifier.
     pub session_id: SessionId,
     /// Reset account identifier.
     pub user_id: UserId,
     /// Session expiry in Unix milliseconds.
     pub expires_at_ms: u64,
-    /// Whether a transport retry replayed the same active result.
-    pub replayed: bool,
     /// Validated local redirect path.
     pub redirect_uri: String,
 }
@@ -1040,8 +1076,7 @@ where
     R: RandomSource,
 {
     /// Consumes a verification token and issues a session in one statement.
-    /// A retry can replay the same still-active session without making the
-    /// opaque token reusable for a different result.
+    /// Every subsequent use of the opaque token is rejected.
     ///
     /// # Errors
     ///
@@ -1075,16 +1110,13 @@ where
             .await
             .map_err(EmailVerificationError::Transport)?;
         let row = rows.first().ok_or(EmailVerificationError::InvalidToken)?;
-        let replayed = match row.required_text("outcome")? {
-            "created" => false,
-            "replayed" => true,
-            _ => return Err(EmailVerificationError::InvalidToken),
-        };
+        if row.required_text("outcome")? != "created" {
+            return Err(EmailVerificationError::InvalidToken);
+        }
         Ok(EmailVerificationReceipt {
             session_id: SessionId::new(row.required_text("session_id")?)?,
             user_id: UserId::new(row.required_text("user_id")?)?,
             expires_at_ms: i64_to_u64(row.required_i64("expires_at_ms")?)?,
-            replayed,
             redirect_uri: request.redirect_uri.clone(),
         })
     }
@@ -1259,16 +1291,13 @@ where
             .await
             .map_err(PasswordResetError::Transport)?;
         let row = rows.first().ok_or(PasswordResetError::InvalidToken)?;
-        let replayed = match row.required_text("outcome")? {
-            "created" => false,
-            "replayed" => true,
-            _ => return Err(PasswordResetError::InvalidToken),
-        };
+        if row.required_text("outcome")? != "created" {
+            return Err(PasswordResetError::InvalidToken);
+        }
         Ok(PasswordResetReceipt {
             session_id: SessionId::new(row.required_text("session_id")?)?,
             user_id: UserId::new(row.required_text("user_id")?)?,
             expires_at_ms: i64_to_u64(row.required_i64("expires_at_ms")?)?,
-            replayed,
             redirect_uri: request.redirect_uri.clone(),
         })
     }

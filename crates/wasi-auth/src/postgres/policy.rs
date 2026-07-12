@@ -10,10 +10,12 @@ use uuid::Uuid;
 use super::{PgRow, PgValue, PostgresAuthStore, PostgresTransport, RowDecodeError};
 use crate::{
     authentication::{Clock, RandomSource},
+    cedar::CedarProvider,
     context::{RequestId, SessionId},
 };
 
 const LIST_POLICY_BUNDLES_SQL: &str = include_str!("list_policy_bundles.sql");
+const LOAD_ACTIVE_POLICY_BUNDLE_SQL: &str = include_str!("load_active_policy_bundle.sql");
 const PUBLISH_POLICY_BUNDLE_SQL: &str = include_str!("publish_policy_bundle.sql");
 const MAX_POLICY_BYTES: usize = 1024 * 1024;
 const MAX_ENTITY_BYTES: usize = 4 * 1024 * 1024;
@@ -33,6 +35,44 @@ pub struct PolicyBundleRecord {
     pub created_at_ms: u64,
     /// Activation timestamp in milliseconds, when activated.
     pub activated_at_ms: Option<u64>,
+}
+
+/// Complete strictly bounded Cedar bundle selected for authorization.
+///
+/// The source is intentionally available only through the authenticated store
+/// API. Presenters should expose [`PolicyBundleRecord`] metadata instead.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ActivePolicyBundle {
+    /// Content-addressed policy revision.
+    pub policy_revision: String,
+    /// Strict Cedar schema source.
+    pub cedar_schema: String,
+    /// Cedar policy-set source.
+    pub cedar_policy: String,
+    /// Trusted Cedar entity graph.
+    pub entities: Value,
+}
+
+impl<T> PostgresAuthStore<T>
+where
+    T: PostgresTransport,
+{
+    /// Loads the single active policy bundle, if one has been published.
+    ///
+    /// # Errors
+    ///
+    /// Returns a transport or malformed-row failure. Callers must fail closed
+    /// instead of falling back after an active revision has been observed.
+    pub async fn load_active_policy_bundle(
+        &self,
+    ) -> Result<Option<ActivePolicyBundle>, PolicyBundleLoadError<T::Error>> {
+        let rows = self
+            .transport()
+            .query(LOAD_ACTIVE_POLICY_BUNDLE_SQL, Vec::new())
+            .await
+            .map_err(PolicyBundleLoadError::Transport)?;
+        rows.first().map(active_policy_from_row).transpose()
+    }
 }
 
 /// PostgreSQL Cedar policy-bundle service.
@@ -110,6 +150,15 @@ where
         {
             return Err(PolicyBundleServiceError::InvalidInput);
         }
+        let entity_source =
+            serde_json::to_string(&entities).map_err(|_| PolicyBundleServiceError::InvalidInput)?;
+        CedarProvider::new_validated(
+            cedar_policy,
+            cedar_schema,
+            &entity_source,
+            "publication-candidate",
+        )
+        .map_err(|_| PolicyBundleServiceError::InvalidInput)?;
         let mut digest = Sha256::new();
         digest.update(cedar_schema.as_bytes());
         digest.update([0]);
@@ -175,6 +224,34 @@ where
     })
 }
 
+fn active_policy_from_row<E>(row: &PgRow) -> Result<ActivePolicyBundle, PolicyBundleLoadError<E>>
+where
+    E: StdError + Send + Sync + 'static,
+{
+    let policy_revision = row.required_text("policy_revision")?.to_owned();
+    let cedar_schema = row.required_text("cedar_schema")?.to_owned();
+    let cedar_policy = row.required_text("cedar_policy")?.to_owned();
+    let entities = row
+        .json("entities")?
+        .cloned()
+        .ok_or(PolicyBundleLoadError::InvalidRow)?;
+    if cedar_schema.is_empty()
+        || cedar_schema.len() > MAX_POLICY_BYTES
+        || cedar_policy.is_empty()
+        || cedar_policy.len() > MAX_POLICY_BYTES
+        || serde_json::to_vec(&entities).map_or(true, |value| value.len() > MAX_ENTITY_BYTES)
+        || !entities.is_array()
+    {
+        return Err(PolicyBundleLoadError::InvalidRow);
+    }
+    Ok(ActivePolicyBundle {
+        policy_revision,
+        cedar_schema,
+        cedar_policy,
+        entities,
+    })
+}
+
 fn hex(value: &[u8]) -> String {
     value.iter().map(|byte| format!("{byte:02x}")).collect()
 }
@@ -221,5 +298,20 @@ pub enum PolicyBundleServiceError<E: StdError + Send + Sync + 'static> {
     Row(#[from] RowDecodeError),
     /// PostgreSQL returned malformed policy metadata.
     #[error("PostgreSQL returned malformed policy metadata")]
+    InvalidRow,
+}
+
+/// Active Cedar bundle loading failure.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum PolicyBundleLoadError<E: StdError + Send + Sync + 'static> {
+    /// PostgreSQL transport failed.
+    #[error("PostgreSQL policy transport failed: {0}")]
+    Transport(#[source] E),
+    /// PostgreSQL returned an undecodable row.
+    #[error(transparent)]
+    Row(#[from] RowDecodeError),
+    /// PostgreSQL returned an invalid or unbounded bundle.
+    #[error("PostgreSQL returned an invalid active policy bundle")]
     InvalidRow,
 }

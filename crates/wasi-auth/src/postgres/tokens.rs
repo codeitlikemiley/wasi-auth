@@ -17,8 +17,11 @@ use thiserror::Error;
 use uuid::Uuid;
 use zeroize::{Zeroize, Zeroizing};
 
+#[cfg(feature = "postgres-native")]
+use super::native::AuthorizationInvalidationEpoch;
 use super::{
-    PgRow, PgValue, PostgresAuthStore, PostgresTransport, RowDecodeError, VerifiedSession,
+    AuthorizationFingerprint, PgRow, PgValue, PostgresAuthStore, PostgresStoreError,
+    PostgresTransport, RowDecodeError, VerifiedSession,
 };
 use crate::{
     authentication::{Clock, RandomSource},
@@ -66,12 +69,7 @@ impl TokenServiceConfig {
     ) -> Result<Self, TokenConfigurationError> {
         let issuer = issuer.into();
         let audience = audience.into();
-        if issuer.is_empty()
-            || issuer.len() > 2_048
-            || issuer.chars().any(char::is_control)
-            || audience.is_empty()
-            || audience.len() > 256
-            || audience.chars().any(char::is_control)
+        if !valid_issuer_and_audience(&issuer, &audience)
             || !(60..=3_600).contains(&access_ttl_seconds)
             || !(300..=90 * 24 * 60 * 60).contains(&refresh_ttl_seconds)
             || !(300..=24 * 60 * 60).contains(&session_ttl_seconds)
@@ -469,6 +467,10 @@ pub struct VerifiedAccessToken {
     pub session_id: String,
     /// Current permission set.
     pub permissions: Vec<String>,
+    /// Current organization role identifiers.
+    pub role_ids: Vec<String>,
+    /// Current embedded-policy revision, when one is active.
+    pub policy_revision: Option<String>,
     /// Current assurance label.
     pub assurance: String,
     /// System-administrator marker.
@@ -477,6 +479,165 @@ pub struct VerifiedAccessToken {
     pub issued_at_seconds: u64,
     /// Token expiry time.
     pub expires_at_seconds: u64,
+    authorization_fingerprint: AuthorizationFingerprint,
+}
+
+/// Read-only JWT verifier for the trusted-ingress hot path.
+///
+/// Unlike [`TokenService`], this type does not load refresh-token sealing
+/// material, token-issuance lifetimes, or a randomness source. Signing-key
+/// lifecycle and every current authorization fact are still checked in one
+/// authoritative PostgreSQL query.
+pub struct AccessTokenVerifier<T, C> {
+    store: PostgresAuthStore<T>,
+    clock: C,
+    keys: JwtKeyRing,
+    issuer: String,
+    audience: String,
+}
+
+impl<T, C> AccessTokenVerifier<T, C> {
+    /// Constructs a bounded read-only access-token verifier.
+    ///
+    /// # Errors
+    ///
+    /// Rejects an empty, control-bearing, or unbounded issuer/audience.
+    pub fn new(
+        store: PostgresAuthStore<T>,
+        clock: C,
+        keys: JwtKeyRing,
+        issuer: impl Into<String>,
+        audience: impl Into<String>,
+    ) -> Result<Self, TokenConfigurationError> {
+        let issuer = issuer.into();
+        let audience = audience.into();
+        if !valid_issuer_and_audience(&issuer, &audience) {
+            return Err(TokenConfigurationError::Invalid);
+        }
+        Ok(Self {
+            store,
+            clock,
+            keys,
+            issuer,
+            audience,
+        })
+    }
+}
+
+impl<T, C> AccessTokenVerifier<T, C>
+where
+    T: PostgresTransport,
+    C: Clock,
+{
+    /// Verifies a JWT and reloads its current relational authorization state.
+    ///
+    /// # Errors
+    ///
+    /// Returns invalid/expired token or current-session persistence failures.
+    pub async fn verify(
+        &self,
+        token: &str,
+        request_id: &RequestId,
+    ) -> Result<VerifiedAccessToken, TokenServiceError<T::Error>> {
+        verify_access_token(
+            &self.store,
+            &self.clock,
+            &self.keys,
+            &self.issuer,
+            &self.audience,
+            token,
+            request_id,
+        )
+        .await
+    }
+
+    /// Verifies a JWT and reuses a previously loaded authorization snapshot
+    /// only when its authoritative revision tuple remains unchanged.
+    ///
+    /// A cache hit still performs one bounded PostgreSQL lookup covering the
+    /// session, user-security revision, organization/membership state,
+    /// authorization revision, policy revision, system-administrator state,
+    /// and signing-key lifecycle. A mismatch reloads the complete snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns invalid/expired token or current-session persistence failures.
+    pub async fn verify_cached(
+        &self,
+        token: &str,
+        request_id: &RequestId,
+        cached: Option<&VerifiedAccessToken>,
+    ) -> Result<VerifiedAccessToken, TokenServiceError<T::Error>> {
+        let decoded = decode_verified_access_token(token, &self.keys, &self.issuer, &self.audience)
+            .ok_or(TokenServiceError::InvalidToken)?;
+        if let Some(cached) = cached.filter(|cached| cached.matches_claims(&decoded)) {
+            let fingerprint = self
+                .store
+                .load_authorization_fingerprint_for_token(
+                    &decoded.session_id,
+                    self.clock.now_unix_seconds(),
+                    &decoded.kid,
+                )
+                .await
+                .map_err(map_verification_store_error)?;
+            if cached.authorization_fingerprint == fingerprint {
+                let mut verified = cached.clone();
+                verified.issued_at_seconds = decoded.claims.iat;
+                verified.expires_at_seconds = decoded.claims.exp;
+                return Ok(verified);
+            }
+        }
+        let session = self
+            .store
+            .load_verified_session_for_token(
+                &decoded.session_id,
+                request_id.clone(),
+                self.clock.now_unix_seconds(),
+                &decoded.kid,
+            )
+            .await
+            .map_err(map_verification_store_error)?;
+        verified_access_token(decoded.claims, decoded.session_id, session)
+    }
+
+    /// Reuses a snapshot without a database query only when a healthy native
+    /// PostgreSQL invalidation tracker proves no authorization-affecting commit
+    /// occurred since it was loaded.
+    ///
+    /// The JWT signature, issuer, audience, algorithm, expiry, subject,
+    /// tenant, and session binding are still checked on every call. Epochs are
+    /// unforgeable outside the native PostgreSQL adapter. Callers must fall
+    /// back to [`Self::verify`] when this returns `Ok(None)` or the tracker is
+    /// unhealthy.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-token error for malformed, expired, or incorrectly
+    /// signed credentials.
+    #[cfg(feature = "postgres-native")]
+    pub fn verify_invalidation_cached(
+        &self,
+        token: &str,
+        cached: &VerifiedAccessToken,
+        cached_epoch: &AuthorizationInvalidationEpoch,
+        current_epoch: &AuthorizationInvalidationEpoch,
+    ) -> Result<Option<VerifiedAccessToken>, TokenServiceError<T::Error>> {
+        if cached_epoch != current_epoch {
+            return Ok(None);
+        }
+        let decoded = decode_verified_access_token(token, &self.keys, &self.issuer, &self.audience)
+            .ok_or(TokenServiceError::InvalidToken)?;
+        if self.clock.now_unix_seconds() >= decoded.claims.exp {
+            return Err(TokenServiceError::InvalidToken);
+        }
+        if !cached.matches_claims(&decoded) {
+            return Ok(None);
+        }
+        let mut verified = cached.clone();
+        verified.issued_at_seconds = decoded.claims.iat;
+        verified.expires_at_seconds = decoded.claims.exp;
+        Ok(Some(verified))
+    }
 }
 
 /// PostgreSQL token-family service.
@@ -684,59 +845,16 @@ where
         token: &str,
         request_id: &RequestId,
     ) -> Result<VerifiedAccessToken, TokenServiceError<T::Error>> {
-        let kid = access_token_key_id(token).map_err(|_| TokenServiceError::InvalidToken)?;
-        let key = self
-            .keys
-            .verification(&kid)
-            .ok_or(TokenServiceError::InvalidToken)?;
-        let claims = decode_access_token(
-            token,
-            &key.decoding,
+        verify_access_token(
+            &self.store,
+            &self.clock,
+            &self.keys,
             &self.config.issuer,
             &self.config.audience,
-            &[key.algorithm],
+            token,
+            request_id,
         )
-        .map_err(|_| TokenServiceError::InvalidToken)?;
-        let session_id = claims
-            .session_id
-            .as_ref()
-            .map(|session| SessionId::new(session.as_str().to_owned()))
-            .transpose()
-            .map_err(|_| TokenServiceError::InvalidToken)?
-            .ok_or(TokenServiceError::InvalidToken)?;
-        let session = self
-            .store
-            .load_verified_session(
-                &session_id,
-                request_id.clone(),
-                self.clock.now_unix_seconds(),
-            )
-            .await
-            .map_err(|_| TokenServiceError::InvalidToken)?;
-        let context = session.context();
-        if claims.sub != context.auth().principal().user_id().as_str()
-            || claims.tenant_id.as_ref().map(|tenant| tenant.as_str())
-                != context
-                    .auth()
-                    .organization_id()
-                    .map(|organization| organization.as_str())
-        {
-            return Err(TokenServiceError::InvalidToken);
-        }
-        Ok(VerifiedAccessToken {
-            user_id: claims.sub,
-            organization_id: context.auth().organization_id().map(ToString::to_string),
-            session_id: session_id.into_string(),
-            permissions: context
-                .authorization()
-                .permissions()
-                .map(str::to_owned)
-                .collect(),
-            assurance: assurance_name(context.auth().assurance()).to_owned(),
-            system_administrator: context.auth().principal().is_system_administrator(),
-            issued_at_seconds: claims.iat,
-            expires_at_seconds: claims.exp,
-        })
+        .await
     }
 
     fn token_pair(
@@ -964,6 +1082,143 @@ fn decode_base64(value: &str) -> Result<Zeroizing<Vec<u8>>, TokenConfigurationEr
         .map_err(|_| TokenConfigurationError::Invalid)
 }
 
+async fn verify_access_token<T, C>(
+    store: &PostgresAuthStore<T>,
+    clock: &C,
+    keys: &JwtKeyRing,
+    issuer: &str,
+    audience: &str,
+    token: &str,
+    request_id: &RequestId,
+) -> Result<VerifiedAccessToken, TokenServiceError<T::Error>>
+where
+    T: PostgresTransport,
+    C: Clock,
+{
+    let decoded = decode_verified_access_token(token, keys, issuer, audience)
+        .ok_or(TokenServiceError::InvalidToken)?;
+    let session = store
+        .load_verified_session_for_token(
+            &decoded.session_id,
+            request_id.clone(),
+            clock.now_unix_seconds(),
+            &decoded.kid,
+        )
+        .await
+        .map_err(map_verification_store_error)?;
+    verified_access_token(decoded.claims, decoded.session_id, session)
+}
+
+struct DecodedAccessToken {
+    claims: AccessTokenClaims,
+    session_id: SessionId,
+    kid: String,
+}
+
+fn decode_verified_access_token(
+    token: &str,
+    keys: &JwtKeyRing,
+    issuer: &str,
+    audience: &str,
+) -> Option<DecodedAccessToken> {
+    let kid = access_token_key_id(token).ok()?;
+    let key = keys.verification(&kid)?;
+    let claims =
+        decode_access_token(token, &key.decoding, issuer, audience, &[key.algorithm]).ok()?;
+    let session_id = claims
+        .session_id
+        .as_ref()
+        .and_then(|session| SessionId::new(session.as_str().to_owned()).ok())?;
+    Some(DecodedAccessToken {
+        claims,
+        session_id,
+        kid,
+    })
+}
+
+impl VerifiedAccessToken {
+    fn matches_claims(&self, decoded: &DecodedAccessToken) -> bool {
+        self.user_id == decoded.claims.sub
+            && self.session_id == decoded.session_id.as_str()
+            && self.organization_id.as_deref()
+                == decoded
+                    .claims
+                    .tenant_id
+                    .as_ref()
+                    .map(|tenant| tenant.as_str())
+    }
+}
+
+fn verified_access_token<E>(
+    claims: AccessTokenClaims,
+    session_id: SessionId,
+    session: VerifiedSession,
+) -> Result<VerifiedAccessToken, TokenServiceError<E>>
+where
+    E: StdError + Send + Sync + 'static,
+{
+    let context = session.context();
+    if claims.sub != context.auth().principal().user_id().as_str()
+        || claims.tenant_id.as_ref().map(|tenant| tenant.as_str())
+            != context
+                .auth()
+                .organization_id()
+                .map(|organization| organization.as_str())
+    {
+        return Err(TokenServiceError::InvalidToken);
+    }
+    let authorization_fingerprint = session.authorization_fingerprint().clone();
+    Ok(VerifiedAccessToken {
+        user_id: claims.sub,
+        organization_id: context.auth().organization_id().map(ToString::to_string),
+        session_id: session_id.into_string(),
+        permissions: context
+            .authorization()
+            .permissions()
+            .map(str::to_owned)
+            .collect(),
+        role_ids: context
+            .authorization()
+            .role_ids()
+            .map(ToString::to_string)
+            .collect(),
+        policy_revision: context
+            .authorization()
+            .policy_revision()
+            .map(ToString::to_string),
+        assurance: assurance_name(context.auth().assurance()).to_owned(),
+        system_administrator: context.auth().principal().is_system_administrator(),
+        issued_at_seconds: claims.iat,
+        expires_at_seconds: claims.exp,
+        authorization_fingerprint,
+    })
+}
+
+fn map_verification_store_error<E>(error: PostgresStoreError<E>) -> TokenServiceError<E>
+where
+    E: StdError + Send + Sync + 'static,
+{
+    match error {
+        PostgresStoreError::Transport(error) => TokenServiceError::Transport(error),
+        PostgresStoreError::Row(error) => TokenServiceError::Row(error),
+        PostgresStoreError::Validation(_)
+        | PostgresStoreError::Context
+        | PostgresStoreError::EmailAlreadyExists
+        | PostgresStoreError::IdempotencyConflict
+        | PostgresStoreError::Unauthenticated
+        | PostgresStoreError::UnexpectedOutcome => TokenServiceError::InvalidToken,
+    }
+}
+
+fn valid_issuer_and_audience(issuer: &str, audience: &str) -> bool {
+    !issuer.is_empty()
+        && issuer.len() <= 2_048
+        && !issuer.chars().any(char::is_control)
+        && !audience.is_empty()
+        && audience.len() <= 256
+        && !audience.chars().any(char::is_control)
+}
+
 fn valid_kid(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
@@ -1091,5 +1346,13 @@ mod tests {
         let debug = format!("{pair:?}");
         assert!(!debug.contains("access-secret"));
         assert!(!debug.contains("refresh-secret"));
+    }
+
+    #[test]
+    fn verification_preserves_transport_failures() {
+        let error = map_verification_store_error(PostgresStoreError::Transport(
+            std::io::Error::other("database unavailable"),
+        ));
+        assert!(matches!(error, TokenServiceError::Transport(_)));
     }
 }

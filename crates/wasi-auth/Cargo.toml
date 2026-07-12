@@ -25,16 +25,27 @@ oauth-facebook = ["oauth"]
 passkeys = ["dep:aes-gcm", "dep:base64", "dep:passkey-auth", "dep:zeroize"]
 mfa = ["dep:hmac", "dep:sha1", "dep:sha2", "dep:subtle", "dep:zeroize"]
 sessions = []
-http = ["dep:base64", "dep:http"]
+http = [
+    "dep:base64",
+    "dep:hmac",
+    "dep:http",
+    "dep:sha2",
+    "dep:zeroize",
+]
 cedar = ["dep:base64", "dep:cedar-policy"]
 spicedb = ["http"]
 leptos = ["http", "dep:leptos"]
 spin-grpc = ["http", "dep:bytes", "dep:http-body", "dep:wasip3"]
 ddd-cqrs = ["dep:ddd_cqrs_es"]
-storage-postgres = ["ddd-cqrs", "dep:sha2"]
-storage-spin-sqlite = ["ddd-cqrs", "dep:sha2"]
 postgres-kernel = ["http", "dep:sha2", "dep:uuid"]
-postgres-native = ["postgres-kernel", "dep:tokio", "dep:tokio-postgres"]
+postgres-native = [
+    "postgres-kernel",
+    "dep:rustls",
+    "dep:rustls-native-certs",
+    "dep:tokio",
+    "dep:tokio-postgres",
+    "dep:tokio-postgres-rustls",
+]
 postgres-spin = ["postgres-kernel", "dep:spin-sdk"]
 mail-smtp = []
 mail-http = ["http"]
@@ -73,6 +84,8 @@ jsonwebtoken = { version = "10.4.0", default-features = false, features = ["rust
 leptos = { workspace = true, optional = true }
 oauth2 = { version = "5.0.0", default-features = false, features = ["pkce-plain"], optional = true }
 passkey-auth = { version = "0.1.3", optional = true }
+rustls = { version = "=0.23.41", default-features = false, features = ["ring", "std"], optional = true }
+rustls-native-certs = { version = "=0.8.4", optional = true }
 serde.workspace = true
 serde_json.workspace = true
 sha1 = { version = "0.10.6", optional = true }
@@ -82,6 +95,7 @@ subtle = { version = "2.6.1", optional = true }
 thiserror.workspace = true
 tokio = { version = "1.52.0", features = ["net", "rt", "sync"], optional = true }
 tokio-postgres = { version = "0.7.18", features = ["with-serde_json-1", "with-uuid-1"], optional = true }
+tokio-postgres-rustls = { version = "=0.14.0", default-features = false, features = ["ring"], optional = true }
 wasip3 = { workspace = true, optional = true }
 zeroize = { version = "1.8.2", optional = true }
 uuid = { version = "1.23.4", features = ["serde", "v7"], optional = true }
