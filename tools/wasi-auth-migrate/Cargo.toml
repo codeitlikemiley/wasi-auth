@@ -5,19 +5,14 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
-description = "Offline secret-extracting migration utility for legacy DDD authentication events"
+description = "Native PostgreSQL schema administration for wasi-auth"
 
 [dependencies]
-aes-gcm = "0.10.3"
-base64.workspace = true
-getrandom = "0.3.4"
-serde.workspace = true
 serde_json.workspace = true
-sha2 = "0.10.9"
-thiserror.workspace = true
+tokio = { version = "1.52.0", features = ["macros", "rt"] }
+wasi-auth = { path = "../../crates/wasi-auth", features = ["postgres-native"] }
 
 [dev-dependencies]
-tempfile = "3.23.0"
 
 [lints]
 workspace = true

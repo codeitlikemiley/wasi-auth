@@ -24,6 +24,10 @@ pub mod http;
 #[cfg(feature = "leptos")]
 pub mod leptos;
 pub mod mail;
+#[cfg(feature = "postgres-kernel")]
+pub mod postgres;
+#[cfg(feature = "postgres-kernel")]
+pub mod schema;
 #[cfg(feature = "spicedb")]
 pub mod spicedb;
 #[cfg(feature = "spin-grpc")]

@@ -1,12 +1,12 @@
-//! Command-line entrypoint for the offline legacy authentication migration.
+//! Command-line entrypoint for PostgreSQL auth schema administration.
 
-use std::path::PathBuf;
 use std::process::ExitCode;
 
-use wasi_auth_migrate::{MigrationConfig, load_key_file, migrate};
+use wasi_auth_migrate::{MigrationCommand, run};
 
-fn main() -> ExitCode {
-    match run() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> ExitCode {
+    match execute().await {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("wasi-auth migration failed: {error}");
@@ -15,35 +15,62 @@ fn main() -> ExitCode {
     }
 }
 
-fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let mut input = None;
-    let mut output = None;
-    let mut key_file = None;
-    let mut arguments = std::env::args_os().skip(1);
+async fn execute() -> Result<(), Box<dyn std::error::Error>> {
+    let mut arguments = std::env::args().skip(1);
+    let Some(command) = arguments.next() else {
+        return Err(usage().into());
+    };
+    if matches!(command.as_str(), "--help" | "-h") {
+        println!("{}", usage());
+        return Ok(());
+    }
+    let command = parse_command(&command)?;
+    let mut database_url_environment = "DATABASE_URL".to_owned();
+    let mut json = false;
     while let Some(argument) = arguments.next() {
-        match argument.to_str() {
-            Some("--input") => input = arguments.next().map(PathBuf::from),
-            Some("--output") => output = arguments.next().map(PathBuf::from),
-            Some("--key-file") => key_file = arguments.next().map(PathBuf::from),
-            Some("--help" | "-h") => {
-                println!(
-                    "Usage: wasi-auth-migrate --input LEGACY_EVENTS.jsonl --output NEW_DIRECTORY --key-file AES256_KEY\n\nThe key file must contain 32 raw bytes or 64 hexadecimal characters. The output directory must not already exist."
-                );
-                return Ok(());
+        match argument.as_str() {
+            "--database-url-env" => {
+                database_url_environment = arguments
+                    .next()
+                    .ok_or("--database-url-env requires a variable name")?;
             }
-            Some(other) => return Err(format!("unknown argument {other}").into()),
-            None => return Err("arguments must be valid UTF-8".into()),
+            "--json" => json = true,
+            _ => return Err(format!("unknown argument {argument}").into()),
         }
     }
-
-    let input = input.ok_or("--input is required")?;
-    let output = output.ok_or("--output is required")?;
-    let key_file = key_file.ok_or("--key-file is required")?;
-    let key = load_key_file(&key_file)?;
-    let report = migrate(&MigrationConfig { input, output, key })?;
-    println!(
-        "migrated {} events and {} secret records; verification passed",
-        report.event_count, report.secret_count
-    );
+    let database_url = std::env::var(&database_url_environment).map_err(|_| {
+        format!("required database URL environment variable {database_url_environment} is unset")
+    })?;
+    let report = run(&database_url, command).await?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        println!("applied: {}", display_versions(&report.applied));
+        println!("pending: {}", display_versions(&report.pending));
+        println!("database verified: {}", report.database_verified);
+    }
     Ok(())
+}
+
+fn parse_command(value: &str) -> Result<MigrationCommand, String> {
+    match value {
+        "plan" => Ok(MigrationCommand::Plan),
+        "apply" => Ok(MigrationCommand::Apply),
+        "verify" => Ok(MigrationCommand::Verify),
+        "verify-database" => Ok(MigrationCommand::VerifyDatabase),
+        "status" => Ok(MigrationCommand::Status),
+        _ => Err(format!("unknown command {value}\n{}", usage())),
+    }
+}
+
+fn display_versions(versions: &[String]) -> String {
+    if versions.is_empty() {
+        "none".to_owned()
+    } else {
+        versions.join(", ")
+    }
+}
+
+fn usage() -> &'static str {
+    "Usage: wasi-auth-migrate <plan|apply|verify|verify-database|status> [--database-url-env NAME] [--json]\n\nThe database URL is read from DATABASE_URL by default and is never accepted on the command line."
 }
