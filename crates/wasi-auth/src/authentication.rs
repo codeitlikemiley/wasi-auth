@@ -22,43 +22,26 @@ use crate::mail::{EmailMessage, Mailer};
 #[cfg(feature = "mfa")]
 pub mod mfa;
 
+mod error;
+
+pub use error::{AuthError as WorkflowError, AuthErrorClass, AuthTransportMapping};
+
 const MAX_TRANSACTION_ITEMS: usize = 1_024;
 
 /// JWT and JWKS primitives used by the built-in authentication workflows.
-#[cfg(all(feature = "ddd-cqrs", feature = "jwt"))]
+#[cfg(feature = "jwt")]
 #[allow(missing_docs)]
-pub mod jwt {
-    pub use crate::compat::ddd_auth::{
-        AccessTokenClaims, Algorithm, DecodingKey, EncodingKey, Header, IdTokenClaims,
-        JwksDocument, JwksKey, access_token_key_id, decode_access_token, decode_id_token,
-        encode_access_token, encode_jwt, jwk_from_encoding_key, jwks_key_by_id, jwt_key_id,
-    };
-}
+pub mod jwt;
 
 /// WebAuthn/passkey primitives used by the runtime adapter.
-#[cfg(all(feature = "ddd-cqrs", feature = "passkeys"))]
+#[cfg(feature = "passkeys")]
 #[allow(missing_docs)]
 pub mod passkeys {
-    pub use crate::compat::ddd_auth::passkeys::*;
-}
-
-/// Stable storage contract metadata for migration and projection tooling.
-#[cfg(feature = "ddd-cqrs")]
-#[allow(missing_docs)]
-pub mod storage_contract {
-    pub use crate::compat::ddd_auth::{AUTH_EVENT_STREAMS, AUTH_STORAGE_VERSION};
-}
-
-/// Workflow error retained while imported authentication adapters migrate to
-/// the consolidated domain error model.
-#[cfg(feature = "ddd-cqrs")]
-pub use crate::compat::ddd_auth::AuthError as WorkflowError;
-
-/// Legacy identifier wrappers retained at the adapter boundary.
-#[cfg(feature = "ddd-cqrs")]
-#[allow(missing_docs)]
-pub mod adapter_ids {
-    pub use crate::compat::ddd_auth::{SessionId, TenantId, UserId};
+    pub use passkey_auth::{
+        Attachment, AuthSuccess, AuthenticationChallenge, AuthenticationResponse,
+        AuthenticationState, Challenge, CredentialId, PasskeyCredential, RegistrationChallenge,
+        RegistrationResponse, RegistrationState, Webauthn,
+    };
 }
 
 /// Stable permission names used by the production template.

@@ -65,25 +65,12 @@ accepted_membership AS (
     SET role_id = EXCLUDED.role_id, status = 'active', updated_at_ms = EXCLUDED.updated_at_ms
     RETURNING organization_id, user_id, role_id
 ),
-revised AS (
-    UPDATE auth_organizations AS organizations
-    SET authorization_revision = organizations.authorization_revision + 1,
-        updated_at_ms = $3
-    FROM accepted_membership
-    WHERE organizations.organization_id = accepted_membership.organization_id
-      AND accepted_membership.role_id <> 'owner'
-    RETURNING organizations.organization_id, organizations.name,
-              organizations.status, organizations.created_at_ms
-),
 revision_result AS (
     SELECT organizations.organization_id, organizations.name,
            organizations.status, organizations.created_at_ms
     FROM accepted_membership
     JOIN auth_organizations AS organizations
       ON organizations.organization_id = accepted_membership.organization_id
-    WHERE accepted_membership.role_id = 'owner'
-    UNION ALL
-    SELECT * FROM revised
 ),
 selected_session AS (
     UPDATE auth_sessions AS sessions

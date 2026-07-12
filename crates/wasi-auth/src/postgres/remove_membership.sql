@@ -76,22 +76,6 @@ cleared_sessions AS (
 session_barrier AS (
     SELECT count(*) AS cleared FROM cleared_sessions
 ),
-revised AS (
-    UPDATE auth_organizations AS organizations
-    SET authorization_revision = organizations.authorization_revision + 1,
-        updated_at_ms = $4
-    FROM removed CROSS JOIN session_barrier
-    WHERE organizations.organization_id = removed.organization_id
-      AND removed.role_id <> 'owner'
-    RETURNING organizations.organization_id
-),
-revision_result AS (
-    SELECT removed.organization_id
-    FROM removed
-    WHERE removed.role_id = 'owner'
-    UNION ALL
-    SELECT revised.organization_id FROM revised
-),
 new_audit AS (
     INSERT INTO auth_audit_log (
         audit_id, organization_id, actor_user_id, session_id,
@@ -102,7 +86,7 @@ new_audit AS (
            'member.remove', 'membership', removed.user_id::text, 'succeeded',
            $6, '{}', $4
     FROM removed
-    JOIN revision_result ON revision_result.organization_id = removed.organization_id
+    CROSS JOIN session_barrier
     JOIN actor ON TRUE
     RETURNING audit_id
 )

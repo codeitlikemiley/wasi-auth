@@ -101,6 +101,12 @@ pub const POSTGRES_CONTEXT_INVALIDATION_0009: SchemaMigration = SchemaMigration 
     sql: include_str!("../migrations/postgres/0009_context_invalidation.sql"),
 };
 
+/// Typed, resource-scoped relationship intents and bootstrap reconciliation.
+pub const POSTGRES_TYPED_RELATIONSHIP_OUTBOX_0010: SchemaMigration = SchemaMigration {
+    version: "0010_typed_relationship_outbox",
+    sql: include_str!("../migrations/postgres/0010_typed_relationship_outbox.sql"),
+};
+
 /// Returns the complete ordered relational-kernel migration catalog.
 #[must_use]
 pub const fn schema_migrations() -> &'static [SchemaMigration] {
@@ -114,6 +120,7 @@ pub const fn schema_migrations() -> &'static [SchemaMigration] {
         POSTGRES_SIGNING_KEYS_0007,
         POSTGRES_FULLSTACK_REDIRECTS_0008,
         POSTGRES_CONTEXT_INVALIDATION_0009,
+        POSTGRES_TYPED_RELATIONSHIP_OUTBOX_0010,
     ]
 }
 
@@ -185,6 +192,7 @@ mod tests {
                 POSTGRES_SIGNING_KEYS_0007,
                 POSTGRES_FULLSTACK_REDIRECTS_0008,
                 POSTGRES_CONTEXT_INVALIDATION_0009,
+                POSTGRES_TYPED_RELATIONSHIP_OUTBOX_0010,
             ])
         );
     }
@@ -227,6 +235,10 @@ mod tests {
             AppliedSchemaMigration {
                 version: POSTGRES_CONTEXT_INVALIDATION_0009.version().to_owned(),
                 checksum: POSTGRES_CONTEXT_INVALIDATION_0009.checksum_hex(),
+            },
+            AppliedSchemaMigration {
+                version: POSTGRES_TYPED_RELATIONSHIP_OUTBOX_0010.version().to_owned(),
+                checksum: POSTGRES_TYPED_RELATIONSHIP_OUTBOX_0010.checksum_hex(),
             },
         ];
 

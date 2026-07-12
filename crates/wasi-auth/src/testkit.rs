@@ -1,5 +1,10 @@
 //! Deterministic test fixtures that are never part of the production feature set.
 
+/// Former DDD in-memory evaluator retained only for deterministic tests.
+#[cfg(feature = "testkit-evaluator")]
+#[allow(clippy::enum_variant_names, dead_code, missing_docs, unused_imports)]
+pub mod evaluator;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
 use std::future::{Future, ready};

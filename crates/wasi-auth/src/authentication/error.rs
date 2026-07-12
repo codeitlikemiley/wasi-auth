@@ -1,42 +1,73 @@
+//! Transport-neutral authentication workflow failures.
+
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
+/// Public authentication workflow failure safe for transport mapping.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AuthError {
-    Validation { message: String },
+    /// A bounded caller-controlled value failed validation.
+    Validation {
+        /// Public validation explanation without secret material.
+        message: String,
+    },
+    /// Registration targeted an existing account.
     AlreadyRegistered,
+    /// The account is administratively disabled.
     UserDisabled,
+    /// No matching account exists.
     UserNotRegistered,
+    /// Identity-provider configuration or selection is invalid.
     InvalidProvider,
+    /// A token is malformed, untrusted, or contextually invalid.
     InvalidToken,
+    /// A token or session exceeded its accepted lifetime.
     SessionExpired,
+    /// The referenced session was revoked.
     SessionRevoked,
+    /// The authenticated principal lacks required authority.
     PermissionDenied,
 }
 
+/// Stable error class shared by HTTP, gRPC, and server functions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AuthErrorClass {
+    /// Invalid caller input.
     InvalidArgument,
+    /// A unique resource already exists.
     AlreadyExists,
+    /// A requested resource does not exist.
     NotFound,
+    /// Authentication is absent or no longer valid.
     Unauthenticated,
+    /// Authentication succeeded but authorization failed.
     PermissionDenied,
 }
 
+/// Transport-neutral status mapping for one authentication failure class.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AuthTransportMapping {
+    /// HTTP response status.
     pub http_status: u16,
+    /// Canonical gRPC status name.
     pub grpc_code: &'static str,
+    /// Stable server-function error code.
     pub server_fn_code: &'static str,
 }
 
 impl AuthError {
+    /// Creates a public validation failure.
+    #[must_use]
     pub fn validation(message: impl Into<String>) -> Self {
         Self::Validation {
             message: message.into(),
         }
     }
 
+    /// Returns a stable machine-readable error code.
+    #[must_use]
     pub fn public_code(&self) -> &'static str {
         match self {
             Self::Validation { .. } => "validation",
@@ -51,6 +82,8 @@ impl AuthError {
         }
     }
 
+    /// Returns the redacted message safe to return to a caller.
+    #[must_use]
     pub fn public_message(&self) -> String {
         match self {
             Self::Validation { message } => message.clone(),
@@ -65,6 +98,8 @@ impl AuthError {
         }
     }
 
+    /// Classifies the failure independently of transport.
+    #[must_use]
     pub fn class(&self) -> AuthErrorClass {
         match self {
             Self::Validation { .. } | Self::InvalidProvider => AuthErrorClass::InvalidArgument,
@@ -77,12 +112,16 @@ impl AuthError {
         }
     }
 
+    /// Returns the HTTP, gRPC, and server-function mapping.
+    #[must_use]
     pub fn transport_mapping(&self) -> AuthTransportMapping {
         self.class().transport_mapping()
     }
 }
 
 impl AuthErrorClass {
+    /// Returns the transport mapping for this error class.
+    #[must_use]
     pub fn transport_mapping(self) -> AuthTransportMapping {
         match self {
             Self::InvalidArgument => AuthTransportMapping {

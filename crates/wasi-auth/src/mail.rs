@@ -278,9 +278,17 @@ impl HttpMailEndpoint {
         let host = uri
             .host()
             .ok_or(HttpMailConfigurationError::InvalidEndpoint)?;
+        let authority = uri
+            .authority()
+            .ok_or(HttpMailConfigurationError::InvalidEndpoint)?;
         let secure = scheme == "https";
         let loopback = scheme == "http" && matches!(host, "localhost" | "127.0.0.1" | "[::1]");
-        if (!secure && !loopback) || uri.path().is_empty() || uri.path() == "/" {
+        if (!secure && !loopback)
+            || authority.as_str().contains('@')
+            || uri.query().is_some()
+            || uri.path().is_empty()
+            || uri.path() == "/"
+        {
             return Err(HttpMailConfigurationError::InvalidEndpoint);
         }
         Ok(Self(uri))
@@ -627,5 +635,14 @@ mod tests {
             HttpMailEndpoint::new("http://mail.example.test/v1/send").unwrap_err(),
             HttpMailConfigurationError::InvalidEndpoint
         );
+        for endpoint in [
+            "https://user:password@mail.example.test/v1/send",
+            "https://mail.example.test/v1/send?token=secret",
+        ] {
+            assert_eq!(
+                HttpMailEndpoint::new(endpoint).unwrap_err(),
+                HttpMailConfigurationError::InvalidEndpoint
+            );
+        }
     }
 }

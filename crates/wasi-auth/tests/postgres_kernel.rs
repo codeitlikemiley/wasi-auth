@@ -3,7 +3,7 @@
 
 #[cfg(feature = "password")]
 use std::convert::Infallible;
-#[cfg(all(feature = "password", feature = "jwt", feature = "ddd-cqrs"))]
+#[cfg(all(feature = "password", feature = "jwt"))]
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{error::Error, io, sync::Mutex};
 
@@ -27,16 +27,11 @@ use wasi_auth::context::{RequestId, SessionId};
 use wasi_auth::postgres::native::NativePostgresTransport;
 #[cfg(all(feature = "password", feature = "oauth", feature = "cedar"))]
 use wasi_auth::postgres::policy::PolicyBundleService;
-#[cfg(all(feature = "password", feature = "jwt", feature = "ddd-cqrs"))]
+#[cfg(all(feature = "password", feature = "jwt"))]
 use wasi_auth::postgres::signing::SigningKeyService;
-#[cfg(all(
-    feature = "password",
-    feature = "oauth",
-    feature = "jwt",
-    feature = "ddd-cqrs"
-))]
+#[cfg(all(feature = "password", feature = "oauth", feature = "jwt"))]
 use wasi_auth::postgres::tokens::JwtKeyRing as ManagedJwtKeyRing;
-#[cfg(all(feature = "password", feature = "jwt", feature = "ddd-cqrs"))]
+#[cfg(all(feature = "password", feature = "jwt"))]
 use wasi_auth::postgres::tokens::{
     AccessTokenVerifier, JwtKeyRing, RefreshSealingKey, TokenService, TokenServiceConfig,
     TokenServiceError,
@@ -65,14 +60,6 @@ use wasi_auth::{
         PasswordResetError, PasswordResetService, PasswordResetStartRequest,
     },
 };
-#[cfg(all(feature = "password", feature = "spicedb"))]
-use wasi_auth::{
-    authentication::{RelationshipOperation, RelationshipOutboxIntent},
-    postgres::outbox::RelationshipOutboxWorker,
-    spicedb::{
-        SpiceDbBearerToken, SpiceDbRelationshipWriter, SpiceDbTransport, SpiceDbWriteEndpoint,
-    },
-};
 #[cfg(feature = "password")]
 use wasi_auth::{
     mail::CaptureMailer,
@@ -84,6 +71,13 @@ use wasi_auth::{
         outbox::{MailOutboxWorker, PublicBaseUrl},
         rate_limits::RateLimitService,
         sessions::SessionService,
+    },
+};
+#[cfg(all(feature = "password", feature = "spicedb"))]
+use wasi_auth::{
+    postgres::outbox::{RelationshipOutboxWorker, load_relationship_consistency},
+    spicedb::{
+        SpiceDbBearerToken, SpiceDbRelationshipWriter, SpiceDbTransport, SpiceDbWriteEndpoint,
     },
 };
 
@@ -827,30 +821,20 @@ fn live_postgres_relationship_outbox_contract() -> Result<(), Box<dyn Error>> {
             let transport = NativePostgresTransport::connect(&database_url).await?;
             let outbox_id = Uuid::now_v7();
             let unique = outbox_id.simple().to_string();
-            let key = [29_u8; 32];
-            let sealing_key = OutboxSealingKey::new("relationship-contract-v1", key)?;
-            let intent = RelationshipOutboxIntent {
-                operation: RelationshipOperation::Grant,
-                resource: format!("organization:{unique}"),
-                relation: "member".to_owned(),
-                subject: format!("user:{unique}"),
-                resource_revision: 1,
-                consistency_token: None,
-            };
-            let sealed = sealing_key.seal_relationship_intent(&TestRandom::new(), &intent)?;
             let now_ms = 1_700_000_000_000_i64;
             transport
                 .client()
                 .execute(
                     "INSERT INTO auth_outbox \
-                     (outbox_id, kind, deduplication_key, key_version, payload_ciphertext, \
-                      status, available_at_ms, created_at_ms, updated_at_ms) \
-                     VALUES ($1, 'relationship', $2, $3, $4, 'pending', $5, $5, $5)",
+                     (outbox_id, kind, deduplication_key, relationship_operation, \
+                      resource_type, resource_id, relation, subject_type, subject_id, \
+                      resource_revision, status, available_at_ms, created_at_ms, updated_at_ms) \
+                     VALUES ($1, 'relationship', $2, 'grant', 'organization', $3, \
+                             'member', 'user', $3, 1, 'pending', $4, $4, $4)",
                     &[
                         &outbox_id,
                         &format!("relationship-contract-{unique}"),
-                        &sealed.key_version(),
-                        &sealed.ciphertext(),
+                        &unique,
                         &now_ms,
                     ],
                 )
@@ -860,7 +844,6 @@ fn live_postgres_relationship_outbox_contract() -> Result<(), Box<dyn Error>> {
                 PostgresAuthStore::new(transport.clone()),
                 FixedClock,
                 TestRandom::new(),
-                OutboxSealingKey::new("relationship-contract-v1", key)?,
             );
             let writer = SpiceDbRelationshipWriter::new(
                 SpiceDbWriteEndpoint::new("https://spicedb.example.test/v1/relationships/write")?,
@@ -881,6 +864,192 @@ fn live_postgres_relationship_outbox_contract() -> Result<(), Box<dyn Error>> {
                 .await?;
             assert_eq!(row.get::<_, String>("status"), "delivered");
             assert_eq!(row.get::<_, String>("delivery_id"), "zed-live-contract");
+
+            Ok::<_, Box<dyn Error>>(())
+        })
+}
+
+#[cfg(all(feature = "password", feature = "spicedb"))]
+#[test]
+#[ignore = "run through scripts/test-postgres-kernel-live.sh"]
+fn live_postgres_membership_relationship_trigger_contract() -> Result<(), Box<dyn Error>> {
+    let database_url = live_database_url()?;
+    let _live_database = LIVE_DB_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    Builder::new_current_thread()
+        .enable_io()
+        .build()?
+        .block_on(async {
+            let transport = NativePostgresTransport::connect(&database_url).await?;
+            let store = PostgresAuthStore::new(transport.clone());
+            let owner_id = Uuid::now_v7();
+            let member_id = Uuid::now_v7();
+            let organization_id = Uuid::now_v7();
+            let unrelated_organization_id = Uuid::now_v7();
+            let now_ms = 1_700_000_000_000_i64;
+            let client = transport.client();
+            client.batch_execute("BEGIN").await?;
+            for user_id in [owner_id, member_id] {
+                let email = format!("{}@example.test", user_id.simple());
+                client
+                    .execute(
+                        "INSERT INTO auth_users \
+                         (user_id, normalized_email, primary_email, status, security_revision, \
+                          created_at_ms, updated_at_ms) \
+                         VALUES ($1, $2, $2, 'active', 1, $3, $3)",
+                        &[&user_id, &email, &now_ms],
+                    )
+                    .await?;
+            }
+            client
+                .execute(
+                    "INSERT INTO auth_organizations \
+                     (organization_id, name, status, authorization_revision, created_by, \
+                      created_at_ms, updated_at_ms) \
+                     VALUES ($1, 'Relationship Trigger', 'active', 1, $2, $3, $3)",
+                    &[&organization_id, &owner_id, &now_ms],
+                )
+                .await?;
+            client
+                .execute(
+                    "INSERT INTO auth_roles \
+                     (organization_id, role_id, name, built_in, created_at_ms, updated_at_ms) \
+                     VALUES ($1, 'owner', 'Owner', TRUE, $2, $2), \
+                            ($1, 'member', 'Member', TRUE, $2, $2), \
+                            ($1, 'viewer', 'Viewer', TRUE, $2, $2)",
+                    &[&organization_id, &now_ms],
+                )
+                .await?;
+            for (user_id, role_id) in [(owner_id, "owner"), (member_id, "member")] {
+                client
+                    .execute(
+                        "INSERT INTO auth_memberships \
+                         (organization_id, user_id, role_id, status, joined_at_ms, updated_at_ms) \
+                         VALUES ($1, $2, $3, 'active', $4, $4)",
+                        &[&organization_id, &user_id, &role_id, &now_ms],
+                    )
+                    .await?;
+            }
+            client.batch_execute("COMMIT").await?;
+
+            let organization = organization_id.to_string();
+            let synchronization =
+                load_relationship_consistency(&store, "organization", &organization).await?;
+            assert!(synchronization.has_unsettled());
+            assert_eq!(synchronization.resource_revision(), Some(3));
+            let unrelated = load_relationship_consistency(
+                &store,
+                "organization",
+                &unrelated_organization_id.to_string(),
+            )
+            .await?;
+            assert!(!unrelated.has_unsettled());
+            assert_eq!(unrelated.resource_revision(), None);
+
+            let member_rows = client
+                .query(
+                    "SELECT relationship_operation, relation, resource_revision, \
+                            key_version, payload_ciphertext \
+                     FROM auth_outbox \
+                     WHERE kind = 'relationship' AND resource_type = 'organization' \
+                       AND resource_id = $1 AND subject_type = 'user' AND subject_id = $2 \
+                     ORDER BY resource_revision",
+                    &[&organization, &member_id.to_string()],
+                )
+                .await?;
+            assert_eq!(member_rows.len(), 1);
+            assert_eq!(
+                member_rows[0].get::<_, String>("relationship_operation"),
+                "grant"
+            );
+            assert_eq!(member_rows[0].get::<_, String>("relation"), "member");
+            assert_eq!(member_rows[0].get::<_, i64>("resource_revision"), 3);
+            assert!(
+                member_rows[0]
+                    .get::<_, Option<String>>("key_version")
+                    .is_none()
+            );
+            assert!(
+                member_rows[0]
+                    .get::<_, Option<Vec<u8>>>("payload_ciphertext")
+                    .is_none()
+            );
+
+            client
+                .execute(
+                    "UPDATE auth_memberships SET role_id = 'viewer', updated_at_ms = $3 \
+                     WHERE organization_id = $1 AND user_id = $2",
+                    &[&organization_id, &member_id, &(now_ms + 1)],
+                )
+                .await?;
+            let relationship_count: i64 = client
+                .query_one(
+                    "SELECT count(*) FROM auth_outbox \
+                     WHERE kind = 'relationship' AND resource_id = $1 AND subject_id = $2",
+                    &[&organization, &member_id.to_string()],
+                )
+                .await?
+                .get(0);
+            assert_eq!(relationship_count, 1);
+            let revision_after_role_change: i64 = client
+                .query_one(
+                    "SELECT authorization_revision FROM auth_organizations \
+                     WHERE organization_id = $1",
+                    &[&organization_id],
+                )
+                .await?
+                .get(0);
+            assert_eq!(revision_after_role_change, 4);
+
+            client
+                .execute(
+                    "UPDATE auth_memberships SET status = 'removed', updated_at_ms = $3 \
+                     WHERE organization_id = $1 AND user_id = $2",
+                    &[&organization_id, &member_id, &(now_ms + 2)],
+                )
+                .await?;
+            let operations = client
+                .query(
+                    "SELECT relationship_operation, resource_revision FROM auth_outbox \
+                     WHERE kind = 'relationship' AND resource_id = $1 AND subject_id = $2 \
+                     ORDER BY resource_revision",
+                    &[&organization, &member_id.to_string()],
+                )
+                .await?;
+            assert_eq!(operations.len(), 2);
+            assert_eq!(operations[0].get::<_, String>(0), "grant");
+            assert_eq!(operations[0].get::<_, i64>(1), 3);
+            assert_eq!(operations[1].get::<_, String>(0), "revoke");
+            assert_eq!(operations[1].get::<_, i64>(1), 5);
+
+            client
+                .execute(
+                    "UPDATE auth_memberships SET status = 'active', updated_at_ms = $3 \
+                     WHERE organization_id = $1 AND user_id = $2",
+                    &[&organization_id, &member_id, &(now_ms + 3)],
+                )
+                .await?;
+            client
+                .execute(
+                    "DELETE FROM auth_memberships \
+                     WHERE organization_id = $1 AND user_id = $2",
+                    &[&organization_id, &member_id],
+                )
+                .await?;
+            let operations = client
+                .query(
+                    "SELECT relationship_operation, resource_revision FROM auth_outbox \
+                     WHERE kind = 'relationship' AND resource_id = $1 AND subject_id = $2 \
+                     ORDER BY resource_revision",
+                    &[&organization, &member_id.to_string()],
+                )
+                .await?;
+            assert_eq!(operations.len(), 4);
+            assert_eq!(operations[2].get::<_, String>(0), "grant");
+            assert_eq!(operations[2].get::<_, i64>(1), 6);
+            assert_eq!(operations[3].get::<_, String>(0), "revoke");
+            assert_eq!(operations[3].get::<_, i64>(1), 7);
 
             Ok::<_, Box<dyn Error>>(())
         })
@@ -1029,7 +1198,7 @@ fn live_postgres_final_owner_concurrency_contract() -> Result<(), Box<dyn Error>
         })
 }
 
-#[cfg(all(feature = "password", feature = "jwt", feature = "ddd-cqrs"))]
+#[cfg(all(feature = "password", feature = "jwt"))]
 #[test]
 #[ignore = "run through scripts/test-postgres-kernel-live.sh"]
 fn live_postgres_refresh_rotation_and_reuse_contract() -> Result<(), Box<dyn Error>> {
@@ -1452,7 +1621,7 @@ fn live_postgres_oauth_state_identity_and_replay_contract() -> Result<(), Box<dy
             assert!(service.start("google", "/after-oauth").await.is_ok());
             assert!(service.start("google", "/not-allowed").await.is_err());
 
-            #[cfg(all(feature = "jwt", feature = "ddd-cqrs"))]
+            #[cfg(feature = "jwt")]
             {
                 let first_kid = format!("contract-a-{unique}");
                 let second_kid = format!("contract-b-{unique}");
@@ -1654,11 +1823,11 @@ impl Clock for FixedClock {
     }
 }
 
-#[cfg(all(feature = "password", feature = "jwt", feature = "ddd-cqrs"))]
+#[cfg(all(feature = "password", feature = "jwt"))]
 #[derive(Clone, Copy, Debug)]
 struct ExplicitClock(u64);
 
-#[cfg(all(feature = "password", feature = "jwt", feature = "ddd-cqrs"))]
+#[cfg(all(feature = "password", feature = "jwt"))]
 impl Clock for ExplicitClock {
     fn now_unix_seconds(&self) -> u64 {
         self.0

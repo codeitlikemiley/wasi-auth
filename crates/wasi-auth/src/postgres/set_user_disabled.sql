@@ -76,26 +76,6 @@ mutation_barrier AS (
     SELECT (SELECT count(*) FROM updated_memberships) AS memberships,
            (SELECT count(*) FROM revoked_sessions) AS sessions
 ),
-revised AS (
-    UPDATE auth_organizations AS organizations
-    SET authorization_revision = organizations.authorization_revision + 1,
-        updated_at_ms = $4
-    FROM locked_organizations CROSS JOIN updated_user CROSS JOIN mutation_barrier
-    WHERE organizations.organization_id = locked_organizations.organization_id
-      AND NOT (
-          locked_organizations.role_id = 'owner'
-          AND (($3 AND locked_organizations.status = 'active')
-               OR (NOT $3 AND locked_organizations.status = 'blocked'))
-      )
-    RETURNING organizations.organization_id
-),
-revision_barrier AS (
-    SELECT count(*) AS organizations FROM revised
-    UNION ALL
-    SELECT count(*) FROM locked_organizations
-    WHERE role_id = 'owner'
-      AND (($3 AND status = 'active') OR (NOT $3 AND status = 'blocked'))
-),
 new_audit AS (
     INSERT INTO auth_audit_log (
         audit_id, actor_user_id, session_id, action, resource_type,
@@ -105,7 +85,7 @@ new_audit AS (
            CASE WHEN $3 THEN 'system.user.disable' ELSE 'system.user.enable' END,
            'user', updated_user.user_id::text, 'succeeded', $6, '{}', $4
     FROM updated_user JOIN actor ON TRUE
-    CROSS JOIN (SELECT sum(organizations) FROM revision_barrier) AS revision_total
+    CROSS JOIN mutation_barrier
     RETURNING audit_id
 )
 SELECT updated_user.user_id::text AS user_id,

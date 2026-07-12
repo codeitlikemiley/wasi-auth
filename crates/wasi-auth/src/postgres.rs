@@ -28,11 +28,11 @@ pub mod passkeys;
 pub mod policy;
 pub mod rate_limits;
 pub mod sessions;
-#[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+#[cfg(all(feature = "jwt", feature = "password"))]
 pub mod signing;
 #[cfg(feature = "postgres-spin")]
 pub mod spin;
-#[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+#[cfg(all(feature = "jwt", feature = "password"))]
 pub mod tokens;
 #[cfg(feature = "password")]
 pub mod workflows;
@@ -46,7 +46,7 @@ use crate::context::{
 const REGISTER_PASSWORD_SQL: &str = include_str!("postgres/register_password.sql");
 const REGISTRATION_REPLAY_SQL: &str = include_str!("postgres/registration_replay.sql");
 const LOAD_REQUEST_CONTEXT_SQL: &str = include_str!("postgres/load_request_context.sql");
-#[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+#[cfg(all(feature = "jwt", feature = "password"))]
 const LOAD_REQUEST_FINGERPRINT_SQL: &str = include_str!("postgres/load_request_fingerprint.sql");
 
 /// Parameter accepted by a PostgreSQL transport.
@@ -375,7 +375,7 @@ pub struct RegistrationReceipt {
 pub struct VerifiedSession {
     context: VerifiedRequestContext,
     primary_email: String,
-    #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+    #[cfg(all(feature = "jwt", feature = "password"))]
     authorization_fingerprint: AuthorizationFingerprint,
 }
 
@@ -392,7 +392,7 @@ impl VerifiedSession {
         &self.primary_email
     }
 
-    #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+    #[cfg(all(feature = "jwt", feature = "password"))]
     pub(crate) const fn authorization_fingerprint(&self) -> &AuthorizationFingerprint {
         &self.authorization_fingerprint
     }
@@ -408,7 +408,7 @@ impl VerifiedSession {
 /// loaded. It is deliberately private to the authentication kernel so callers
 /// can reuse a snapshot but cannot manufacture a cache hit.
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+#[cfg(all(feature = "jwt", feature = "password"))]
 pub(crate) struct AuthorizationFingerprint {
     user_id: String,
     session_id: String,
@@ -547,7 +547,7 @@ where
     ///
     /// This keeps immediate key revocation on the same bounded query as user,
     /// session, organization, role, permission, and policy validation.
-    #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+    #[cfg(all(feature = "jwt", feature = "password"))]
     pub(crate) async fn load_verified_session_for_token(
         &self,
         session_id: &SessionId,
@@ -571,7 +571,7 @@ where
     /// authorization snapshot is still current. Session, account,
     /// organization, membership, policy, administrator, and signing-key
     /// revocations all remain authoritative on every cache hit.
-    #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+    #[cfg(all(feature = "jwt", feature = "password"))]
     pub(crate) async fn load_authorization_fingerprint_for_token(
         &self,
         session_id: &SessionId,
@@ -659,7 +659,7 @@ fn verified_session(
     row: &PgRow,
     request_id: RequestId,
 ) -> Result<VerifiedSession, ContextLoadError> {
-    #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+    #[cfg(all(feature = "jwt", feature = "password"))]
     let authorization_fingerprint = authorization_fingerprint(row)?;
     let user_id = UserId::new(row.required_text("user_id")?)?;
     let primary_email = row.required_text("primary_email")?.to_owned();
@@ -722,12 +722,12 @@ fn verified_session(
     Ok(VerifiedSession {
         context: VerifiedRequestContext::from_verified(auth, authorization),
         primary_email,
-        #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+        #[cfg(all(feature = "jwt", feature = "password"))]
         authorization_fingerprint,
     })
 }
 
-#[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+#[cfg(all(feature = "jwt", feature = "password"))]
 fn authorization_fingerprint(row: &PgRow) -> Result<AuthorizationFingerprint, ContextLoadError> {
     let user_id = UserId::new(row.required_text("user_id")?)?.to_string();
     let session_id = SessionId::new(row.required_text("session_id")?)?.to_string();
@@ -815,7 +815,7 @@ enum ContextLoadError {
     #[error("stored primary email is invalid")]
     InvalidEmail,
     #[error("stored authorization revision is invalid")]
-    #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+    #[cfg(all(feature = "jwt", feature = "password"))]
     InvalidRevision,
 }
 
@@ -870,13 +870,13 @@ where
             | ContextLoadError::InvalidTimestamp
             | ContextLoadError::InvalidPermissions
             | ContextLoadError::InvalidEmail => Self::Context,
-            #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+            #[cfg(all(feature = "jwt", feature = "password"))]
             ContextLoadError::InvalidRevision => Self::Context,
         }
     }
 }
 
-#[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+#[cfg(all(feature = "jwt", feature = "password"))]
 fn valid_signing_key_id(value: &str) -> bool {
     !value.is_empty() && value.len() <= 128 && !value.chars().any(char::is_control)
 }
@@ -1020,7 +1020,7 @@ mod tests {
         assert!(receipt.replayed);
     }
 
-    #[cfg(all(feature = "jwt", feature = "password", feature = "ddd-cqrs"))]
+    #[cfg(all(feature = "jwt", feature = "password"))]
     #[test]
     fn token_context_load_is_one_query_with_authoritative_key_lifecycle() {
         let user_id = Uuid::now_v7().to_string();

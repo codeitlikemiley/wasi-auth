@@ -1,9 +1,14 @@
-use super::{AuthError, SessionId, TenantId, UserId};
+//! JWT claims, JWKS documents, and hardened signing helpers.
+
 use std::collections::BTreeMap;
 
+use super::WorkflowError as AuthError;
+use crate::context::{OrganizationId as TenantId, SessionId, UserId};
+
+#[cfg(feature = "jwt")]
+pub use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 #[cfg(feature = "jwt")]
 use jsonwebtoken::{
-    Algorithm, DecodingKey, EncodingKey, Header, Validation,
     crypto::{CryptoProvider, JwkUtils, JwtSigner, JwtVerifier},
     decode, decode_header, encode,
     errors::{Error as JwtError, ErrorKind as JwtErrorKind},
@@ -383,13 +388,13 @@ mod tests {
     fn revoked_session_rejects_matching_session_id() {
         let mut claims = AccessTokenClaims::for_user(
             "issuer",
-            UserId::from("user-1"),
+            UserId::new("user-1").expect("valid user id"),
             vec!["audience".to_string()],
             4_102_444_800,
             1,
             "token-1",
         );
-        claims.session_id = Some(SessionId::from("session-1"));
+        claims.session_id = Some(SessionId::new("session-1").expect("valid session id"));
 
         assert_eq!(
             reject_revoked_session(&claims, &["session-1"]).unwrap_err(),
@@ -439,14 +444,15 @@ mod tests {
             let now = now_seconds();
             let mut claims = AccessTokenClaims::for_user(
                 "https://issuer.example",
-                UserId::from("user-1"),
+                UserId::new("user-1").expect("valid user id"),
                 vec!["fullstack-app".to_string()],
                 now + 300,
                 now,
                 "token-1",
             );
-            claims.tenant_id = Some(TenantId::from("tenant:default"));
-            claims.session_id = Some(SessionId::from("session-1"));
+            claims.tenant_id =
+                Some(TenantId::new("tenant:default").expect("valid organization id"));
+            claims.session_id = Some(SessionId::new("session-1").expect("valid session id"));
             claims.scope = vec!["auth:session:read".to_string()];
             claims
         }
@@ -517,7 +523,10 @@ mod tests {
             .unwrap();
 
             assert_eq!(decoded.sub, "user-1");
-            assert_eq!(decoded.session_id, Some(SessionId::from("session-1")));
+            assert_eq!(
+                decoded.session_id,
+                Some(SessionId::new("session-1").expect("valid session id"))
+            );
         }
 
         #[test]

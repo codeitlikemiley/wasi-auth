@@ -4,22 +4,18 @@ use std::{error::Error as StdError, fmt};
 
 use http::Uri;
 use serde::Deserialize;
-#[cfg(feature = "spicedb")]
-use serde::Serialize;
 use thiserror::Error;
 use uuid::Uuid;
 use zeroize::{Zeroize, Zeroizing};
 
-#[cfg(feature = "spicedb")]
-use super::SealedPayload;
 use super::{PgValue, PostgresAuthStore, PostgresTransport, RowDecodeError};
 #[cfg(feature = "spicedb")]
 use crate::{
-    authentication::RelationshipOutboxIntent,
+    authentication::RelationshipOperation,
     spicedb::{SpiceDbRelationshipWriter, SpiceDbTransport},
 };
 use crate::{
-    authentication::{Clock, RandomSource},
+    authentication::{Clock, RandomSource, RelationshipOutboxIntent},
     mail::{EmailKind, EmailMessage, Mailer, Recipient},
     postgres::workflows::OutboxSealingKey,
 };
@@ -27,6 +23,8 @@ use crate::{
 const LEASE_OUTBOX_SQL: &str = include_str!("lease_outbox.sql");
 const COMPLETE_OUTBOX_SQL: &str = include_str!("complete_outbox.sql");
 const RETRY_OUTBOX_SQL: &str = include_str!("retry_outbox.sql");
+#[cfg(feature = "spicedb")]
+const LOAD_RELATIONSHIP_CONSISTENCY_SQL: &str = include_str!("load_relationship_consistency.sql");
 #[cfg(feature = "mail-capture")]
 const LOAD_RECENT_DELIVERED_MAIL_SQL: &str = include_str!("load_recent_delivered_mail.sql");
 const MAIL_LEASE_MS: u64 = 30_000;
@@ -85,8 +83,9 @@ pub enum PublicBaseUrlError {
 struct OutboxLease {
     outbox_id: Uuid,
     deduplication_key: String,
-    key_version: String,
+    key_version: Option<String>,
     payload_ciphertext: Vec<u8>,
+    relationship: Option<RelationshipOutboxIntent>,
     attempt_count: u64,
     lease_id: Uuid,
 }
@@ -99,6 +98,10 @@ impl fmt::Debug for OutboxLease {
             .field("deduplication_key", &self.deduplication_key)
             .field("key_version", &self.key_version)
             .field("payload_ciphertext", &"[REDACTED]")
+            .field(
+                "relationship",
+                &self.relationship.as_ref().map(|_| "[TYPED]"),
+            )
             .field("attempt_count", &self.attempt_count)
             .field("lease_id", &self.lease_id)
             .finish()
@@ -119,56 +122,6 @@ struct MailPayload {
     token: String,
     redirect_uri: String,
 }
-
-#[cfg(feature = "spicedb")]
-#[derive(Deserialize, Serialize)]
-struct RelationshipPayload {
-    version: u8,
-    intent: RelationshipOutboxIntent,
-}
-
-#[cfg(feature = "spicedb")]
-impl OutboxSealingKey {
-    /// Encrypts one versioned relationship intent for insertion by a typed,
-    /// transactional PostgreSQL command.
-    ///
-    /// The returned payload contains no plaintext relationship data. Callers
-    /// must insert it into `auth_outbox` in the same statement that commits the
-    /// corresponding authorization revision; this helper is not an enqueue
-    /// operation by itself.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when randomness, serialization, or encryption fails.
-    pub fn seal_relationship_intent<R>(
-        &self,
-        randomness: &R,
-        intent: &RelationshipOutboxIntent,
-    ) -> Result<SealedPayload, RelationshipPayloadError>
-    where
-        R: RandomSource,
-    {
-        let mut nonce = [0_u8; 12];
-        randomness
-            .fill_bytes(&mut nonce)
-            .map_err(|_| RelationshipPayloadError)?;
-        let plaintext = Zeroizing::new(
-            serde_json::to_vec(&RelationshipPayload {
-                version: 1,
-                intent: intent.clone(),
-            })
-            .map_err(|_| RelationshipPayloadError)?,
-        );
-        self.seal_relationship(nonce, &plaintext)
-            .map_err(|_| RelationshipPayloadError)
-    }
-}
-
-/// Relationship outbox payload construction failed closed.
-#[cfg(feature = "spicedb")]
-#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
-#[error("relationship outbox payload could not be sealed")]
-pub struct RelationshipPayloadError;
 
 impl Drop for MailPayload {
     fn drop(&mut self) {
@@ -356,7 +309,7 @@ where
     fn message(&self, lease: &OutboxLease) -> Result<EmailMessage, ()> {
         self.message_from_encrypted(
             &lease.deduplication_key,
-            &lease.key_version,
+            lease.key_version.as_deref().ok_or(())?,
             &lease.payload_ciphertext,
         )
     }
@@ -491,13 +444,135 @@ where
         outbox_id: Uuid::parse_str(row.required_text("outbox_id")?)
             .map_err(|_| MailOutboxError::InvalidRow)?,
         deduplication_key: row.required_text("deduplication_key")?.to_owned(),
-        key_version: row.required_text("key_version")?.to_owned(),
+        key_version: Some(row.required_text("key_version")?.to_owned()),
         payload_ciphertext: ciphertext.to_vec(),
+        relationship: None,
         attempt_count: u64::try_from(row.required_i64("attempt_count")?)
             .map_err(|_| MailOutboxError::InvalidRow)?,
         lease_id: Uuid::parse_str(row.required_text("lease_id")?)
             .map_err(|_| MailOutboxError::InvalidRow)?,
     })
+}
+
+/// Resource-scoped relationship synchronization state.
+#[cfg(feature = "spicedb")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RelationshipConsistency {
+    has_unsettled: bool,
+    consistency_token: Option<String>,
+    resource_revision: Option<u64>,
+}
+
+#[cfg(feature = "spicedb")]
+impl RelationshipConsistency {
+    /// Returns whether a grant, revocation, or dead letter remains unsettled.
+    #[must_use]
+    pub const fn has_unsettled(&self) -> bool {
+        self.has_unsettled
+    }
+
+    /// Returns the newest provider token acknowledged for this resource.
+    #[must_use]
+    pub fn consistency_token(&self) -> Option<&str> {
+        self.consistency_token.as_deref()
+    }
+
+    /// Returns the newest relationship revision known for this resource.
+    #[must_use]
+    pub const fn resource_revision(&self) -> Option<u64> {
+        self.resource_revision
+    }
+}
+
+/// Loads synchronization state for exactly one protected resource.
+///
+/// Callers must deny while [`RelationshipConsistency::has_unsettled`] is true.
+/// This prevents one tenant's provider backlog from blocking unrelated tenants.
+///
+/// # Errors
+///
+/// Rejects malformed resource identifiers, transport failures, and malformed
+/// database rows.
+#[cfg(feature = "spicedb")]
+pub async fn load_relationship_consistency<T>(
+    store: &PostgresAuthStore<T>,
+    resource_type: &str,
+    resource_id: &str,
+) -> Result<RelationshipConsistency, RelationshipConsistencyError<T::Error>>
+where
+    T: PostgresTransport,
+{
+    if !valid_relationship_name(resource_type)
+        || resource_id.is_empty()
+        || resource_id.len() > 1_024
+        || resource_id.chars().any(char::is_control)
+    {
+        return Err(RelationshipConsistencyError::InvalidResource);
+    }
+    let rows = store
+        .transport()
+        .query(
+            LOAD_RELATIONSHIP_CONSISTENCY_SQL,
+            vec![
+                PgValue::Text(resource_type.to_owned()),
+                PgValue::Text(resource_id.to_owned()),
+            ],
+        )
+        .await
+        .map_err(RelationshipConsistencyError::Transport)?;
+    let row = rows
+        .first()
+        .ok_or(RelationshipConsistencyError::InvalidRow)?;
+    let has_unsettled = row
+        .bool("has_unsettled")?
+        .ok_or(RelationshipConsistencyError::InvalidRow)?;
+    let consistency_token = row.text("consistency_token")?.map(str::to_owned);
+    if consistency_token.as_ref().is_some_and(|token| {
+        token.is_empty() || token.len() > 4_096 || token.chars().any(char::is_control)
+    }) {
+        return Err(RelationshipConsistencyError::InvalidRow);
+    }
+    let resource_revision = row
+        .i64("resource_revision")?
+        .map(u64::try_from)
+        .transpose()
+        .map_err(|_| RelationshipConsistencyError::InvalidRow)?;
+    Ok(RelationshipConsistency {
+        has_unsettled,
+        consistency_token,
+        resource_revision,
+    })
+}
+
+#[cfg(feature = "spicedb")]
+fn valid_relationship_name(value: &str) -> bool {
+    (3..=64).contains(&value.len())
+        && value
+            .bytes()
+            .next()
+            .is_some_and(|byte| byte.is_ascii_lowercase())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
+}
+
+/// Resource-scoped relationship consistency lookup failure.
+#[cfg(feature = "spicedb")]
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum RelationshipConsistencyError<E: StdError + Send + Sync + 'static> {
+    /// Resource type or identifier violated the bounded contract.
+    #[error("relationship resource is invalid")]
+    InvalidResource,
+    /// PostgreSQL lookup failed.
+    #[error("PostgreSQL relationship consistency lookup failed: {0}")]
+    Transport(#[source] E),
+    /// PostgreSQL returned a typed row-decoding failure.
+    #[error(transparent)]
+    Row(#[from] RowDecodeError),
+    /// PostgreSQL returned malformed synchronization metadata.
+    #[error("PostgreSQL returned invalid relationship consistency metadata")]
+    InvalidRow,
 }
 
 /// One bounded relationship-dispatch pass result.
@@ -520,24 +595,17 @@ pub struct RelationshipOutboxWorker<T, C, R> {
     store: PostgresAuthStore<T>,
     clock: C,
     randomness: R,
-    sealing_key: OutboxSealingKey,
 }
 
 #[cfg(feature = "spicedb")]
 impl<T, C, R> RelationshipOutboxWorker<T, C, R> {
     /// Assembles the worker from concrete runtime dependencies.
     #[must_use]
-    pub const fn new(
-        store: PostgresAuthStore<T>,
-        clock: C,
-        randomness: R,
-        sealing_key: OutboxSealingKey,
-    ) -> Self {
+    pub const fn new(store: PostgresAuthStore<T>, clock: C, randomness: R) -> Self {
         Self {
             store,
             clock,
             randomness,
-            sealing_key,
         }
     }
 
@@ -558,8 +626,9 @@ where
     /// Leases and dispatches a bounded relationship batch.
     ///
     /// SpiceDB writes are at-least-once. `TOUCH` and `DELETE` operations make
-    /// retry after a lost database acknowledgement safe. Invalid encrypted
-    /// payloads are retried with the same bounded dead-letter policy as mail.
+    /// retry after a lost database acknowledgement safe. Relationship data is
+    /// typed relational metadata inserted by the same statement as its source
+    /// membership mutation; secret mail payloads remain separately encrypted.
     ///
     /// # Errors
     ///
@@ -657,16 +726,7 @@ where
     }
 
     fn relationship(&self, lease: &OutboxLease) -> Result<RelationshipOutboxIntent, ()> {
-        let plaintext = Zeroizing::new(
-            self.sealing_key
-                .open_relationship(&lease.key_version, &lease.payload_ciphertext)
-                .map_err(|_| ())?,
-        );
-        let payload = serde_json::from_slice::<RelationshipPayload>(&plaintext).map_err(|_| ())?;
-        if payload.version != 1 {
-            return Err(());
-        }
-        Ok(payload.intent)
+        lease.relationship.clone().ok_or(())
     }
 
     async fn complete_relationship(
@@ -747,16 +807,36 @@ where
     if row.required_text("kind")? != "relationship" {
         return Err(RelationshipOutboxError::InvalidRow);
     }
-    let ciphertext = row.required_bytes("payload_ciphertext")?;
-    if ciphertext.is_empty() || ciphertext.len() > 256 * 1_024 {
-        return Err(RelationshipOutboxError::InvalidRow);
-    }
+    let operation = match row.required_text("relationship_operation")? {
+        "grant" => RelationshipOperation::Grant,
+        "revoke" => RelationshipOperation::Revoke,
+        _ => return Err(RelationshipOutboxError::InvalidRow),
+    };
+    let resource_revision = u64::try_from(row.required_i64("resource_revision")?)
+        .map_err(|_| RelationshipOutboxError::InvalidRow)?;
+    let relationship = RelationshipOutboxIntent {
+        operation,
+        resource: format!(
+            "{}:{}",
+            row.required_text("resource_type")?,
+            row.required_text("resource_id")?
+        ),
+        relation: row.required_text("relation")?.to_owned(),
+        subject: format!(
+            "{}:{}",
+            row.required_text("subject_type")?,
+            row.required_text("subject_id")?
+        ),
+        resource_revision,
+        consistency_token: None,
+    };
     Ok(OutboxLease {
         outbox_id: Uuid::parse_str(row.required_text("outbox_id")?)
             .map_err(|_| RelationshipOutboxError::InvalidRow)?,
         deduplication_key: row.required_text("deduplication_key")?.to_owned(),
-        key_version: row.required_text("key_version")?.to_owned(),
-        payload_ciphertext: ciphertext.to_vec(),
+        key_version: None,
+        payload_ciphertext: Vec::new(),
+        relationship: Some(relationship),
         attempt_count: u64::try_from(row.required_i64("attempt_count")?)
             .map_err(|_| RelationshipOutboxError::InvalidRow)?,
         lease_id: Uuid::parse_str(row.required_text("lease_id")?)
@@ -853,7 +933,6 @@ mod tests {
 
     use super::*;
     use crate::{
-        authentication::RelationshipOperation,
         postgres::PgRow,
         spicedb::{SpiceDbBearerToken, SpiceDbWriteEndpoint},
     };
@@ -925,26 +1004,49 @@ mod tests {
     }
 
     #[test]
-    fn relationship_worker_uses_canonical_encrypted_outbox() {
-        let sealing_key = OutboxSealingKey::new("outbox-v1", [11; 32]).expect("valid sealing key");
-        let intent = RelationshipOutboxIntent {
-            operation: RelationshipOperation::Grant,
-            resource: "organization:org-one".to_owned(),
-            relation: "member".to_owned(),
-            subject: "user:user-one".to_owned(),
-            resource_revision: 7,
-            consistency_token: None,
-        };
-        let sealed = sealing_key
-            .seal_relationship_intent(&FixedRandom, &intent)
-            .expect("sealed relationship intent");
-        assert!(
-            sealing_key
-                .open(sealed.key_version(), sealed.ciphertext())
-                .is_err(),
-            "mail and relationship authenticated-data domains must differ"
-        );
+    fn relationship_consistency_is_resource_scoped() {
+        let postgres = FakePostgres::default();
+        {
+            let mut state = postgres.state.lock().expect("fake postgres lock");
+            state.responses.push_back(vec![PgRow::new([
+                ("has_unsettled".to_owned(), PgValue::Bool(false)),
+                (
+                    "consistency_token".to_owned(),
+                    PgValue::Text("zed-org-one".to_owned()),
+                ),
+                ("resource_revision".to_owned(), PgValue::I64(9)),
+            ])]);
+        }
+        let store = PostgresAuthStore::new(postgres.clone());
+        let consistency = block_on(load_relationship_consistency(
+            &store,
+            "organization",
+            "org-one",
+        ))
+        .expect("relationship consistency");
 
+        assert_eq!(
+            consistency,
+            RelationshipConsistency {
+                has_unsettled: false,
+                consistency_token: Some("zed-org-one".to_owned()),
+                resource_revision: Some(9),
+            }
+        );
+        let state = postgres.state.lock().expect("fake postgres lock");
+        assert_eq!(state.calls.len(), 1);
+        assert_eq!(state.calls[0].0, LOAD_RELATIONSHIP_CONSISTENCY_SQL);
+        assert_eq!(
+            state.calls[0].1,
+            vec![
+                PgValue::Text("organization".to_owned()),
+                PgValue::Text("org-one".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn relationship_worker_uses_canonical_typed_outbox() {
         let outbox_id = Uuid::now_v7();
         let lease_id = Uuid::now_v7();
         let postgres = FakePostgres::default();
@@ -958,13 +1060,24 @@ mod tests {
                     PgValue::Text("relationship:org-one:user-one:7".to_owned()),
                 ),
                 (
-                    "key_version".to_owned(),
-                    PgValue::Text(sealed.key_version().to_owned()),
+                    "relationship_operation".to_owned(),
+                    PgValue::Text("grant".to_owned()),
                 ),
                 (
-                    "payload_ciphertext".to_owned(),
-                    PgValue::Bytes(sealed.ciphertext().to_vec()),
+                    "resource_type".to_owned(),
+                    PgValue::Text("organization".to_owned()),
                 ),
+                (
+                    "resource_id".to_owned(),
+                    PgValue::Text("org-one".to_owned()),
+                ),
+                ("relation".to_owned(), PgValue::Text("member".to_owned())),
+                ("subject_type".to_owned(), PgValue::Text("user".to_owned())),
+                (
+                    "subject_id".to_owned(),
+                    PgValue::Text("user-one".to_owned()),
+                ),
+                ("resource_revision".to_owned(), PgValue::I64(7)),
                 ("attempt_count".to_owned(), PgValue::I64(1)),
                 ("lease_id".to_owned(), PgValue::Text(lease_id.to_string())),
             ])]);
@@ -978,7 +1091,6 @@ mod tests {
             PostgresAuthStore::new(postgres.clone()),
             FixedClock,
             FixedRandom,
-            sealing_key,
         );
         let writer = SpiceDbRelationshipWriter::new(
             SpiceDbWriteEndpoint::new("https://spicedb.example.test/v1/relationships/write")

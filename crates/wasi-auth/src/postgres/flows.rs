@@ -193,6 +193,7 @@ impl<T, C, R> EncryptedFlowStore<T, C, R> {
         self.clock.now_unix_seconds()
     }
 
+    #[cfg(feature = "oauth")]
     pub(crate) fn fill_bytes(&self, destination: &mut [u8]) -> Result<(), ()>
     where
         R: RandomSource,

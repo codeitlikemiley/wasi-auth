@@ -31,10 +31,8 @@ const UUID_RANDOM_BYTES: usize = 10;
 const EMAIL_VERIFICATION_TTL_MS: u64 = 24 * 60 * 60 * 1_000;
 const IDEMPOTENCY_TTL_MS: u64 = 24 * 60 * 60 * 1_000;
 // This value is frozen because changing authenticated data would make already
-// queued mail payloads unreadable. Relationship payloads use a separate label.
+// queued mail payloads unreadable.
 const MAIL_OUTBOX_AAD_V1: &[u8] = b"wasi-auth:email-verification:v1";
-#[cfg(feature = "spicedb")]
-const RELATIONSHIP_OUTBOX_AAD_V1: &[u8] = b"wasi-auth:relationship:v1";
 const LOAD_PASSWORD_LOGIN_SQL: &str = include_str!("load_password_login.sql");
 const ISSUE_PASSWORD_SESSION_SQL: &str = include_str!("issue_password_session.sql");
 const LOAD_PASSWORD_BY_USER_SQL: &str = include_str!("load_password_by_user.sql");
@@ -142,15 +140,6 @@ impl OutboxSealingKey {
         self.seal_with_aad(nonce, plaintext, MAIL_OUTBOX_AAD_V1)
     }
 
-    #[cfg(feature = "spicedb")]
-    pub(crate) fn seal_relationship(
-        &self,
-        nonce: [u8; OUTBOX_NONCE_BYTES],
-        plaintext: &[u8],
-    ) -> Result<SealedPayload, PasswordCryptoError> {
-        self.seal_with_aad(nonce, plaintext, RELATIONSHIP_OUTBOX_AAD_V1)
-    }
-
     fn seal_with_aad(
         &self,
         nonce: [u8; OUTBOX_NONCE_BYTES],
@@ -179,15 +168,6 @@ impl OutboxSealingKey {
         sealed: &[u8],
     ) -> Result<Vec<u8>, PasswordCryptoError> {
         self.open_with_aad(key_version, sealed, MAIL_OUTBOX_AAD_V1)
-    }
-
-    #[cfg(feature = "spicedb")]
-    pub(crate) fn open_relationship(
-        &self,
-        key_version: &str,
-        sealed: &[u8],
-    ) -> Result<Vec<u8>, PasswordCryptoError> {
-        self.open_with_aad(key_version, sealed, RELATIONSHIP_OUTBOX_AAD_V1)
     }
 
     fn open_with_aad(

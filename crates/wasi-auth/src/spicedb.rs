@@ -53,9 +53,16 @@ impl SpiceDbEndpoint {
         let host = uri
             .host()
             .ok_or(SpiceDbConfigurationError::InvalidEndpoint)?;
+        let authority = uri
+            .authority()
+            .ok_or(SpiceDbConfigurationError::InvalidEndpoint)?;
         let secure = scheme == "https";
         let loopback = scheme == "http" && matches!(host, "localhost" | "127.0.0.1" | "[::1]");
-        if (!secure && !loopback) || uri.path() != "/v1/permissions/check" {
+        if (!secure && !loopback)
+            || authority.as_str().contains('@')
+            || uri.query().is_some()
+            || uri.path() != "/v1/permissions/check"
+        {
             return Err(SpiceDbConfigurationError::InvalidEndpoint);
         }
         Ok(Self(uri))
@@ -484,9 +491,16 @@ impl SpiceDbWriteEndpoint {
         let host = uri
             .host()
             .ok_or(SpiceDbConfigurationError::InvalidEndpoint)?;
+        let authority = uri
+            .authority()
+            .ok_or(SpiceDbConfigurationError::InvalidEndpoint)?;
         let secure = scheme == "https";
         let loopback = scheme == "http" && matches!(host, "localhost" | "127.0.0.1" | "[::1]");
-        if (!secure && !loopback) || uri.path() != "/v1/relationships/write" {
+        if (!secure && !loopback)
+            || authority.as_str().contains('@')
+            || uri.query().is_some()
+            || uri.path() != "/v1/relationships/write"
+        {
             return Err(SpiceDbConfigurationError::InvalidEndpoint);
         }
         Ok(Self(uri))
@@ -607,7 +621,11 @@ where
             serde_json::from_slice(response.body()).map_err(|_| SpiceDbError::InvalidResponse)?;
         let consistency_token = wire
             .written_at
-            .filter(|token| !token.token.is_empty() && token.token.len() <= 4_096)
+            .filter(|token| {
+                !token.token.is_empty()
+                    && token.token.len() <= 4_096
+                    && !token.token.chars().any(char::is_control)
+            })
             .ok_or(SpiceDbError::InvalidResponse)?
             .token;
         Ok(RelationshipWriteReceipt { consistency_token })
@@ -913,6 +931,69 @@ mod tests {
         let debug = format!("{writer:?}");
         assert!(!debug.contains("provider-secret"));
         assert!(!debug.contains("spicedb.example.test"));
+    }
+
+    #[test]
+    fn relationship_writer_rejects_malformed_consistency_tokens() {
+        #[derive(Clone, Copy)]
+        struct FakeTransport;
+
+        impl SpiceDbTransport for FakeTransport {
+            type Error = std::io::Error;
+
+            async fn send(
+                &self,
+                _request: Request<Vec<u8>>,
+            ) -> Result<Response<Vec<u8>>, Self::Error> {
+                Ok(Response::builder()
+                    .status(StatusCode::OK)
+                    .header(CONTENT_TYPE, "application/json")
+                    .body(b"{\"writtenAt\":{\"token\":\"zed\\ninvalid\"}}".to_vec())
+                    .expect("response"))
+            }
+        }
+
+        let writer = SpiceDbRelationshipWriter::new(
+            SpiceDbWriteEndpoint::new("https://spicedb.example.test/v1/relationships/write")
+                .expect("endpoint"),
+            SpiceDbBearerToken::new("provider-secret").expect("token"),
+            FakeTransport,
+        );
+        let intent = RelationshipOutboxIntent {
+            operation: RelationshipOperation::Grant,
+            resource: "organization:org-one".to_owned(),
+            relation: "member".to_owned(),
+            subject: "user:user-one".to_owned(),
+            resource_revision: 7,
+            consistency_token: None,
+        };
+
+        assert!(matches!(
+            futures::executor::block_on(writer.write(&[intent])),
+            Err(SpiceDbError::InvalidResponse)
+        ));
+    }
+
+    #[test]
+    fn endpoints_reject_embedded_credentials_and_queries() {
+        for endpoint in [
+            "https://user:password@spicedb.example.test/v1/permissions/check",
+            "https://spicedb.example.test/v1/permissions/check?token=secret",
+        ] {
+            assert!(matches!(
+                SpiceDbEndpoint::new(endpoint),
+                Err(SpiceDbConfigurationError::InvalidEndpoint)
+            ));
+        }
+        for endpoint in [
+            "https://user:password@spicedb.example.test/v1/relationships/write",
+            "https://spicedb.example.test/v1/relationships/write?token=secret",
+        ] {
+            assert!(matches!(
+                SpiceDbWriteEndpoint::new(endpoint),
+                Err(SpiceDbConfigurationError::InvalidEndpoint)
+            ));
+        }
     }
 
     #[test]

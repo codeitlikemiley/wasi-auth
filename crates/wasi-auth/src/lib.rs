@@ -11,14 +11,9 @@ pub mod authentication;
 pub mod authorization;
 #[cfg(feature = "cedar")]
 pub mod cedar;
-#[cfg(any(feature = "ddd-cqrs", feature = "testkit-evaluator"))]
-#[allow(clippy::enum_variant_names, dead_code, missing_docs, unused_imports)]
-mod compat;
 #[cfg(feature = "http")]
 pub mod config;
 pub mod context;
-#[cfg(feature = "ddd-cqrs")]
-pub mod ddd;
 #[cfg(feature = "http")]
 pub mod http;
 #[cfg(feature = "leptos")]

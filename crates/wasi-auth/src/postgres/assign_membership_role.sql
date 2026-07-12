@@ -78,22 +78,6 @@ updated AS (
               memberships.role_id, memberships.status, memberships.joined_at_ms,
               eligible.role_id AS previous_role_id
 ),
-revised AS (
-    UPDATE auth_organizations AS organizations
-    SET authorization_revision = organizations.authorization_revision + 1,
-        updated_at_ms = $5
-    FROM updated
-    WHERE organizations.organization_id = updated.organization_id
-      AND ((updated.previous_role_id = 'owner') = (updated.role_id = 'owner'))
-    RETURNING organizations.organization_id
-),
-revision_result AS (
-    SELECT updated.organization_id
-    FROM updated
-    WHERE (updated.previous_role_id = 'owner') <> (updated.role_id = 'owner')
-    UNION ALL
-    SELECT revised.organization_id FROM revised
-),
 new_audit AS (
     INSERT INTO auth_audit_log (
         audit_id, organization_id, actor_user_id, session_id,
@@ -104,7 +88,6 @@ new_audit AS (
            'member.role.assign', 'membership', updated.user_id::text, 'succeeded',
            $7, jsonb_build_object('role_id', updated.role_id), $5
     FROM updated
-    JOIN revision_result ON revision_result.organization_id = updated.organization_id
     JOIN actor ON TRUE
     RETURNING audit_id
 )

@@ -1,4 +1,4 @@
-//! Stable storage contract names for authorization services.
+//! Stable storage contract names for authorization test fixtures.
 //!
 //! Runtime applications own adapter-specific schema and projection code.
 

@@ -1,17 +1,17 @@
-//! Authorization primitives for `ddd_cqrs_es` applications.
+//! Legacy linear authorization evaluator for deterministic test fixtures.
 //!
 //! This crate models RBAC, ReBAC, and bounded ABAC concepts without owning any
 //! HTTP, gRPC, Spin, or Leptos adapters.
 
+mod engine;
 mod error;
-mod evaluator;
 mod model;
 mod storage;
 mod tuple;
 mod types;
 
+pub use engine::{AuthzContext, Decision, Evaluator};
 pub use error::AuthzError;
-pub use evaluator::{AuthzContext, Decision, Evaluator};
 pub use model::{AuthorizationModel, ObjectType, RelationDefinition, Rewrite};
 pub use storage::{
     AUTHZ_ACTIVE_MODEL_READ_MODEL, AUTHZ_ASSERTION_STREAM, AUTHZ_CHECK_AUDIT_READ_MODEL,

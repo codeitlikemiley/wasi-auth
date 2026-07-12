@@ -24,14 +24,11 @@ use super::{
     PostgresTransport, RowDecodeError, VerifiedSession,
 };
 use crate::{
-    authentication::{Clock, RandomSource},
-    authentication::{
-        adapter_ids::{SessionId as AdapterSessionId, TenantId, UserId as AdapterUserId},
-        jwt::{
-            AccessTokenClaims, Algorithm, DecodingKey, EncodingKey, JwksDocument, JwksKey,
-            access_token_key_id, decode_access_token, encode_access_token, jwk_from_encoding_key,
-        },
+    authentication::jwt::{
+        AccessTokenClaims, Algorithm, DecodingKey, EncodingKey, JwksDocument, JwksKey,
+        access_token_key_id, decode_access_token, encode_access_token, jwk_from_encoding_key,
     },
+    authentication::{Clock, RandomSource},
     context::{RequestId, SessionId},
 };
 
@@ -873,17 +870,14 @@ where
         let active = self.keys.active();
         let mut claims = AccessTokenClaims::for_user(
             self.config.issuer.clone(),
-            AdapterUserId::from(context.auth().principal().user_id().as_str()),
+            context.auth().principal().user_id().clone(),
             vec![self.config.audience.clone()],
             expires_at,
             now,
             self.uuid(now.saturating_mul(1_000))?.to_string(),
         );
-        claims.tenant_id = context
-            .auth()
-            .organization_id()
-            .map(|organization| TenantId::from(organization.as_str()));
-        claims.session_id = Some(AdapterSessionId::from(context.auth().session_id().as_str()));
+        claims.tenant_id = context.auth().organization_id().cloned();
+        claims.session_id = Some(context.auth().session_id().clone());
         claims.roles = context
             .authorization()
             .role_ids()

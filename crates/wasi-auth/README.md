@@ -13,4 +13,5 @@ arbitrary public headers cannot construct a `VerifiedRequestContext`.
 The authentication source of truth is the PostgreSQL relational command
 kernel, not DDD events. Each typed mutation is one parameterized SQL statement
 covering locks, credentials, idempotency, audit, authorization revisions, and
-encrypted outbox insertion. `auth_outbox` is the only mail/relationship queue.
+durable outbox insertion. Secret mail payloads are encrypted; relationship
+intents are bounded typed metadata. `auth_outbox` is the only delivery queue.
