@@ -338,7 +338,7 @@ jobs:
     needs: component
     runs-on: ubuntu-24.04
     env:
-      GOBIN: ${{ runner.temp }}/go-bin
+      GOBIN: ${{ github.workspace }}/go-bin
     defaults:
       run:
         working-directory: wasi-auth
@@ -357,8 +357,8 @@ jobs:
       - run: go install oras.land/oras/cmd/oras@v1.3.2
       - run: bash scripts/dry-run-supply-chain.sh
         env:
-          COSIGN_BIN: ${{ runner.temp }}/go-bin/cosign
-          ORAS_BIN: ${{ runner.temp }}/go-bin/oras
+          COSIGN_BIN: ${{ github.workspace }}/go-bin/cosign
+          ORAS_BIN: ${{ github.workspace }}/go-bin/oras
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: wasi-auth-supply-chain-dry-run
