@@ -15,9 +15,9 @@ class NormalizeSbomTests(unittest.TestCase):
     def test_canonicalizes_local_package_and_dependency_references(self) -> None:
         repository = "/checkout/wasi-auth"
         sibling = f"{repository}/legacy/wasi-http-middleware"
-        local_ddd = "/checkout/ddd"
-        ddd_reference = (
-            f"path+file://{local_ddd}#ddd_cqrs_es@0.3.0-rc.1"
+        local_fixture = "/checkout/local-fixture"
+        fixture_reference = (
+            f"path+file://{local_fixture}#local_fixture@1.0.0"
         )
         document = {
             "metadata": {
@@ -36,21 +36,21 @@ class NormalizeSbomTests(unittest.TestCase):
             },
             "components": [
                 {
-                    "name": "ddd_cqrs_es",
-                    "version": "0.3.0-rc.1",
-                    "bom-ref": ddd_reference,
+                    "name": "local_fixture",
+                    "version": "1.0.0",
+                    "bom-ref": fixture_reference,
                     "purl": (
-                        "pkg:cargo/ddd_cqrs_es@0.3.0-rc.1"
-                        f"?download_url=file://{local_ddd}"
+                        "pkg:cargo/local_fixture@1.0.0"
+                        f"?download_url=file://{local_fixture}"
                     ),
                 }
             ],
             "dependencies": [
                 {
                     "ref": "pkg:cargo/wasi-auth@0.1.0-rc.1",
-                    "dependsOn": [ddd_reference],
+                    "dependsOn": [fixture_reference],
                 },
-                {"ref": ddd_reference, "dependsOn": []},
+                {"ref": fixture_reference, "dependsOn": []},
             ],
         }
 
@@ -79,15 +79,15 @@ class NormalizeSbomTests(unittest.TestCase):
         )
         self.assertEqual(
             normalized["components"][0]["bom-ref"],
-            "pkg:cargo/ddd_cqrs_es@0.3.0-rc.1",
+            "pkg:cargo/local_fixture@1.0.0",
         )
         self.assertEqual(
             normalized["dependencies"][0]["dependsOn"],
-            ["pkg:cargo/ddd_cqrs_es@0.3.0-rc.1"],
+            ["pkg:cargo/local_fixture@1.0.0"],
         )
         self.assertEqual(
             normalized["dependencies"][1]["ref"],
-            "pkg:cargo/ddd_cqrs_es@0.3.0-rc.1",
+            "pkg:cargo/local_fixture@1.0.0",
         )
 
 

@@ -19,7 +19,7 @@ authentication + organization + application services
         |
         +--> PostgreSQL relational command kernel --> embedded Cedar
         |
-        +--> encrypted auth_outbox --> mail / optional direct SpiceDB
+        +--> auth_outbox --> native mail / optional direct SpiceDB worker
 ```
 
 Guest-composed component middleware and remote AuthZEN PDPs remain private
@@ -86,15 +86,15 @@ purpose-specific tables. Raw one-time tokens and private signing material are
 never stored. One lock-protected migration catalog is authoritative; SQLite is
 not a production or parity claim.
 
-Mail and relationship delivery use the encrypted `auth_outbox`. Workers lease
-rows with `FOR UPDATE SKIP LOCKED`, perform at-least-once provider operations,
-and persist delivery IDs or SpiceDB ZedTokens in the canonical row. Optional
-SpiceDB checks deny globally while any relationship row is pending, leased, or
-dead-lettered. This conservative rule is intentional until resource-scoped
-intent indexing is added and independently qualified. The RC does not claim
-that every membership mutation emits a relationship intent; therefore the
-generated SpiceDB auth profile remains preview even though the provider and
-canonical worker contracts pass.
+Mail and relationship delivery share `auth_outbox`, but only secret-bearing
+mail payloads are encrypted. Relationship rows contain bounded typed metadata
+that the membership trigger inserts atomically with the authorization revision.
+The native `wasi-auth-outbox-worker` leases rows with `FOR UPDATE SKIP LOCKED`,
+performs at-least-once provider operations, and persists delivery IDs or
+SpiceDB ZedTokens. Grant and revoke ordering is serialized per tuple. Optional
+SpiceDB checks deny only when the matching resource has an unsettled row and
+use that resource's newest delivered consistency token; one tenant's backlog
+cannot block unrelated tenants.
 
 ## Domain boundaries
 
@@ -106,10 +106,8 @@ is separate from organization roles and requires MFA step-up for sensitive
 operations.
 
 DDD remains appropriate for the generated application's business aggregates,
-such as the counter example. Authentication itself is relational. During this
-RC transition, compatibility modules still point from `wasi-auth` to
-`ddd_cqrs_es`; removing that edge is a separate release-graph closure and does
-not change the relational source of truth.
+such as the counter example. Authentication itself is relational, and the
+dependency points only from DDD consumers to `wasi-auth`.
 
 Measured release evidence and the exact comparison boundary are documented in
 [Performance and soak evidence](PERFORMANCE.md).

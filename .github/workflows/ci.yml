@@ -14,7 +14,6 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  DDD_CQRS_ES_SOURCE: ${{ github.workspace }}/ddd
 
 jobs:
   rust:
@@ -32,11 +31,6 @@ jobs:
         with:
           fetch-depth: 0
           path: wasi-auth
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: codeitlikemiley/ddd-cqrs-es
-          ref: 737fa95c3c286a7904aca1f5ba59f342877a9579
-          path: ddd
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -45,7 +39,6 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           workspaces: wasi-auth
-      - run: bash scripts/configure-coordinated-ddd-source.sh
       - run: bash scripts/check-sibling-source.sh
       - if: matrix.toolchain == '1.93.0'
         run: cargo fmt --all -- --check
@@ -72,11 +65,6 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           path: wasi-auth
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: codeitlikemiley/ddd-cqrs-es
-          ref: 737fa95c3c286a7904aca1f5ba59f342877a9579
-          path: ddd
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: 1.93.0
@@ -85,9 +73,30 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           workspaces: wasi-auth
-      - run: bash scripts/configure-coordinated-ddd-source.sh
       - run: cargo clippy --locked --package wasi-authz-client --all-targets --no-default-features --features '${{ matrix.features }}' -- -D warnings
       - run: cargo check --locked --target wasm32-wasip2 --package wasi-authz-client --no-default-features --features '${{ matrix.features }}'
+
+  auth-feature-powerset:
+    name: wasi-auth feature powerset (depth 2)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: wasi-auth
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          path: wasi-auth
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
+        with:
+          toolchain: 1.93.0
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with:
+          workspaces: wasi-auth
+      - run: cargo install cargo-hack --locked --version 0.6.45
+      - name: Check every supported feature pair
+        run: >-
+          cargo hack check --locked --package wasi-auth --feature-powerset --depth 2
+          --include-features password,jwt,oauth,passkeys,mfa,sessions,http,cedar,spicedb,leptos,spin-grpc,postgres-kernel,postgres-native,postgres-spin,mail-http,mail-capture,testkit,testkit-evaluator
 
   alpha-api-inventory:
     name: Private alpha API inventory
@@ -100,18 +109,12 @@ jobs:
         with:
           fetch-depth: 0
           path: wasi-auth
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: codeitlikemiley/ddd-cqrs-es
-          ref: 737fa95c3c286a7904aca1f5ba59f342877a9579
-          path: ddd
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: 1.93.0
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           workspaces: wasi-auth
-      - run: bash scripts/configure-coordinated-ddd-source.sh
       - run: cargo install cargo-semver-checks --locked --version 0.48.0
       - run: bash scripts/check-alpha-api-inventory.sh
 
@@ -125,18 +128,12 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           path: wasi-auth
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: codeitlikemiley/ddd-cqrs-es
-          ref: 737fa95c3c286a7904aca1f5ba59f342877a9579
-          path: ddd
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: 1.93.0
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           workspaces: wasi-auth
-      - run: bash scripts/configure-coordinated-ddd-source.sh
       - run: cargo install cargo-audit --locked --version 0.22.1
       - run: cargo install cargo-deny --locked --version 0.20.2
       - run: cargo audit --deny warnings
@@ -152,18 +149,12 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           path: wasi-auth
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: codeitlikemiley/ddd-cqrs-es
-          ref: 737fa95c3c286a7904aca1f5ba59f342877a9579
-          path: ddd
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: 1.93.0
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           workspaces: wasi-auth
-      - run: bash scripts/configure-coordinated-ddd-source.sh
       - run: bash scripts/check-authzen-vectors.sh
       - run: cargo test --locked --package wasi-authz-cedar
       - run: cargo test --locked --package wasi-authz-spicedb
@@ -179,15 +170,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           path: wasi-auth
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: codeitlikemiley/ddd-cqrs-es
-          ref: 737fa95c3c286a7904aca1f5ba59f342877a9579
-          path: ddd
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: 1.93.0
-      - run: bash scripts/configure-coordinated-ddd-source.sh
       - name: Install checksum-verified SpiceDB and zed tools
         run: bash scripts/install-provider-tools.sh
         env:
@@ -222,18 +207,12 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           path: wasi-auth
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: codeitlikemiley/ddd-cqrs-es
-          ref: 737fa95c3c286a7904aca1f5ba59f342877a9579
-          path: ddd
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: 1.93.0
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           workspaces: wasi-auth
-      - run: bash scripts/configure-coordinated-ddd-source.sh
       - run: bash scripts/test-postgres-kernel-live.sh
         env:
           WASI_AUTH_POSTGRES_TEST_URL: postgresql://postgres:postgres@127.0.0.1:5432/wasi_auth_ci
@@ -248,16 +227,10 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           path: wasi-auth
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: codeitlikemiley/ddd-cqrs-es
-          ref: 737fa95c3c286a7904aca1f5ba59f342877a9579
-          path: ddd
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: 1.93.0
           targets: wasm32-wasip2
-      - run: bash scripts/configure-coordinated-ddd-source.sh
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           workspaces: wasi-auth
@@ -300,15 +273,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           path: wasi-auth
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: codeitlikemiley/ddd-cqrs-es
-          ref: 737fa95c3c286a7904aca1f5ba59f342877a9579
-          path: ddd
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: nightly-2026-03-06
-      - run: bash scripts/configure-coordinated-ddd-source.sh
       - run: cargo install cargo-fuzz --locked --version 0.13.2
       - run: bash scripts/run-fuzz-smoke.sh
         env:
@@ -324,15 +291,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           path: wasi-auth
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: codeitlikemiley/ddd-cqrs-es
-          ref: 737fa95c3c286a7904aca1f5ba59f342877a9579
-          path: ddd
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: 1.93.0
-      - run: bash scripts/configure-coordinated-ddd-source.sh
       - run: bash scripts/check-packages.sh
 
   supply-chain:

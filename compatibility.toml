@@ -39,6 +39,7 @@ cargo_deny = "0.20.2"
 cargo_cyclonedx = "0.5.9"
 cargo_fuzz = "0.13.2"
 cargo_semver_checks = "0.48.0"
+cargo_hack = "0.6.45"
 fuzz_rust = "nightly-2026-03-06"
 cosign = "3.1.1"
 oras = "1.3.2"
@@ -71,10 +72,6 @@ cedar_policy = "4.11.2"
 [dependencies]
 wasi_http_middleware = "0.2.0-alpha.3"
 wasi_http_middleware_revision = "006352a4d334cef06e7a5f8bdafe8968861cab8b"
-
-[coordinated_sources]
-ddd_repository = "codeitlikemiley/ddd-cqrs-es"
-ddd_revision = "737fa95c3c286a7904aca1f5ba59f342877a9579"
 
 [support]
 wasmtime_final_wasi = true

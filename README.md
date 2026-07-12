@@ -31,13 +31,17 @@ also private workspace packages.
 wasi-auth = { version = "0.1.0-rc.1", default-features = false, features = [
   "fullstack-spin",
   "postgres-spin",
-  "mail-smtp",
 ] }
 ```
 
 Development templates use PostgreSQL and `mail-capture`. Production startup
-selects PostgreSQL and the documented HTTP webhook adapter;
-SMTP delivery runs in the external native worker.
+selects PostgreSQL while the native worker owns the documented HTTP webhook
+adapter and optional SpiceDB writes. Install the worker from the same package:
+
+```bash
+cargo install wasi-auth --version 0.1.0-rc.1 \
+  --features outbox-worker --bin wasi-auth-outbox-worker
+```
 
 The workspace also builds experimental, separately deployable final-WASIp3
 coarse HTTP PEP, Cedar PDP, and SpiceDB PDP components. Production applications
@@ -65,16 +69,14 @@ Authentication is implemented by the PostgreSQL relational command kernel.
 Each product mutation is one bounded, parameterized SQL statement that owns
 its row locks, optimistic checks, credential changes, idempotency result,
 authorization revision, audit record, and durable outbox insertion. It is not
-event sourced. The optional `ddd` and legacy `AuthUnitOfWork` APIs are
-transition adapters for business aggregates and are not the authentication
-source of truth.
+event sourced. DDD business aggregates remain consumer concerns; `wasi-auth`
+has no `ddd_cqrs_es` dependency.
 
-Mail and optional SpiceDB delivery share the encrypted `auth_outbox` table.
-The reusable workers lease with `FOR UPDATE SKIP LOCKED`, retry with bounded
-backoff, dead-letter poison records, and acknowledge provider delivery tokens.
-The current generated RC dispatches bounded batches after requests; stable
-promotion requires moving those same workers into the native background
-process so delivery no longer depends on request traffic.
+Mail and optional SpiceDB delivery share `auth_outbox`. Mail payloads remain
+encrypted; relationship rows use typed, non-secret relational metadata. The
+native worker leases bounded batches with `FOR UPDATE SKIP LOCKED`, retries,
+dead-letters poison records, and acknowledges provider delivery tokens.
+Delivery no longer depends on request traffic.
 
 Install the checksum-pinned SpiceDB and `zed` binaries and run the live
 relationship matrix with:
@@ -86,6 +88,7 @@ make test-spicedb-live
 
 See [Architecture](docs/ARCHITECTURE.md),
 [Compatibility](docs/COMPATIBILITY.md), [Production support](docs/SUPPORT.md),
+[Native outbox worker](docs/OUTBOX_WORKER.md),
 [Performance](docs/PERFORMANCE.md),
 [Security](SECURITY.md), [Relationship consistency](docs/CONSISTENCY.md), and
 [Release process](docs/RELEASE.md).

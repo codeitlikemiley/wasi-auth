@@ -16,21 +16,17 @@ if [[ "${PACKAGE_STRUCTURAL_ONLY:-0}" == "1" ]]; then
     package_args+=(--no-verify)
 fi
 
-cargo_command=(cargo)
-if [[ -n "${DDD_CQRS_ES_SOURCE:-}" ]]; then
-    ddd_source="$(cd "${DDD_CQRS_ES_SOURCE}" && pwd)"
-    cargo_command+=(
-        --config
-        "patch.crates-io.ddd_cqrs_es.path='${ddd_source}'"
-    )
-fi
-
-"${cargo_command[@]}" package "${package_args[@]}" --package wasi-auth
+cargo package "${package_args[@]}" --package wasi-auth
 
 if [[ "${PACKAGE_STRUCTURAL_ONLY:-0}" == "1" ]]; then
     verification="a structural archive; Cargo build verification was explicitly skipped"
 else
-    verification="a Cargo-verified archive"
+    packaged_source="${REPO_ROOT}/target/package/wasi-auth-${VERSION}"
+    require_file "${packaged_source}/Cargo.toml"
+    cargo install --locked --path "${packaged_source}" \
+        --root "${REPO_ROOT}/target/package-install-proof" \
+        --features outbox-worker --bin wasi-auth-outbox-worker --force
+    verification="a Cargo-verified archive with an installable native outbox worker"
 fi
 
 cat <<EOF

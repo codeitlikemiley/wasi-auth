@@ -19,7 +19,7 @@ the complete default-profile matrix.
 | Native trusted ingress | RC production profile | Five protected-path pairs, five 60-second absolute samples, bounded revocation, and the ten-minute concurrency-100 soak pass |
 | Cedar RBAC/ABAC | Default production provider | Active bundles reload on transactional invalidation; complete-chain worst p99 is 10.847 ms at concurrency 100 |
 | Cedar WASIp3 PDP | Experimental | Production terminal embeds the Cedar provider |
-| SpiceDB ReBAC | Provider and canonical worker functional; generated auth synchronization remains preview | Live SpiceDB 1.54.0/zed 1.1.1 matrix and PostgreSQL `auth_outbox` delivery contract pass; transactional relationship production and the independent 25 ms p99 gate remain open |
+| SpiceDB ReBAC | Transactional synchronization complete; production performance remains preview | Membership changes atomically emit resource-scoped typed intents and the native worker preserves tuple order; the independent 25 ms p99 gate remains open |
 | SpiceDB WASIp3 PDP | Compatibility profile | Production terminal calls SpiceDB directly; no extra AuthZEN service hop |
 | Leptos islands/server functions | Companion support | Request context, route/server-function guards, declared-island hydration, and lazy-chunk browser checks |
 | Decision cache | Deliberately absent | Every Cedar decision is evaluated; only verified auth context is cached, transactionally invalidated, and revalidated within one second |

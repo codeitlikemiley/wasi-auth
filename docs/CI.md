@@ -8,7 +8,8 @@ There is no cross-repository path dependency or checkout prerequisite.
 
 Blocking lanes cover:
 
-- Rust 1.93 MSRV and current stable, Clippy, tests, doctests, and rustdoc;
+- Rust 1.93 MSRV and current stable, Clippy, tests, doctests, rustdoc, and the
+  public feature powerset through every pair;
 - additive WASIp2, WASIp3, and dual-client builds;
 - an explicit private-alpha API break inventory against `043f5b6`;
 - AuthZEN vectors plus Cedar and SpiceDB providers;
@@ -38,12 +39,7 @@ The legacy API inventory is not a SemVer compatibility claim. The compatibility
 packages are private and the gate only detects behavioral drift from
 [`reports/semver/alpha-api-inventory.md`](../reports/semver/alpha-api-inventory.md).
 The final `wasi-auth 0.1.0-rc.1` revision becomes the public baseline for
-subsequent release checks.
-
-Before `ddd_cqrs_es 0.3.0-rc.1` is published, coordinated source CI checks out
-the exact revision recorded in `compatibility.toml` and sets
-`DDD_CQRS_ES_SOURCE`. Cargo receives that source as external configuration, so
-no path enters the publishable manifest or archive. The PostgreSQL live runner
-requires the same source instead of silently dropping refresh-token coverage.
+subsequent release checks. No CI lane checks out DDD: the authentication crate,
+package archive, and PostgreSQL live runner are independently releasable.
 `PACKAGE_STRUCTURAL_ONLY=1` exists for archive inspection only and is never
 release evidence.

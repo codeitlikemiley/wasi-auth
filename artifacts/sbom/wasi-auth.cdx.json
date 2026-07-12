@@ -2,35 +2,6 @@
   "bomFormat": "CycloneDX",
   "components": [
     {
-      "author": "Uriah G",
-      "bom-ref": "pkg:cargo/ddd_cqrs_es@0.3.0-rc.1",
-      "description": "A lightweight DDD, CQRS, and Event Sourcing framework for Rust",
-      "externalReferences": [
-        {
-          "type": "documentation",
-          "url": "https://docs.rs/ddd_cqrs_es"
-        },
-        {
-          "type": "website",
-          "url": "https://github.com/codeitlikemiley/ddd-cqrs-es"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/codeitlikemiley/ddd-cqrs-es"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT"
-        }
-      ],
-      "name": "ddd_cqrs_es",
-      "purl": "pkg:cargo/ddd_cqrs_es@0.3.0-rc.1",
-      "scope": "required",
-      "type": "library",
-      "version": "0.3.0-rc.1"
-    },
-    {
       "author": "RustCrypto Developers",
       "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#aead@0.5.2",
       "description": "Traits for Authenticated Encryption with Associated Data (AEAD) algorithms, such as AES-GCM as ChaCha20Poly1305, which provide a high-level API ",
@@ -9388,15 +9359,11 @@
   ],
   "dependencies": [
     {
-      "ref": "pkg:cargo/ddd_cqrs_es@0.3.0-rc.1"
-    },
-    {
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#aes-gcm@0.10.3",
         "registry+https://github.com/rust-lang/crates.io-index#argon2@0.5.3",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
         "registry+https://github.com/rust-lang/crates.io-index#cedar-policy@4.11.2",
-        "pkg:cargo/ddd_cqrs_es@0.3.0-rc.1",
         "registry+https://github.com/rust-lang/crates.io-index#hmac@0.12.1",
         "registry+https://github.com/rust-lang/crates.io-index#http@1.4.2",
         "registry+https://github.com/rust-lang/crates.io-index#jsonwebtoken@10.4.0",
@@ -11491,6 +11458,13 @@
           "purl": "pkg:cargo/wasi-auth@0.1.0-rc.1?download_url=file://.#src/lib.rs",
           "type": "library",
           "version": "0.1.0-rc.1"
+        },
+        {
+          "bom-ref": "path+file://./crates/wasi-auth#0.1.0-rc.1 bin-target-1",
+          "name": "wasi-auth-outbox-worker",
+          "purl": "pkg:cargo/wasi-auth@0.1.0-rc.1?download_url=file://.#src/bin/wasi-auth-outbox-worker.rs",
+          "type": "application",
+          "version": "0.1.0-rc.1"
         }
       ],
       "description": "Production authentication, authorization, and trusted ingress for WASI applications",
@@ -11512,7 +11486,7 @@
       "name": "wasi-auth",
       "purl": "pkg:cargo/wasi-auth@0.1.0-rc.1",
       "scope": "required",
-      "type": "library",
+      "type": "application",
       "version": "0.1.0-rc.1"
     },
     "properties": [

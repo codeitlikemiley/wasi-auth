@@ -27,16 +27,15 @@ The package graph, rather than repository ownership, determines publication
 order:
 
 1. `leptos-wasi-runtime 0.4.2-rc.1`, aliased as `leptos_wasi`;
-2. the `ddd_cqrs_es 0.3.0-rc.1` library;
-3. `wasi-auth 0.1.0-rc.1`;
+2. `wasi-auth 0.1.0-rc.1`;
+3. the `ddd_cqrs_es 0.3.0-rc.1` library;
 4. `ddd-cqrs-es-cli 0.3.0-rc.1`; and
 5. generated fullstack consumers.
 
-`wasi-auth` optionally depends on `ddd_cqrs_es`, so the DDD library must exist
-first. The CLI emits a manifest pinned to `wasi-auth`, so it follows this
-crate. Stable releases repeat this topology. Never use an unpublished path or
-git patch as registry-release evidence, and do not treat `--no-verify` as
-proof of publishability.
+`wasi-auth` has no DDD dependency. DDD consumers depend on `wasi-auth`, and the
+CLI emits a manifest pinned to both released libraries. Stable releases repeat
+this topology. Never use an unpublished path or git patch as registry-release
+evidence, and do not treat `--no-verify` as proof of publishability.
 
 The earlier proposed `leptos_wasi 0.4.0-alpha.3` number is not reusable because
 the local release history already contains `0.4.0` and `0.4.1`.
@@ -84,21 +83,10 @@ substitute an anonymous proxy microbenchmark for the protected-path comparison.
 The current local RC evidence is indexed from [Performance](PERFORMANCE.md);
 signed release provenance must repeat the same commands from a clean tree.
 
-During coordinated pre-publication integration only, run
-`DDD_CQRS_ES_SOURCE=/absolute/path/to/ddd bash scripts/check-packages.sh`.
-Cargo receives that source as external configuration and verifies the archive;
-the packaged manifest remains registry-only. `PACKAGE_STRUCTURAL_ONLY=1`
-deliberately skips Cargo's build verification and therefore cannot satisfy this
-release gate.
-
-The same coordinated checkout is mandatory for the relational live gate:
+The relational live gate is independent of DDD and runs directly against a
+fresh PostgreSQL database:
 
 ```bash
 WASI_AUTH_POSTGRES_TEST_URL=postgresql://... \
-DDD_CQRS_ES_SOURCE=/absolute/path/to/ddd \
   bash scripts/test-postgres-kernel-live.sh
 ```
-
-This is a transition constraint, not the target dependency direction. After
-the compatibility DDD modules leave the public crate, publication becomes
-`leptos-wasi-runtime -> wasi-auth -> ddd_cqrs_es -> ddd-cqrs-es-cli`.
