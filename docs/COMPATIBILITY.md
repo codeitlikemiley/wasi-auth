@@ -1,6 +1,6 @@
 # Compatibility
 
-| Surface | Status in `0.1.0-alpha.3` |
+| Surface | Status in `0.1.0-alpha.4` |
 |---|---|
 | Rust | MSRV 1.93; current stable is tested separately |
 | AuthZEN Authorization API | Final 1.0 bounded access-evaluation profile |
@@ -16,9 +16,10 @@
 | Wasmtime | `46.0.1`, final-WASI component contract |
 | Spin 4.0.2 | Tagged compatibility canary; final-WASI linking is unavailable |
 | Spin main `c34c584...` (`4.1.0-pre0`) | Experimental final-WASI terminal/outbound-HTTP canary; native middleware is still RC-only and no tagged support is claimed |
+| Spin SDK | Git revision `f0c4aeb2c2c44804906a9bc818397050b45c622d`; final-WASI and Tonic gRPC canary only |
 | Cedar | Embedded provider and native reference PDP |
 | SpiceDB | CheckPermission adapter tested with `1.54.0` |
-| Leptos | Typed request/server-function helpers |
+| Leptos | Current 0.8 line, islands-compatible request/server-function helpers |
 | Non-HTTP triggers | Reuse contract/provider; trigger-specific PEP required |
 
 The AuthZEN specification permits extensions and requires unknown standard

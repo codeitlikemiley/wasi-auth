@@ -1,9 +1,10 @@
 # Security policy
 
-This alpha is an authorization toolkit, not a credential verifier.
-Authentication must establish the versioned upstream identity context. Never
-place bearer tokens, cookies, passwords, client secrets, raw queries, request
-bodies, or session secrets in authorization attributes.
+This alpha consolidates authentication and authorization. Only validated
+authentication ingress may construct `VerifiedAuthContext`; application code
+must never promote arbitrary headers. Never place bearer tokens, cookies,
+passwords, client secrets, raw queries, request bodies, or session secrets in
+authorization attributes.
 
 Only an explicit valid allow decision may proceed. A false decision maps to 401
 for an anonymous subject and 403 for an authenticated subject. Transport,
@@ -48,6 +49,17 @@ them transitively. Both advisories describe unmaintained macro crates, not known
 vulnerabilities. They are isolated from request data at runtime and must be
 reviewed before every release; any newly reported vulnerability remains
 blocking.
+
+`rsa 0.9.10` is covered by `RUSTSEC-2023-0071`, which warns that private RSA
+operations can leak key information through remotely observable timing. It is
+retained only to verify provider-issued RS256 ID-token signatures, a public-key
+operation with no application secret. The process-wide `wasi-auth` JWT crypto
+provider rejects every RSA/PSS signing algorithm and RSA private-key JWK
+extraction, and the production template accepts only ES256 private signing
+keys. Tests enforce that denial. This narrow exception must be removed when a
+constant-time upstream release is available or provider verification moves to
+a dependency without the advisory; using this dependency for private RSA
+operations remains prohibited.
 
 Report suspected security issues privately to the repository maintainers rather
 than opening a public issue. Do not include credentials, identity envelopes, or

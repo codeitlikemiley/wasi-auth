@@ -1,5 +1,5 @@
 [release]
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.4"
 channel = "alpha"
 publish = false
 
@@ -25,6 +25,7 @@ spin_main_final_wasi_outbound_http = true
 spin_main_precomposed_default_features = false
 spin_main_native_middleware = false
 spin_sdk = "6.0.0"
+spin_sdk_revision = "f0c4aeb2c2c44804906a9bc818397050b45c622d"
 spin_middleware_revision = "27451471b8ba0faeffa01c5a4ddd6daee9a9d526"
 spin_final_wasi_blocking = false
 

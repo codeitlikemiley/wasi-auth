@@ -7,6 +7,11 @@ yanked = "deny"
 # Temporary, non-vulnerability exceptions inherited only through Leptos 0.8.
 # Review and remove when Leptos replaces the archived macro dependencies.
 ignore = [
+    # The process-wide wasi-auth JWT provider rejects RSA/PSS signing and RSA
+    # private-key JWK extraction. rsa remains only for public-key verification
+    # of provider-issued RS256 ID tokens. Remove when the upstream crate ships
+    # a constant-time release or provider RS256 verification is replaced.
+    "RUSTSEC-2023-0071",
     "RUSTSEC-2024-0436", # paste, unmaintained
     "RUSTSEC-2026-0173", # proc-macro-error2, unmaintained
 ]
@@ -18,6 +23,7 @@ allow = [
     "BSD-3-Clause",
     "BSL-1.0",
     "CC0-1.0",
+    "ISC",
     "MIT",
     "Unicode-3.0",
     "Zlib",

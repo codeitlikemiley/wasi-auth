@@ -1,5 +1,6 @@
 [package]
 name = "wasi-authz-client"
+publish = false
 description = "Transport-neutral AuthZEN client with additive WASIp2 and WASIp3 transports"
 version.workspace = true
 authors.workspace = true

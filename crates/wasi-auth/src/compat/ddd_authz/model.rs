@@ -1,4 +1,4 @@
-use crate::{AuthzError, Relation};
+use super::{AuthzError, Relation};
 use std::collections::BTreeMap;
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]

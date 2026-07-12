@@ -1,4 +1,4 @@
-use crate::AuthzError;
+use super::AuthzError;
 use std::fmt::{Display, Formatter};
 
 macro_rules! ref_type {

@@ -1,4 +1,4 @@
-use crate::{
+use super::{
     AuthError, AuthProviderConfig, AuthProviderId, ExternalSubjectId, PasskeyCredentialId,
     SessionId, SigningKeyId, TenantId, UserId,
 };
@@ -1169,6 +1169,7 @@ impl SigningKeySet {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[allow(clippy::large_enum_variant)] // Preserves the imported compatibility wire shape.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AuthProviderConfigCommand {
     Configure {
@@ -1192,6 +1193,7 @@ pub enum AuthProviderConfigCommand {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[allow(clippy::large_enum_variant)] // Preserves the imported compatibility wire shape.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AuthProviderConfigEvent {
     AuthProviderConfigured {
@@ -1261,10 +1263,10 @@ impl Aggregate for AuthProviderConfigAggregate {
                 self.enabled = false;
             }
             AuthProviderConfigEvent::AuthProviderRedirectUriAdded { redirect_uri, .. } => {
-                if let Some(config) = &mut self.config {
-                    if !config.redirect_uri_allowlist.contains(redirect_uri) {
-                        config.redirect_uri_allowlist.push(redirect_uri.clone());
-                    }
+                if let Some(config) = &mut self.config
+                    && !config.redirect_uri_allowlist.contains(redirect_uri)
+                {
+                    config.redirect_uri_allowlist.push(redirect_uri.clone());
                 }
             }
             AuthProviderConfigEvent::AuthProviderRedirectUriRemoved { redirect_uri, .. } => {
@@ -1391,6 +1393,7 @@ fn validate_non_empty(label: &str, value: &str) -> Result<(), AuthError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::compat::ddd_auth::OAuthProviderProfile;
 
     #[test]
     fn register_user_returns_registered_event() {
@@ -1680,13 +1683,15 @@ mod tests {
             aggregate.apply(&event);
         }
 
-        assert!(aggregate
-            .handle(AuthProviderConfigCommand::AddRedirectUri {
-                redirect_uri: "http://localhost:3008/auth/callback/google".to_string(),
-                updated_at_ms: 2,
-            })
-            .unwrap()
-            .is_empty());
+        assert!(
+            aggregate
+                .handle(AuthProviderConfigCommand::AddRedirectUri {
+                    redirect_uri: "http://localhost:3008/auth/callback/google".to_string(),
+                    updated_at_ms: 2,
+                })
+                .unwrap()
+                .is_empty()
+        );
 
         let added = aggregate
             .handle(AuthProviderConfigCommand::AddRedirectUri {
@@ -1706,19 +1711,21 @@ mod tests {
         assert_eq!(removed.len(), 1);
         aggregate.apply(&removed[0]);
 
-        assert!(aggregate
-            .handle(AuthProviderConfigCommand::RemoveRedirectUri {
-                redirect_uri: "http://localhost:3009/auth/callback/google".to_string(),
-                updated_at_ms: 5,
-            })
-            .unwrap()
-            .is_empty());
+        assert!(
+            aggregate
+                .handle(AuthProviderConfigCommand::RemoveRedirectUri {
+                    redirect_uri: "http://localhost:3009/auth/callback/google".to_string(),
+                    updated_at_ms: 5,
+                })
+                .unwrap()
+                .is_empty()
+        );
     }
 
     fn provider_config() -> AuthProviderConfig {
         AuthProviderConfig {
             provider_id: AuthProviderId::new("google"),
-            profile: crate::OAuthProviderProfile::Google,
+            profile: OAuthProviderProfile::Google,
             issuer: "https://accounts.google.com".to_string(),
             authorization_endpoint: "https://accounts.google.com/o/oauth2/v2/auth".to_string(),
             token_endpoint: "https://oauth2.googleapis.com/token".to_string(),

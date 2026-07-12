@@ -1,0 +1,86 @@
+[package]
+name = "wasi-auth"
+description = "Production authentication, authorization, and trusted ingress for WASI applications"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["wasi", "authentication", "authorization", "cedar", "grpc"]
+categories = ["authentication", "web-programming"]
+include = ["/src/**", "/migrations/**", "/README.md"]
+
+[features]
+default = []
+password = []
+serde = []
+json = ["serde"]
+jwt = ["json", "dep:jsonwebtoken"]
+oauth = ["dep:oauth2"]
+oauth-google = ["oauth"]
+oauth-apple = ["oauth"]
+oauth-facebook = ["oauth"]
+passkeys = ["dep:passkey-auth"]
+mfa = ["dep:hmac", "dep:sha1", "dep:sha2", "dep:subtle", "dep:zeroize"]
+sessions = []
+http = ["dep:base64", "dep:http"]
+cedar = ["dep:base64", "dep:cedar-policy"]
+spicedb = ["http"]
+leptos = ["http", "dep:leptos"]
+spin-grpc = ["http", "dep:bytes", "dep:http-body", "dep:wasip3"]
+ddd-cqrs = ["dep:ddd_cqrs_es"]
+storage-postgres = ["ddd-cqrs", "dep:sha2"]
+storage-spin-sqlite = ["ddd-cqrs", "dep:sha2"]
+mail-smtp = []
+mail-http = ["http"]
+mail-capture = []
+component-experimental = []
+testkit = []
+testkit-evaluator = ["testkit", "serde", "json"]
+fullstack-spin = [
+    "password",
+    "jwt",
+    "oauth",
+    "oauth-google",
+    "oauth-apple",
+    "oauth-facebook",
+    "passkeys",
+    "mfa",
+    "sessions",
+    "http",
+    "cedar",
+    "leptos",
+    "spin-grpc",
+    "ddd-cqrs",
+]
+
+[dependencies]
+base64 = { workspace = true, optional = true }
+bytes = { workspace = true, optional = true }
+cedar-policy = { workspace = true, optional = true }
+ddd_cqrs_es = { version = ">=0.3.0-alpha.1, <0.4.0", default-features = false, optional = true }
+http = { workspace = true, optional = true }
+http-body = { workspace = true, optional = true }
+hmac = { version = "0.12.1", optional = true }
+jsonwebtoken = { version = "10.4.0", default-features = false, features = ["rust_crypto", "use_pem"], optional = true }
+leptos = { workspace = true, optional = true }
+oauth2 = { version = "5.0.0", default-features = false, features = ["pkce-plain"], optional = true }
+passkey-auth = { version = "0.1.3", optional = true }
+serde.workspace = true
+serde_json.workspace = true
+sha1 = { version = "0.10.6", optional = true }
+sha2 = { version = "0.10.9", optional = true }
+subtle = { version = "2.6.1", optional = true }
+thiserror.workspace = true
+wasip3 = { workspace = true, optional = true }
+zeroize = { version = "1.8.2", optional = true }
+
+[dev-dependencies]
+bytes.workspace = true
+futures.workspace = true
+http-body-util.workspace = true
+
+[lints]
+workspace = true

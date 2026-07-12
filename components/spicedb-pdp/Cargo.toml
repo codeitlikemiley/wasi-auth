@@ -19,7 +19,7 @@ http.workspace = true
 http-body-util.workspace = true
 wasi-authz-client = { workspace = true, features = ["wasip3"] }
 wasi-authz-contract.workspace = true
-wasi-authz-spicedb = { path = "../../crates/wasi-authz-spicedb", version = "=0.1.0-alpha.3" }
+wasi-authz-spicedb = { path = "../../crates/wasi-authz-spicedb", version = "=0.1.0-alpha.4" }
 wasip3.workspace = true
 
 [lints]

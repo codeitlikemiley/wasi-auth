@@ -1,4 +1,4 @@
-use crate::{
+use super::{
     AuthorizationModel, AuthzError, ObjectRef, Relation, RelationshipTuple, Rewrite, SubjectRef,
     TenantRef,
 };
@@ -195,6 +195,7 @@ impl Evaluator {
         Ok(allowed)
     }
 
+    #[allow(clippy::too_many_arguments)] // Legacy testkit evaluator mirrors rewrite recursion.
     fn eval_rewrite(
         &self,
         subject: &SubjectRef,
@@ -330,7 +331,7 @@ impl Evaluator {
         &self,
         object: &ObjectRef,
         relation: &Relation,
-    ) -> Result<&crate::RelationDefinition, AuthzError> {
+    ) -> Result<&super::RelationDefinition, AuthzError> {
         let object_type = object.type_name();
         let definition_type =
             self.model
@@ -554,8 +555,8 @@ fn rewrite_name(rewrite: &Rewrite) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use super::super::{ObjectType, RelationDefinition};
     use super::*;
-    use crate::{ObjectType, RelationDefinition};
 
     fn relation(value: &str) -> Relation {
         Relation::new(value).unwrap()
@@ -722,12 +723,10 @@ mod tests {
         let project = object("project:demo");
         let context = AuthzContext {
             attributes: BTreeMap::from([("business_hours".to_string(), "true".to_string())]),
-            contextual_tuples: vec![RelationshipTuple::new(
-                user.clone(),
-                viewer.clone(),
-                project.clone(),
-            )
-            .with_condition("business_hours")],
+            contextual_tuples: vec![
+                RelationshipTuple::new(user.clone(), viewer.clone(), project.clone())
+                    .with_condition("business_hours"),
+            ],
             ..AuthzContext::default()
         };
 

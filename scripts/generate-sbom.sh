@@ -13,7 +13,7 @@ if [[ "${actual}" != *"${expected}"* ]]; then
     exit 1
 fi
 
-sibling="${REPO_ROOT}/../wasi-http-middleware"
+sibling="${REPO_ROOT}/legacy/wasi-http-middleware"
 if [[ ! -d "${sibling}" ]]; then
     echo "error: pinned unpublished sibling is missing: ${sibling}" >&2
     exit 1

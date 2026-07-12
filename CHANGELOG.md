@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Consolidated authentication, authorization, trusted HTTP ingress, Leptos,
+  Spin gRPC, Cedar, optional SpiceDB, mail, DDD/CQRS, and test helpers behind
+  the single publishable `wasi-auth` crate. Legacy workspace crates are now
+  non-publishable compatibility fixtures.
+- Added bounded `VerifiedAuthContext` and authorization contracts, typestate
+  application construction, static Cedar/SpiceDB provider dispatch, and
+  fail-closed HTTP, Leptos, and gRPC guards.
+- Added PostgreSQL and Spin SQLite auth schemas, atomic unit-of-work support,
+  idempotency records, secret references, durable mail and relationship
+  outboxes, migration parity checks, and the offline legacy migration tool.
+- Added password, OAuth, passkey, MFA, rotating-session, organization,
+  membership, invitation, role, policy-bundle, and audit workflows plus
+  provider-neutral capture, SMTP, and HTTP mail adapters.
+- Disabled every private RSA/PSS signing path process-wide because the
+  RustCrypto RSA implementation has no patched release for its timing
+  advisory. Production first-party tokens use ES256; RSA remains available
+  only for public-key verification of identity-provider tokens.
+- Recorded the five-sample trusted-ingress matrix and corrected ten-minute
+  soak. Current Spin canaries fail the status/transport and 10% performance
+  gates, so stable production promotion remains blocked.
 - Clarified that Wasmtime is the final-WASI correctness reference and Spin is
   the upstream-blocked production-performance target.
 - Classified component PDP services as experimental/compatibility profiles;

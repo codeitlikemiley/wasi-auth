@@ -8,8 +8,8 @@
 //! `AuthenticatedPrincipal` can build `ddd_cqrs_es::Metadata` for command
 //! execution without coupling the domain to a specific transport.
 //!
-//! ```rust
-//! use ddd_auth::{
+//! ```ignore
+//! use wasi_auth::compat::ddd_auth::{
 //!     AuthProviderId, AuthenticatedPrincipal, SessionId, TenantId, UserId,
 //!     AUTH_PROVIDER_METADATA_KEY,
 //! };
@@ -55,38 +55,34 @@ pub use ids::{
     UserId,
 };
 pub use principal::{
-    AuthenticatedPrincipal, AUTH_PROVIDER_METADATA_KEY, AUTH_ROLES_METADATA_KEY,
-    AUTH_SCOPES_METADATA_KEY, AUTH_SESSION_METADATA_KEY,
+    AUTH_PROVIDER_METADATA_KEY, AUTH_ROLES_METADATA_KEY, AUTH_SCOPES_METADATA_KEY,
+    AUTH_SESSION_METADATA_KEY, AuthenticatedPrincipal,
 };
 pub use provider::{AuthProviderConfig, OAuthProviderProfile};
 pub use storage::{
-    auth_read_model_contract, auth_stream_contract, AuthEventStreamContract, AuthReadModelContract,
     AUTH_EVENT_STREAMS, AUTH_EXTERNAL_IDENTITY_STREAM, AUTH_PASSKEY_CREDENTIAL_STREAM,
     AUTH_PASSWORD_CREDENTIAL_STREAM, AUTH_PROVIDER_CONFIG_STREAM, AUTH_READ_MODELS,
     AUTH_REFRESH_TOKEN_READ_MODEL, AUTH_SESSION_READ_MODEL, AUTH_SESSION_STREAM,
     AUTH_SIGNING_KEY_READ_MODEL, AUTH_SIGNING_KEY_STREAM, AUTH_STORAGE_VERSION,
     AUTH_TOKEN_GRANT_READ_MODEL, AUTH_USER_BY_EMAIL_READ_MODEL, AUTH_USER_READ_MODEL,
-    AUTH_USER_STREAM,
+    AUTH_USER_STREAM, AuthEventStreamContract, AuthReadModelContract, auth_read_model_contract,
+    auth_stream_contract,
 };
 pub use token::{
-    jwks_key_by_id, reject_revoked_session, AccessTokenClaims, IdTokenClaims, JwksDocument, JwksKey,
+    AccessTokenClaims, IdTokenClaims, JwksDocument, JwksKey, jwks_key_by_id, reject_revoked_session,
 };
 
 #[cfg(feature = "jwt")]
 pub use token::{
-    access_token_key_id, decode_access_token, decode_id_token, encode_access_token, jwt_key_id,
+    access_token_key_id, decode_access_token, decode_id_token, encode_access_token, encode_jwt,
+    jwk_from_encoding_key, jwt_key_id,
 };
 
 #[cfg(feature = "jwt")]
-pub use jsonwebtoken::{
-    encode as encode_jwt, jwk::Jwk, Algorithm, DecodingKey, EncodingKey, Header, Validation,
-};
+pub use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 
 #[cfg(feature = "oauth")]
-pub use oauth2::{CsrfToken, PkceCodeChallenge, PkceCodeVerifier};
-
-#[cfg(feature = "oauth")]
-pub use openidconnect::Nonce;
+pub use oauth2::{CsrfToken, CsrfToken as Nonce, PkceCodeChallenge, PkceCodeVerifier};
 
 #[cfg(feature = "passkeys")]
 pub mod passkeys {

@@ -1,18 +1,18 @@
 {
   "artifact": {
-    "bytes": 6068427,
-    "sha256": "5c62158d32834e0b6bf50d93dec9ddceca486b3e665740070364d7df6791c352"
+    "bytes": 6068301,
+    "sha256": "a4c9d381fb3794a13ee76dfb4d474ebe37d0673392530b3995b37d8f8432e7c8"
   },
   "cold_start_ms": {
-    "max": 120.351,
-    "p50": 72.937,
-    "p95": 120.351,
+    "max": 1351.724,
+    "p50": 76.032,
+    "p95": 1351.724,
     "trials": [
-      120.351,
-      75.844,
-      69.126,
-      69.776,
-      72.937
+      1351.724,
+      76.612,
+      76.032,
+      73.599,
+      75.382
     ]
   },
   "flags": [
@@ -22,17 +22,17 @@
     "-S http=y"
   ],
   "load": {
-    "concurrency": 16,
+    "concurrency": 100,
     "errors": 0,
     "latency_ms": {
-      "max": 7.847,
-      "p50": 2.966,
-      "p95": 5.968,
-      "p99": 7.146
+      "max": 62.222,
+      "p50": 14.063,
+      "p95": 32.416,
+      "p99": 42.673
     },
-    "peak_host_rss_kib": 72832,
-    "requests": 200,
-    "throughput_requests_per_second": 2343.92
+    "peak_host_rss_kib": 81520,
+    "requests": 1000,
+    "throughput_requests_per_second": 2826.42
   },
   "platform": {
     "machine": "arm64",
@@ -40,6 +40,6 @@
     "system": "Darwin"
   },
   "runtime": "wasmtime 46.0.1 (823d1b8f2 2026-06-24)",
-  "support_status": "candidate",
-  "verification_scope": "local cold-start and bounded concurrency probe; production soak and CI matrix remain required"
+  "support_status": "blocked",
+  "verification_scope": "single local remote-PDP concurrency-100 canary; p99 exceeded 25 ms; five paired embedded-app samples and the ten-minute soak remain required"
 }

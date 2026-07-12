@@ -1,4 +1,4 @@
-use crate::{ObjectRef, Relation, SubjectRef, TenantRef};
+use super::{ObjectRef, Relation, SubjectRef, TenantRef};
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]

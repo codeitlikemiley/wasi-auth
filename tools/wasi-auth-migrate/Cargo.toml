@@ -1,0 +1,23 @@
+[package]
+name = "wasi-auth-migrate"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "Offline secret-extracting migration utility for legacy DDD authentication events"
+
+[dependencies]
+aes-gcm = "0.10.3"
+base64.workspace = true
+getrandom = "0.3.4"
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10.9"
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = "3.23.0"
+
+[lints]
+workspace = true

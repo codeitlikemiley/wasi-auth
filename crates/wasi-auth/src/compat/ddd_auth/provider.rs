@@ -1,4 +1,4 @@
-use crate::AuthProviderId;
+use super::AuthProviderId;
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]

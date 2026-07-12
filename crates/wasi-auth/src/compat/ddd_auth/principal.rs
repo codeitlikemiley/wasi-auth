@@ -1,4 +1,4 @@
-use crate::{AuthProviderId, SessionId, TenantId, UserId};
+use super::{AuthProviderId, SessionId, TenantId, UserId};
 use ddd_cqrs_es::Metadata;
 use std::collections::BTreeMap;
 

@@ -1,15 +1,10 @@
 # Continuous integration
 
-The workspace intentionally depends on unpublished `wasi-http-middleware`
-crates. Every CI job checks out that sibling at the exact revision in
-`compatibility.toml` and runs `scripts/check-sibling-source.sh`. A missing
-repository, unavailable revision, mismatch, or dirty sibling fails the workflow;
-there is no fallback vendor copy and no skipped “green” path.
-
-At this local-only stage the GitHub checkout cannot succeed until the user
-authorizes a middleware remote or release artifact. That is an explicit
-promotion blocker, not a passing gate. Local sibling runs remain authoritative
-until both repositories are remotely addressable.
+The middleware history and compatibility sources are imported under
+`legacy/wasi-http-middleware` at the exact revision in `compatibility.toml`.
+Every CI job runs `scripts/check-sibling-source.sh`, which verifies that the
+pinned source revision remains an ancestor of the consolidated repository.
+There is no cross-repository path dependency or checkout prerequisite.
 
 Blocking lanes cover:
 
@@ -21,17 +16,21 @@ Blocking lanes cover:
 - exact final-WIT imports, exports, and capability denial;
 - dependency/advisory policy;
 - parser fuzz smoke tests;
-- structural package archives; and
+- the single public, Cargo-verified `wasi-auth` package archive; and
 - local OCI, SBOM, provenance, and cosign verification.
 
 Ignored production tests are not accepted as coverage. The ordinary Rust lane
 may leave the environment-dependent SpiceDB test ignored only because the
 dedicated `spicedb-live` job executes it explicitly.
 
-The API inventory is not a SemVer compatibility claim. No `wasi-authz` crate
-has a prior public release, and the two compared trees intentionally share the
-same pre-release version. The gate forces patch analysis only to detect drift
-from the exact findings recorded in
+The legacy API inventory is not a SemVer compatibility claim. The compatibility
+packages are private and the gate only detects behavioral drift from
 [`reports/semver/alpha-api-inventory.md`](../reports/semver/alpha-api-inventory.md).
-If published, the final `0.1.0-alpha.3` release revision becomes the baseline
-for subsequent release checks.
+The final `wasi-auth 0.1.0-alpha.4` revision becomes the public baseline for
+subsequent release checks.
+
+Before `ddd_cqrs_es 0.3.0-alpha.1` is published, coordinated source CI may set
+`DDD_CQRS_ES_SOURCE` to that checkout. The package command receives the patch
+through Cargo configuration, so no path enters the publishable manifest or
+archive. `PACKAGE_STRUCTURAL_ONLY=1` exists for archive inspection only and is
+never release evidence.

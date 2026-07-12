@@ -13,7 +13,7 @@ from typing import Any
 def normalize(value: Any, repository: str, sibling: str) -> Any:
     """Remove machine-specific repository paths recursively."""
     if isinstance(value, str):
-        return value.replace(repository, ".").replace(sibling, "../wasi-http-middleware")
+        return value.replace(repository, ".").replace(sibling, "legacy/wasi-http-middleware")
     if isinstance(value, list):
         return [normalize(item, repository, sibling) for item in value]
     if isinstance(value, dict):

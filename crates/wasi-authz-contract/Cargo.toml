@@ -1,6 +1,7 @@
 [package]
 name = "wasi-authz-contract"
 description = "Bounded AuthZEN 1.0 authorization request and decision types"
+publish = false
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

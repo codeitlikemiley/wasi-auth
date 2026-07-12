@@ -1,11 +1,86 @@
-use crate::{AuthError, SessionId, TenantId, UserId};
+use super::{AuthError, SessionId, TenantId, UserId};
 use std::collections::BTreeMap;
 
 #[cfg(feature = "jwt")]
 use jsonwebtoken::{
-    decode, decode_header, encode, errors::ErrorKind as JwtErrorKind, Algorithm, DecodingKey,
-    EncodingKey, Header, Validation,
+    Algorithm, DecodingKey, EncodingKey, Header, Validation,
+    crypto::{CryptoProvider, JwkUtils, JwtSigner, JwtVerifier},
+    decode, decode_header, encode,
+    errors::{Error as JwtError, ErrorKind as JwtErrorKind},
+    jwk::{EllipticCurve, Jwk, ThumbprintHash},
 };
+
+#[cfg(feature = "jwt")]
+fn safe_signer_factory(
+    algorithm: &Algorithm,
+    key: &EncodingKey,
+) -> Result<Box<dyn JwtSigner>, JwtError> {
+    if matches!(
+        algorithm,
+        Algorithm::RS256
+            | Algorithm::RS384
+            | Algorithm::RS512
+            | Algorithm::PS256
+            | Algorithm::PS384
+            | Algorithm::PS512
+    ) {
+        return Err(JwtErrorKind::InvalidAlgorithm.into());
+    }
+    (jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER.signer_factory)(algorithm, key)
+}
+
+#[cfg(feature = "jwt")]
+fn safe_verifier_factory(
+    algorithm: &Algorithm,
+    key: &DecodingKey,
+) -> Result<Box<dyn JwtVerifier>, JwtError> {
+    (jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER.verifier_factory)(algorithm, key)
+}
+
+#[cfg(feature = "jwt")]
+fn reject_rsa_private_key_extraction(_: &[u8]) -> Result<(Vec<u8>, Vec<u8>), JwtError> {
+    Err(JwtErrorKind::InvalidAlgorithm.into())
+}
+
+#[cfg(feature = "jwt")]
+fn extract_ec_public_key_coordinates(
+    key: &[u8],
+    algorithm: Algorithm,
+) -> Result<(EllipticCurve, Vec<u8>, Vec<u8>), JwtError> {
+    (jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER
+        .jwk_utils
+        .extract_ec_public_key_coordinates)(key, algorithm)
+}
+
+#[cfg(feature = "jwt")]
+fn compute_jwk_digest(data: &[u8], algorithm: ThumbprintHash) -> Vec<u8> {
+    (jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER
+        .jwk_utils
+        .compute_digest)(data, algorithm)
+}
+
+#[cfg(feature = "jwt")]
+static SAFE_JWT_PROVIDER: CryptoProvider = CryptoProvider {
+    signer_factory: safe_signer_factory,
+    verifier_factory: safe_verifier_factory,
+    jwk_utils: JwkUtils {
+        extract_rsa_public_key_components: reject_rsa_private_key_extraction,
+        extract_ec_public_key_coordinates,
+        compute_digest: compute_jwk_digest,
+    },
+};
+
+#[cfg(feature = "jwt")]
+fn ensure_safe_jwt_provider() -> Result<(), JwtError> {
+    match SAFE_JWT_PROVIDER.install_default() {
+        Ok(()) => Ok(()),
+        Err(existing) if std::ptr::eq(existing, &SAFE_JWT_PROVIDER) => Ok(()),
+        Err(_) => Err(JwtErrorKind::Provider(
+            "a conflicting JWT crypto provider was installed".to_string(),
+        )
+        .into()),
+    }
+}
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -173,6 +248,7 @@ pub fn encode_access_token(
     algorithm: Algorithm,
     key_id: Option<&str>,
 ) -> Result<String, AuthError> {
+    ensure_safe_jwt_provider().map_err(|_| AuthError::InvalidToken)?;
     let mut header = Header::new(algorithm);
     header.kid = key_id.map(ToOwned::to_owned);
     encode(&header, claims, encoding_key).map_err(|_| AuthError::InvalidToken)
@@ -186,6 +262,7 @@ pub fn decode_access_token(
     audience: &str,
     algorithms: &[Algorithm],
 ) -> Result<AccessTokenClaims, AuthError> {
+    ensure_safe_jwt_provider().map_err(|_| AuthError::InvalidToken)?;
     let Some(default_algorithm) = algorithms.first().copied() else {
         return Err(AuthError::validation(
             "at least one JWT algorithm is required",
@@ -210,6 +287,7 @@ pub fn decode_id_token(
     algorithms: &[Algorithm],
     expected_nonce: Option<&str>,
 ) -> Result<IdTokenClaims, AuthError> {
+    ensure_safe_jwt_provider().map_err(|_| AuthError::InvalidToken)?;
     let Some(default_algorithm) = algorithms.first().copied() else {
         return Err(AuthError::validation(
             "at least one JWT algorithm is required",
@@ -235,6 +313,25 @@ pub fn decode_id_token(
     }
 
     Ok(claims)
+}
+
+#[cfg(feature = "jwt")]
+pub fn encode_jwt<T: serde::Serialize>(
+    header: &Header,
+    claims: &T,
+    encoding_key: &EncodingKey,
+) -> Result<String, JwtError> {
+    ensure_safe_jwt_provider()?;
+    encode(header, claims, encoding_key)
+}
+
+#[cfg(feature = "jwt")]
+pub fn jwk_from_encoding_key(
+    encoding_key: &EncodingKey,
+    algorithm: Algorithm,
+) -> Result<Jwk, JwtError> {
+    ensure_safe_jwt_provider()?;
+    Jwk::from_encoding_key(encoding_key, algorithm)
 }
 
 #[cfg(feature = "jwt")]
@@ -328,7 +425,7 @@ mod tests {
     #[cfg(feature = "jwt")]
     mod jwt_tests {
         use super::*;
-        use jsonwebtoken::{decode_header, encode, Algorithm, DecodingKey, EncodingKey, Header};
+        use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, decode_header};
         use std::time::{SystemTime, UNIX_EPOCH};
 
         fn now_seconds() -> u64 {
@@ -343,7 +440,7 @@ mod tests {
             let mut claims = AccessTokenClaims::for_user(
                 "https://issuer.example",
                 UserId::from("user-1"),
-                vec!["auth-stack".to_string()],
+                vec!["fullstack-app".to_string()],
                 now + 300,
                 now,
                 "token-1",
@@ -384,7 +481,20 @@ mod tests {
             };
             let mut header = Header::new(Algorithm::HS256);
             header.kid = Some("kid-1".to_string());
-            encode(&header, &claims, &EncodingKey::from_secret(secret)).unwrap()
+            encode_jwt(&header, &claims, &EncodingKey::from_secret(secret)).unwrap()
+        }
+
+        #[test]
+        fn private_rsa_signing_is_rejected_by_the_process_provider() {
+            let claims = valid_claims();
+            let error = encode_jwt(
+                &Header::new(Algorithm::RS256),
+                &claims,
+                &EncodingKey::from_secret(b"not-an-rsa-private-key"),
+            )
+            .unwrap_err();
+
+            assert!(matches!(error.kind(), JwtErrorKind::InvalidAlgorithm));
         }
 
         #[test]
@@ -401,7 +511,7 @@ mod tests {
                 &token,
                 &DecodingKey::from_secret(b"secret"),
                 "https://issuer.example",
-                "auth-stack",
+                "fullstack-app",
                 &[Algorithm::HS256],
             )
             .unwrap();
@@ -421,7 +531,7 @@ mod tests {
                 &token,
                 &DecodingKey::from_secret(b"secret"),
                 "https://issuer.example",
-                "auth-stack",
+                "fullstack-app",
                 &[Algorithm::HS256],
             )
             .unwrap_err();
@@ -438,7 +548,7 @@ mod tests {
                 &token,
                 &DecodingKey::from_secret(b"secret"),
                 "https://other-issuer.example",
-                "auth-stack",
+                "fullstack-app",
                 &[Algorithm::HS256],
             )
             .unwrap_err();
@@ -464,7 +574,7 @@ mod tests {
                 &token,
                 &DecodingKey::from_secret(b"other-secret"),
                 "https://issuer.example",
-                "auth-stack",
+                "fullstack-app",
                 &[Algorithm::HS256],
             )
             .unwrap_err();
@@ -475,7 +585,7 @@ mod tests {
         #[test]
         fn oidc_id_token_accepts_string_audience_and_nonce() {
             let token = encode_id_token_fixture(
-                AudienceClaim::One("auth-stack".to_string()),
+                AudienceClaim::One("fullstack-app".to_string()),
                 Some("nonce-1"),
                 b"secret",
             );
@@ -484,21 +594,24 @@ mod tests {
                 &token,
                 &DecodingKey::from_secret(b"secret"),
                 "https://issuer.example",
-                "auth-stack",
+                "fullstack-app",
                 &[Algorithm::HS256],
                 Some("nonce-1"),
             )
             .unwrap();
 
             assert_eq!(claims.sub, "provider-subject-1");
-            assert_eq!(claims.aud, vec!["auth-stack"]);
+            assert_eq!(claims.aud, vec!["fullstack-app"]);
             assert_eq!(claims.email.as_deref(), Some("owner@example.test"));
         }
 
         #[test]
         fn oidc_id_token_accepts_array_audience() {
             let token = encode_id_token_fixture(
-                AudienceClaim::Many(vec!["auth-stack".to_string(), "other-client".to_string()]),
+                AudienceClaim::Many(vec![
+                    "fullstack-app".to_string(),
+                    "other-client".to_string(),
+                ]),
                 None,
                 b"secret",
             );
@@ -507,7 +620,7 @@ mod tests {
                 &token,
                 &DecodingKey::from_secret(b"secret"),
                 "https://issuer.example",
-                "auth-stack",
+                "fullstack-app",
                 &[Algorithm::HS256],
                 None,
             )
@@ -519,7 +632,7 @@ mod tests {
         #[test]
         fn oidc_id_token_rejects_nonce_mismatch() {
             let token = encode_id_token_fixture(
-                AudienceClaim::One("auth-stack".to_string()),
+                AudienceClaim::One("fullstack-app".to_string()),
                 Some("nonce-1"),
                 b"secret",
             );
@@ -528,7 +641,7 @@ mod tests {
                 &token,
                 &DecodingKey::from_secret(b"secret"),
                 "https://issuer.example",
-                "auth-stack",
+                "fullstack-app",
                 &[Algorithm::HS256],
                 Some("nonce-2"),
             )
