@@ -1,0 +1,634 @@
+# Instincts generated from https://github.com/codeitlikemiley/wasi-auth
+# Generated: 2026-07-13T02:06:12.816Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: wasi-auth-commit-conventional
+trigger: "when writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: https://github.com/codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Commit Conventional
+
+## Action
+
+Use conventional commit format with prefixes: feat, chore, ci, fix, test
+
+## Evidence
+
+- 64 commits analyzed
+- Detected conventional commit pattern
+- Examples: test: pin the WASIp3 middleware compatibility contract, feat: establish the reusable middleware component core
+
+---
+id: wasi-auth-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Commit Length
+
+## Action
+
+Keep commit messages concise (~49 characters)
+
+## Evidence
+
+- Average commit message length: 49 chars
+- Based on 64 commits
+
+---
+id: wasi-auth-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Naming Files
+
+## Action
+
+Use camelCase naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: camelCase
+
+---
+id: wasi-auth-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: wasi-auth-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: wasi-auth-workflow-feature-development
+trigger: "when implementing a new feature"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Workflow Feature Development
+
+## Action
+
+Follow the feature-development workflow:
+1. Add feature implementation
+2. Add tests for feature
+3. Update documentation
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~8x per month
+- Files: components/passthrough/*, components/passthrough/src/*, crates/component-support/*
+
+---
+id: wasi-auth-workflow-test-driven-development
+trigger: "when adding new functionality"
+confidence: 0.7
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Workflow Test Driven Development
+
+## Action
+
+Follow the test-driven-development workflow:
+1. Write failing test
+2. Implement code to pass test
+3. Refactor if needed
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~4x per month
+- Files: **/*.test.*, **/*.spec.*, src/**/*
+
+---
+id: wasi-auth-workflow-add-new-middleware-component
+trigger: "when doing add new middleware component"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Workflow Add New Middleware Component
+
+## Action
+
+Follow the add-new-middleware-component workflow:
+1. Create new component directory under components/ with Cargo.toml and src/lib.rs
+2. Update Cargo.toml and Cargo.lock at the root
+3. Optionally add related test-components for the middleware
+4. Optionally update scripts or reports if needed
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: components/<component-name>/Cargo.toml, components/<component-name>/src/lib.rs, Cargo.toml
+
+---
+id: wasi-auth-workflow-middleware-component-bugfix-or-enhancement
+trigger: "when doing middleware component bugfix or enhancement"
+confidence: 0.7
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Workflow Middleware Component Bugfix Or Enhancement
+
+## Action
+
+Follow the middleware-component-bugfix-or-enhancement workflow:
+1. Edit src/lib.rs for one or more components under components/
+2. Edit shared crates (e.g., component-support, policy-core) if needed
+3. Update Cargo.toml and Cargo.lock if dependencies change
+4. Optionally update related scripts or reports
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~4x per month
+- Files: components/*/src/lib.rs, crates/component-support/src/lib.rs, crates/policy-core/src/lib.rs
+
+---
+id: wasi-auth-workflow-middleware-release-preparation
+trigger: "when doing middleware release preparation"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Workflow Middleware Release Preparation
+
+## Action
+
+Follow the middleware-release-preparation workflow:
+1. Update CHANGELOG.md and/or MIGRATION.md
+2. Update compatibility.toml
+3. Update artifacts/SHA256SUMS and SBOM files
+4. Update Cargo.toml and Cargo.lock
+5. Optionally update .github/workflows/ci.yml and scripts
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: CHANGELOG.md, MIGRATION.md, compatibility.toml
+
+---
+id: wasi-auth-workflow-update-or-add-ci-and-supply-chain-scripts
+trigger: "when doing update or add ci and supply chain scripts"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Workflow Update Or Add Ci And Supply Chain Scripts
+
+## Action
+
+Follow the update-or-add-ci-and-supply-chain-scripts workflow:
+1. Edit or add .github/workflows/ci.yml
+2. Edit or add scripts/ (e.g., generate-sbom.sh, generate-checksums.sh, dry-run-supply-chain.sh)
+3. Optionally update .gitignore or deny.toml
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: .github/workflows/ci.yml, scripts/*.sh, scripts/*.py
+
+---
+id: wasi-auth-workflow-documentation-and-trust-boundary-update
+trigger: "when doing documentation and trust boundary update"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Workflow Documentation And Trust Boundary Update
+
+## Action
+
+Follow the documentation-and-trust-boundary-update workflow:
+1. Edit one or more docs/*.md files
+2. Edit README.md, SECURITY.md, or LICENSE files if needed
+3. Optionally update CHANGELOG.md
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: docs/*.md, README.md, SECURITY.md
+
+---
+id: wasi-auth-workflow-test-component-and-fixture-update
+trigger: "when doing test component and fixture update"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Workflow Test Component And Fixture Update
+
+## Action
+
+Follow the test-component-and-fixture-update workflow:
+1. Edit or add test-components/*/Cargo.toml and src/lib.rs
+2. Edit or add fixtures/spin/*.toml
+3. Update or add scripts for testing (e.g., run-spin-e2e.sh, test_audit_spin_manifest.py)
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: test-components/*/Cargo.toml, test-components/*/src/lib.rs, fixtures/spin/*.toml
+
+---
+id: wasi-auth-instinct-naming-files
+trigger: "When creating or renaming files"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Naming Files
+
+## Action
+
+Use camelCase for file names
+
+## Evidence
+
+- Pattern in namingConventions.files: camelCase
+
+---
+id: wasi-auth-instinct-naming-functions
+trigger: "When defining a function"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Naming Functions
+
+## Action
+
+Use camelCase for function names
+
+## Evidence
+
+- Pattern in namingConventions.functions: camelCase
+
+---
+id: wasi-auth-instinct-naming-classes
+trigger: "When defining a class or struct"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Naming Classes
+
+## Action
+
+Use PascalCase for class/struct names
+
+## Evidence
+
+- Pattern in namingConventions.classes: PascalCase
+
+---
+id: wasi-auth-instinct-naming-constants
+trigger: "When defining a constant"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Naming Constants
+
+## Action
+
+Use SCREAMING_SNAKE_CASE for constant names
+
+## Evidence
+
+- Pattern in namingConventions.constants: SCREAMING_SNAKE_CASE
+
+---
+id: wasi-auth-instinct-import-style
+trigger: "When importing modules"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Import Style
+
+## Action
+
+Use relative imports
+
+## Evidence
+
+- Pattern in importStyle: relative
+
+---
+id: wasi-auth-instinct-export-style
+trigger: "When exporting modules/functions"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Export Style
+
+## Action
+
+Use named exports
+
+## Evidence
+
+- Pattern in exportStyle: named
+
+---
+id: wasi-auth-instinct-test-location
+trigger: "When adding or updating tests"
+confidence: 0.7
+domain: testing
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Test Location
+
+## Action
+
+Place tests in both source folders and dedicated test folders as needed (mixed test location)
+
+## Evidence
+
+- Pattern in architecture.folderStructure.testLocation: mixed
+
+---
+id: wasi-auth-instinct-test-file-naming
+trigger: "When naming test files"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Test File Naming
+
+## Action
+
+Use .test. or .spec. in test file names
+
+## Evidence
+
+- Files involved in test-driven-development: **/*.test.*, **/*.spec.*
+
+---
+id: wasi-auth-instinct-tdd-pattern
+trigger: "When following test-driven development"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Tdd Pattern
+
+## Action
+
+Write a failing test first, then implement code to pass the test, then refactor if needed
+
+## Evidence
+
+- Workflow: test-driven-development
+- Commit sequence: Write failing test → Implement code → Refactor
+
+---
+id: wasi-auth-instinct-conventional-commit-prefix
+trigger: "When writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Conventional Commit Prefix
+
+## Action
+
+Start the commit message with a conventional prefix (feat, fix, chore, ci, test, docs, refactor, perf)
+
+## Evidence
+
+- commits.prefixes
+- Examples: 'feat: ...', 'fix: ...', 'test: ...'
+
+---
+id: wasi-auth-instinct-commit-length
+trigger: "When composing a commit message"
+confidence: 0.7
+domain: git
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Commit Length
+
+## Action
+
+Aim for concise commit messages (~49 characters on average)
+
+## Evidence
+
+- commits.averageLength: 49
+
+---
+id: wasi-auth-instinct-add-middleware-component
+trigger: "When someone wants to introduce a new reusable middleware component"
+confidence: 0.95
+domain: workflow
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Add Middleware Component
+
+## Action
+
+Create a new directory under components/ with Cargo.toml and src/lib.rs, update root Cargo.toml and Cargo.lock, and optionally add tests/scripts
+
+## Evidence
+
+- Workflow: add-new-middleware-component
+- Files: components/<component-name>/Cargo.toml, src/lib.rs, Cargo.toml, Cargo.lock
+
+---
+id: wasi-auth-instinct-fix-middleware
+trigger: "When someone needs to fix, harden, or improve middleware logic or contracts"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Fix Middleware
+
+## Action
+
+Edit src/lib.rs for components, update shared crates if needed, update Cargo.toml/Cargo.lock if dependencies change, and optionally update scripts/reports
+
+## Evidence
+
+- Workflow: middleware-component-bugfix-or-enhancement
+- Files: components/*/src/lib.rs, crates/component-support/src/lib.rs, Cargo.toml, Cargo.lock
+
+---
+id: wasi-auth-instinct-release-prepare
+trigger: "When someone wants to cut a new alpha or production release"
+confidence: 0.95
+domain: workflow
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Release Prepare
+
+## Action
+
+Update CHANGELOG.md, MIGRATION.md, compatibility.toml, artifacts, Cargo.toml, Cargo.lock, and optionally CI/scripts
+
+## Evidence
+
+- Workflow: middleware-release-preparation
+- Files: CHANGELOG.md, MIGRATION.md, compatibility.toml, artifacts, Cargo.toml, Cargo.lock
+
+---
+id: wasi-auth-instinct-update-ci
+trigger: "When someone wants to improve CI/CD or supply chain security"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Update Ci
+
+## Action
+
+Edit or add .github/workflows/ci.yml, scripts, and optionally .gitignore or deny.toml
+
+## Evidence
+
+- Workflow: update-or-add-ci-and-supply-chain-scripts
+- Files: .github/workflows/ci.yml, scripts/*.sh, scripts/*.py, .gitignore, deny.toml
+
+---
+id: wasi-auth-instinct-update-docs
+trigger: "When someone wants to document new features, changes, or clarify trust boundaries"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Update Docs
+
+## Action
+
+Edit docs/*.md, README.md, SECURITY.md, LICENSE files, and optionally CHANGELOG.md
+
+## Evidence
+
+- Workflow: documentation-and-trust-boundary-update
+- Files: docs/*.md, README.md, SECURITY.md, LICENSE-APACHE, LICENSE-MIT, CHANGELOG.md
+
+---
+id: wasi-auth-instinct-update-test-fixtures
+trigger: "When someone wants to test new middleware or verify compatibility with Spin/Wasmtime"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: codeitlikemiley/wasi-auth
+---
+
+# Wasi Auth Instinct Update Test Fixtures
+
+## Action
+
+Edit or add test-components/*/Cargo.toml and src/lib.rs, fixtures/spin/*.toml, and scripts for testing
+
+## Evidence
+
+- Workflow: test-component-and-fixture-update
+- Files: test-components/*/Cargo.toml, test-components/*/src/lib.rs, fixtures/spin/*.toml, scripts/*.sh, scripts/*.py
+
