@@ -248,7 +248,9 @@ where
     ///
     /// # Errors
     ///
-    /// Returns a transport, row-decoding, or encrypted-payload failure.
+    /// Returns a PostgreSQL transport failure. Delivered rows encrypted under
+    /// a different historical key are skipped because this development helper
+    /// has no key ring and must not block capture polling during key rotation.
     #[cfg(feature = "mail-capture")]
     pub async fn latest_delivered_for_development(
         &self,
@@ -262,17 +264,23 @@ where
             .await
             .map_err(MailOutboxError::Transport)?;
         for row in &rows {
-            let ciphertext = row.required_bytes("payload_ciphertext")?;
+            let Ok(ciphertext) = row.required_bytes("payload_ciphertext") else {
+                continue;
+            };
             if ciphertext.is_empty() || ciphertext.len() > 256 * 1_024 {
-                return Err(MailOutboxError::InvalidRow);
+                continue;
             }
-            let message = self
-                .message_from_encrypted(
-                    row.required_text("deduplication_key")?,
-                    row.required_text("key_version")?,
-                    ciphertext,
-                )
-                .map_err(|_| MailOutboxError::InvalidRow)?;
+            let (Ok(deduplication_key), Ok(key_version)) = (
+                row.required_text("deduplication_key"),
+                row.required_text("key_version"),
+            ) else {
+                continue;
+            };
+            let Ok(message) =
+                self.message_from_encrypted(deduplication_key, key_version, ciphertext)
+            else {
+                continue;
+            };
             if message.recipient() == recipient && message.kind() == kind {
                 return Ok(Some(message));
             }

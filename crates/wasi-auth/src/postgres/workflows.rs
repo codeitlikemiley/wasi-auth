@@ -1009,6 +1009,7 @@ pub struct EmailVerificationService<T, C, R> {
     clock: C,
     randomness: R,
     session_ttl_ms: u64,
+    bootstrap_system_administrator_emails: Vec<String>,
 }
 
 impl<T, C, R> EmailVerificationService<T, C, R> {
@@ -1020,7 +1021,44 @@ impl<T, C, R> EmailVerificationService<T, C, R> {
             clock,
             randomness,
             session_ttl_ms: DEFAULT_SESSION_TTL_MS,
+            bootstrap_system_administrator_emails: Vec::new(),
         }
+    }
+
+    /// Configures the bounded set of users promoted to system administrator
+    /// when they complete email verification.
+    ///
+    /// Promotion is committed atomically with activation and session creation.
+    /// This is intended only for initial deployment bootstrap; subsequent
+    /// administrator grants should use the audited management workflow.
+    ///
+    /// # Errors
+    ///
+    /// Rejects more than 100 entries or malformed email addresses.
+    pub fn with_bootstrap_system_administrator_emails<I, S>(
+        mut self,
+        emails: I,
+    ) -> Result<Self, EmailVerificationError<T::Error>>
+    where
+        T: PostgresTransport,
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let mut normalized = Vec::new();
+        for email in emails {
+            let email = email.as_ref().trim().to_ascii_lowercase();
+            if !valid_bootstrap_email(&email) {
+                return Err(EmailVerificationError::InvalidConfiguration);
+            }
+            if !normalized.contains(&email) {
+                if normalized.len() == 100 {
+                    return Err(EmailVerificationError::InvalidConfiguration);
+                }
+                normalized.push(email);
+            }
+        }
+        self.bootstrap_system_administrator_emails = normalized;
+        Ok(self)
     }
 
     /// Overrides the session lifetime after bounded validation.
@@ -1085,6 +1123,7 @@ where
                     PgValue::I64(u64_to_i64(expires_at_ms)),
                     PgValue::Text(audit_id.to_string()),
                     PgValue::Text(request.request_id.as_str().to_owned()),
+                    PgValue::Json(json!(self.bootstrap_system_administrator_emails)),
                 ],
             )
             .await
@@ -1100,6 +1139,23 @@ where
             redirect_uri: request.redirect_uri.clone(),
         })
     }
+}
+
+fn valid_bootstrap_email(email: &str) -> bool {
+    if email.is_empty() || email.len() > 320 || email.chars().any(char::is_whitespace) {
+        return false;
+    }
+    let Some((local, domain)) = email.split_once('@') else {
+        return false;
+    };
+    !local.is_empty()
+        && local.len() <= 64
+        && !domain.is_empty()
+        && domain.contains('.')
+        && !domain.starts_with('.')
+        && !domain.ends_with('.')
+        && !domain.contains("..")
+        && !domain.contains('@')
 }
 
 /// Password reset start/completion and session-rotation service.

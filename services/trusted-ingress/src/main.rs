@@ -146,8 +146,10 @@ impl CredentialAuthenticator for NativeAuthenticator {
                 authenticated_session_from_token(verified)
             }
             Credential::SessionCookie(session_id) => {
+                Uuid::parse_str(session_id)
+                    .map_err(|_| NativeAuthenticationError::InvalidCredential)?;
                 let session_id = SessionId::new(session_id.to_owned())
-                    .map_err(|_| NativeAuthenticationError::InvalidContext)?;
+                    .map_err(|_| NativeAuthenticationError::InvalidCredential)?;
                 let verified = self
                     .store
                     .load_verified_session(
@@ -160,7 +162,7 @@ impl CredentialAuthenticator for NativeAuthenticator {
                     .map_err(NativeAuthenticationError::Store)?;
                 authenticated_session_from_context(verified.context())
             }
-            _ => Err(NativeAuthenticationError::InvalidContext),
+            _ => Err(NativeAuthenticationError::InvalidCredential),
         }
     }
 }
@@ -249,6 +251,8 @@ enum NativeAuthenticationError {
     Token(#[source] TokenServiceError<NativePostgresError>),
     #[error("session authentication failed")]
     Store(#[source] PostgresStoreError<NativePostgresError>),
+    #[error("credential is malformed or unsupported")]
+    InvalidCredential,
     #[error("authenticated context is invalid")]
     InvalidContext,
 }
@@ -259,9 +263,11 @@ impl NativeAuthenticationError {
             Self::Token(
                 TokenServiceError::InvalidSession
                 | TokenServiceError::InvalidToken
+                | TokenServiceError::ExpiredToken
                 | TokenServiceError::ReuseDetected,
             )
             | Self::Store(PostgresStoreError::Unauthenticated) => true,
+            Self::InvalidCredential => true,
             Self::Token(_) | Self::Store(_) | Self::InvalidContext => false,
         }
     }
@@ -453,7 +459,7 @@ async fn proxy_request(state: AppState, mut request: Request) -> Response {
             .await
         {
             Ok(context) => context,
-            Err(error) => return boundary_error(error),
+            Err(error) => return boundary_error(error, &request),
         }
     } else {
         None
@@ -826,7 +832,14 @@ fn authenticated_session_from_context(
     })
 }
 
-fn boundary_error(error: HttpBoundaryError<NativeAuthenticationError>) -> Response {
+fn boundary_error(
+    error: HttpBoundaryError<NativeAuthenticationError>,
+    request: &Request,
+) -> Response {
+    let credential_rejection = matches!(
+        &error,
+        HttpBoundaryError::Authenticator(error) if error.is_credential_rejection()
+    );
     let status = match error {
         HttpBoundaryError::MissingCredentials | HttpBoundaryError::InsufficientAssurance => {
             StatusCode::UNAUTHORIZED
@@ -843,7 +856,52 @@ fn boundary_error(error: HttpBoundaryError<NativeAuthenticationError>) -> Respon
         HttpBoundaryError::InvalidContext(_) => StatusCode::SERVICE_UNAVAILABLE,
         _ => StatusCode::SERVICE_UNAVAILABLE,
     };
+    if credential_rejection && browser_document_navigation(request) {
+        return authentication_redirect(request);
+    }
     (status, "Request rejected.").into_response()
+}
+
+fn browser_document_navigation(request: &Request) -> bool {
+    matches!(*request.method(), http::Method::GET | http::Method::HEAD)
+        && !request.uri().path().starts_with("/auth/")
+        && request
+            .headers()
+            .get(http::header::ACCEPT)
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| {
+                value
+                    .split(',')
+                    .any(|item| item.trim().starts_with("text/html"))
+            })
+}
+
+fn authentication_redirect(request: &Request) -> Response {
+    let location = format!("/auth/required?next={}", request.uri().path());
+    let Ok(location) = HeaderValue::from_str(&location) else {
+        return internal_error();
+    };
+    let mut response = StatusCode::SEE_OTHER.into_response();
+    response
+        .headers_mut()
+        .insert(http::header::LOCATION, location);
+    response.headers_mut().insert(
+        http::header::CACHE_CONTROL,
+        HeaderValue::from_static("no-store"),
+    );
+    response.headers_mut().append(
+        http::header::SET_COOKIE,
+        HeaderValue::from_static(
+            "__Host-session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure",
+        ),
+    );
+    response.headers_mut().append(
+        http::header::SET_COOKIE,
+        HeaderValue::from_static(
+            "wasi_auth_dev_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
+        ),
+    );
+    response
 }
 
 fn ensure_request_id(request: &mut Request) -> Result<(), StatusCode> {
@@ -1026,13 +1084,74 @@ mod tests {
     #[test]
     fn operational_authentication_failures_are_not_reported_as_bad_credentials() {
         let invalid = NativeAuthenticationError::Token(TokenServiceError::InvalidToken);
+        let expired = NativeAuthenticationError::Token(TokenServiceError::ExpiredToken);
         let unavailable = NativeAuthenticationError::Token(TokenServiceError::Crypto);
         let missing = NativeAuthenticationError::Store(PostgresStoreError::Unauthenticated);
+        let malformed = NativeAuthenticationError::InvalidCredential;
         let corrupt = NativeAuthenticationError::Store(PostgresStoreError::Context);
         assert!(invalid.is_credential_rejection());
+        assert!(expired.is_credential_rejection());
         assert!(missing.is_credential_rejection());
+        assert!(malformed.is_credential_rejection());
         assert!(!unavailable.is_credential_rejection());
         assert!(!corrupt.is_credential_rejection());
+    }
+
+    #[test]
+    fn rejected_browser_session_redirects_and_clears_supported_cookies() {
+        let request = http::Request::builder()
+            .uri("/dashboard")
+            .header(http::header::ACCEPT, "text/html,application/xhtml+xml")
+            .body(Body::empty())
+            .unwrap();
+        let response = boundary_error(
+            HttpBoundaryError::Authenticator(NativeAuthenticationError::Token(
+                TokenServiceError::InvalidToken,
+            )),
+            &request,
+        );
+        let cookies = response
+            .headers()
+            .get_all(http::header::SET_COOKIE)
+            .iter()
+            .map(|value| value.to_str().unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(
+            response.headers().get(http::header::LOCATION).unwrap(),
+            "/auth/required?next=/dashboard"
+        );
+        assert_eq!(cookies.len(), 2);
+        assert!(
+            cookies
+                .iter()
+                .any(|cookie| cookie.starts_with("__Host-session="))
+        );
+        assert!(
+            cookies
+                .iter()
+                .any(|cookie| cookie.starts_with("wasi_auth_dev_session="))
+        );
+    }
+
+    #[test]
+    fn rejected_api_session_remains_unauthorized() {
+        let request = http::Request::builder()
+            .method(http::Method::POST)
+            .uri("/api/authorization/check")
+            .header(http::header::ACCEPT, "application/json")
+            .body(Body::empty())
+            .unwrap();
+        let response = boundary_error(
+            HttpBoundaryError::Authenticator(NativeAuthenticationError::Token(
+                TokenServiceError::InvalidToken,
+            )),
+            &request,
+        );
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(response.headers().get(http::header::LOCATION).is_none());
     }
 
     #[test]

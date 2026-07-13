@@ -28,7 +28,7 @@ use crate::{
         AccessTokenClaims, Algorithm, DecodingKey, EncodingKey, JwksDocument, JwksKey,
         access_token_key_id, decode_access_token, encode_access_token, jwk_from_encoding_key,
     },
-    authentication::{Clock, RandomSource},
+    authentication::{Clock, RandomSource, WorkflowError},
     context::{RequestId, SessionId},
 };
 
@@ -566,7 +566,7 @@ where
         cached: Option<&VerifiedAccessToken>,
     ) -> Result<VerifiedAccessToken, TokenServiceError<T::Error>> {
         let decoded = decode_verified_access_token(token, &self.keys, &self.issuer, &self.audience)
-            .ok_or(TokenServiceError::InvalidToken)?;
+            .map_err(map_access_token_decode_error)?;
         if let Some(cached) = cached.filter(|cached| cached.matches_claims(&decoded)) {
             let fingerprint = self
                 .store
@@ -623,9 +623,9 @@ where
             return Ok(None);
         }
         let decoded = decode_verified_access_token(token, &self.keys, &self.issuer, &self.audience)
-            .ok_or(TokenServiceError::InvalidToken)?;
+            .map_err(map_access_token_decode_error)?;
         if self.clock.now_unix_seconds() >= decoded.claims.exp {
-            return Err(TokenServiceError::InvalidToken);
+            return Err(TokenServiceError::ExpiredToken);
         }
         if !cached.matches_claims(&decoded) {
             return Ok(None);
@@ -1090,7 +1090,7 @@ where
     C: Clock,
 {
     let decoded = decode_verified_access_token(token, keys, issuer, audience)
-        .ok_or(TokenServiceError::InvalidToken)?;
+        .map_err(map_access_token_decode_error)?;
     let session = store
         .load_verified_session_for_token(
             &decoded.session_id,
@@ -1114,20 +1114,30 @@ fn decode_verified_access_token(
     keys: &JwtKeyRing,
     issuer: &str,
     audience: &str,
-) -> Option<DecodedAccessToken> {
-    let kid = access_token_key_id(token).ok()?;
-    let key = keys.verification(&kid)?;
-    let claims =
-        decode_access_token(token, &key.decoding, issuer, audience, &[key.algorithm]).ok()?;
+) -> Result<DecodedAccessToken, WorkflowError> {
+    let kid = access_token_key_id(token)?;
+    let key = keys.verification(&kid).ok_or(WorkflowError::InvalidToken)?;
+    let claims = decode_access_token(token, &key.decoding, issuer, audience, &[key.algorithm])?;
     let session_id = claims
         .session_id
         .as_ref()
-        .and_then(|session| SessionId::new(session.as_str().to_owned()).ok())?;
-    Some(DecodedAccessToken {
+        .and_then(|session| SessionId::new(session.as_str().to_owned()).ok())
+        .ok_or(WorkflowError::InvalidToken)?;
+    Ok(DecodedAccessToken {
         claims,
         session_id,
         kid,
     })
+}
+
+fn map_access_token_decode_error<E>(error: WorkflowError) -> TokenServiceError<E>
+where
+    E: StdError + Send + Sync + 'static,
+{
+    match error {
+        WorkflowError::SessionExpired => TokenServiceError::ExpiredToken,
+        _ => TokenServiceError::InvalidToken,
+    }
 }
 
 impl VerifiedAccessToken {
@@ -1263,9 +1273,12 @@ pub enum TokenServiceError<E: StdError + Send + Sync + 'static> {
     /// Session is missing, expired, revoked, stale, or disabled.
     #[error("session is invalid")]
     InvalidSession,
-    /// Access or refresh token is malformed, expired, or unknown.
+    /// Access or refresh token is malformed or unknown.
     #[error("token is invalid")]
     InvalidToken,
+    /// Access token exceeded its signed lifetime.
+    #[error("access token is expired")]
+    ExpiredToken,
     /// A rotated refresh token was reused outside its retry window.
     #[error("refresh token reuse detected; token family revoked")]
     ReuseDetected,
@@ -1348,5 +1361,13 @@ mod tests {
             std::io::Error::other("database unavailable"),
         ));
         assert!(matches!(error, TokenServiceError::Transport(_)));
+    }
+
+    #[test]
+    fn access_token_decode_error_preserves_expiration() {
+        let error: TokenServiceError<std::io::Error> =
+            map_access_token_decode_error(WorkflowError::SessionExpired);
+
+        assert!(matches!(error, TokenServiceError::ExpiredToken));
     }
 }

@@ -241,7 +241,8 @@ fn live_postgres_verification_replay_and_password_login() -> Result<(), Box<dyn 
                 PostgresAuthStore::new(transport.clone()),
                 FixedClock,
                 TestRandom::new(),
-            );
+            )
+            .with_bootstrap_system_administrator_emails([format!("{unique}@example.com")])?;
             let first = verification
                 .verify(EmailVerificationRequest::new(
                     raw_token.clone(),
@@ -261,6 +262,17 @@ fn live_postgres_verification_replay_and_password_login() -> Result<(), Box<dyn 
                 replayed,
                 Err(EmailVerificationError::InvalidToken)
             ));
+
+            let bootstrap_grant_count: i64 = transport
+                .client()
+                .query_one(
+                    "SELECT COUNT(*) FROM auth_system_administrators \
+                     WHERE user_id = $1 AND revoked_at_ms IS NULL",
+                    &[&user_id],
+                )
+                .await?
+                .get(0);
+            assert_eq!(bootstrap_grant_count, 1);
 
             transport
                 .client()

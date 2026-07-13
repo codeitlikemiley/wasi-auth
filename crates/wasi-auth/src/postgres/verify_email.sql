@@ -20,7 +20,17 @@ activated AS (
     FROM consumed
     WHERE users.user_id = consumed.user_id
       AND users.status IN ('pending_verification', 'active')
-    RETURNING users.user_id, users.security_revision
+    RETURNING users.user_id, users.normalized_email, users.security_revision
+),
+bootstrap_administrator AS (
+    INSERT INTO auth_system_administrators (
+        user_id, granted_by, granted_at_ms, revoked_at_ms
+    )
+    SELECT activated.user_id, activated.user_id, $2, NULL
+    FROM activated
+    WHERE $7::jsonb ? activated.normalized_email
+    ON CONFLICT (user_id) DO NOTHING
+    RETURNING user_id
 ),
 new_session AS (
     INSERT INTO auth_sessions (
@@ -41,7 +51,12 @@ new_audit AS (
     )
     SELECT $5::text::uuid, NULL, new_session.user_id, new_session.session_id,
            'auth.email.verify', 'user', new_session.user_id::text, 'succeeded',
-           $6, NULL, '{}', $2
+           $6, NULL,
+           jsonb_build_object(
+               'bootstrap_system_administrator',
+               EXISTS (SELECT 1 FROM bootstrap_administrator)
+           ),
+           $2
     FROM new_session
     RETURNING audit_id
 )
