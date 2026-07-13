@@ -1,0 +1,22 @@
+[package]
+name = "wasi-http-policy-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Pure policy engine for reusable WASI HTTP middleware components"
+readme = "../../README.md"
+keywords = ["wasi", "wasm", "http", "authentication", "middleware"]
+categories = ["wasm", "web-programming::http-server", "authentication"]
+
+[dependencies]
+http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+wasi-http-metadata.workspace = true
+
+[lints]
+workspace = true

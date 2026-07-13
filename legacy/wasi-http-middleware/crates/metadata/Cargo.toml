@@ -1,0 +1,22 @@
+[package]
+name = "wasi-http-metadata"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Trusted HTTP metadata contract for composed WASI middleware"
+readme = "../../README.md"
+keywords = ["wasi", "wasm", "http", "authentication", "middleware"]
+categories = ["wasm", "web-programming::http-server", "authentication"]
+
+[dependencies]
+base64 = "0.22.1"
+http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

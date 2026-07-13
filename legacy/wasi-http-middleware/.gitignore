@@ -1,0 +1,10 @@
+/target/
+/artifacts/
+/reports/*
+!/reports/wit/
+!/reports/wit/*.wit
+!/reports/semver/
+!/reports/semver/*.md
+.spin/
+__pycache__/
+*.tmp

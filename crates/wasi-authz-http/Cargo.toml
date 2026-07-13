@@ -1,5 +1,6 @@
 [package]
 name = "wasi-authz-http"
+publish = false
 description = "Coarse HTTP policy enforcement helpers for wasi-authz"
 version.workspace = true
 authors.workspace = true
@@ -17,7 +18,7 @@ wasi-http-metadata.workspace = true
 wasi-http-policy-core.workspace = true
 
 [dev-dependencies]
-wasi-authz-testkit = { path = "../wasi-authz-testkit", version = "=0.1.0-alpha.3" }
+wasi-authz-testkit = { path = "../wasi-authz-testkit", version = "=0.1.0-rc.1" }
 
 [lints]
 workspace = true

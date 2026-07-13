@@ -2,8 +2,32 @@
 
 ## Unreleased
 
-- Clarified that Wasmtime is the final-WASI correctness reference and Spin is
-  the upstream-blocked production-performance target.
+- Consolidated authentication, authorization, trusted HTTP ingress, Leptos,
+  Spin gRPC, Cedar, optional SpiceDB, mail, DDD/CQRS, and test helpers behind
+  the single publishable `wasi-auth` crate. Legacy workspace crates are now
+  non-publishable compatibility fixtures.
+- Added bounded `VerifiedAuthContext` and authorization contracts, typestate
+  application construction, static Cedar/SpiceDB provider dispatch, and
+  fail-closed HTTP, Leptos, and gRPC guards.
+- Added the single PostgreSQL relational auth schema, atomic unit-of-work
+  support, idempotency records, secret references, durable mail and
+  relationship outboxes, and the offline legacy migration tool. Removed the
+  divergent migration-only Spin SQLite feature before the first RC.
+- Added password, OAuth, passkey, MFA, rotating-session, organization,
+  membership, invitation, role, policy-bundle, and audit workflows plus
+  provider-neutral capture, SMTP, and HTTP mail adapters.
+- Disabled every private RSA/PSS signing path process-wide because the
+  RustCrypto RSA implementation has no patched release for its timing
+  advisory. Production first-party tokens use ES256; RSA remains available
+  only for public-key verification of identity-provider tokens.
+- Reimplemented the supported terminal as native Hyper ingress with
+  transactionally invalidated PostgreSQL context, active Cedar bundle reload,
+  and streaming HTTP/2 proxying. Five protected-path pairs, five absolute
+  samples, all four gRPC modes, and the ten-minute soak now pass on the
+  maintained Spin fork with zero status or transport failures.
+- Clarified that Wasmtime is the final-WASI correctness reference, upstream
+  tagged Spin remains blocked, and the maintained Spin fork is the RC
+  production-performance target.
 - Classified component PDP services as experimental/compatibility profiles;
   production terminals embed Cedar and call SpiceDB directly.
 

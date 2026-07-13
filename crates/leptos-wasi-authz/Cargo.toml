@@ -1,6 +1,7 @@
 [package]
 name = "leptos-wasi-authz"
 description = "Typed Leptos context and server-function authorization layers for wasi-authz"
+publish = false
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -19,12 +20,12 @@ server_fn.workspace = true
 thiserror.workspace = true
 wasi-authz-client.workspace = true
 wasi-authz-contract.workspace = true
-wasi-authz-http = { path = "../wasi-authz-http", version = "=0.1.0-alpha.3" }
+wasi-authz-http = { path = "../wasi-authz-http", version = "=0.1.0-rc.1" }
 wasi-http-metadata.workspace = true
 
 [dev-dependencies]
 http-body-util.workspace = true
-wasi-authz-testkit = { path = "../wasi-authz-testkit", version = "=0.1.0-alpha.3" }
+wasi-authz-testkit = { path = "../wasi-authz-testkit", version = "=0.1.0-rc.1" }
 
 [lints]
 workspace = true

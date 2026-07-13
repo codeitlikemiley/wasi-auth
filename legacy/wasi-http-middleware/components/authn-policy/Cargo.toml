@@ -1,0 +1,25 @@
+[package]
+name = "wasi-http-middleware-authn-policy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Strict fail-closed authentication broker middleware for WASIp3 HTTP services"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+http.workspace = true
+wasi-http-authn-runtime.workspace = true
+wasi-http-metadata.workspace = true
+wasi-http-middleware-component-support.workspace = true
+wasi-http-policy-core.workspace = true
+wasip3 = { workspace = true, features = ["async-spawn"] }
+wit-bindgen.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,27 @@
+spin_manifest_version = 2
+
+[application]
+name = "wasi-http-middleware-composed-final-optional"
+version = "0.2.0-alpha.3"
+
+[[trigger.http]]
+route = "/..."
+component = "application"
+executor = { type = "http" }
+
+[component.application]
+source = "../../../artifacts/composed/full-chain.wasm"
+allowed_outbound_hosts = ["http://127.0.0.1:19101"]
+
+[component.application.environment]
+WASI_MIDDLEWARE_CORS_ORIGINS = "https://app.example"
+WASI_MIDDLEWARE_CORS_METHODS = "GET,HEAD,POST"
+WASI_MIDDLEWARE_CORS_HEADERS = "content-type,authorization"
+WASI_MIDDLEWARE_CORS_ALLOW_CREDENTIALS = "false"
+WASI_MIDDLEWARE_AUTHN_BROKER_URL = "http://127.0.0.1:19101/authenticate"
+WASI_MIDDLEWARE_AUTHN_TIMEOUT_MS = "2000"
+WASI_MIDDLEWARE_AUTHN_MODE = "optional"
+WASI_MIDDLEWARE_SERVICE_ID = "echo-service"
+WASI_MIDDLEWARE_AUTHN_AUDIENCES = "api://echo-service"
+WASI_MIDDLEWARE_AUTHN_MAX_IN_FLIGHT = "64"
+WASI_MIDDLEWARE_AUTHN_ALLOW_INSECURE_LOOPBACK = "true"

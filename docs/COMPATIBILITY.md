@@ -1,8 +1,8 @@
 # Compatibility
 
-| Surface | Status in `0.1.0-alpha.3` |
+| Surface | Status in `0.1.0-rc.1` |
 |---|---|
-| Rust | MSRV 1.93; current stable is tested separately |
+| Rust | Library MSRV 1.93; async final-WASI component builds require Rust 1.94+ |
 | AuthZEN Authorization API | Final 1.0 bounded access-evaluation profile |
 | Unknown standard members | Ignored as AuthZEN requires |
 | `wasi_authz` extension | Strictly parsed and crate-versioned; unknown members rejected |
@@ -11,14 +11,15 @@
 | Native Rust | Supported |
 | WASIp2 outbound HTTP | Additive `wasip2` client feature with an injected cancellation-safe pollable waiter |
 | WASIp3 outbound HTTP | Additive `wasip3` client feature using `wasip3` 0.7.0 and final `wasi:http@0.3.0` |
-| Component bindings | `wit-bindgen` 0.59.0; `wasip3` also carries its own internal binding-generator dependency |
+| Component bindings | `wit-bindgen` 0.57.1, exactly matching the runtime embedded by tagged `wasip3` 0.7.0 |
 | Browser bindings | `wasm-bindgen` 0.2.126 in the locked Leptos/browser graph; unrelated to the WASI HTTP ABI |
 | Wasmtime | `46.0.1`, final-WASI component contract |
 | Spin 4.0.2 | Tagged compatibility canary; final-WASI linking is unavailable |
-| Spin main `c34c584...` (`4.1.0-pre0`) | Experimental final-WASI terminal/outbound-HTTP canary; native middleware is still RC-only and no tagged support is claimed |
+| Maintained Spin fork `c34c584...` (`4.1.0-pre0`) | Release-candidate final-WASI terminal/outbound-HTTP lane; WAC middleware remains experimental and no upstream tagged support is claimed |
+| Spin SDK | Git revision `a02d330fe9357be2d18e6deef400511195ce6f7f`; Rust 1.94 final-WASI component and Tonic gRPC lane |
 | Cedar | Embedded provider and native reference PDP |
 | SpiceDB | CheckPermission adapter tested with `1.54.0` |
-| Leptos | Typed request/server-function helpers |
+| Leptos | Current 0.8 line, islands-compatible request/server-function helpers |
 | Non-HTTP triggers | Reuse contract/provider; trigger-specific PEP required |
 
 The AuthZEN specification permits extensions and requires unknown standard
@@ -26,13 +27,15 @@ members to be ignored. This project follows that rule outside its own reserved
 namespace. Inside `wasi_authz`, strict parsing prevents unrecognized
 enforcement instructions from crossing the trust boundary.
 
-Exact versions and the unpublished sibling source revision live in
+Exact versions and the imported middleware history revision live in
 [`compatibility.toml`](../compatibility.toml). The authoritative operational
 matrix is [Production support](SUPPORT.md).
 
 The browser and component binding versions serve different targets.
 `wasm-bindgen` supports the Leptos browser artifact, while `wit-bindgen` and
-`wasip3` define the component-facing final-WASI contract. Updating one is not
+`wasip3` must resolve to one component runtime version. Upgrade `wit-bindgen`
+only with a tagged `wasip3` release generated against that same version.
+Together they define the component-facing final-WASI contract. Updating one is not
 evidence that the other ABI or runtime lane is compatible.
 
 ## WASIp2 alpha API correction

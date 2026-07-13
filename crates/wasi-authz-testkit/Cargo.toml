@@ -1,5 +1,6 @@
 [package]
 name = "wasi-authz-testkit"
+publish = false
 description = "Conformance fixtures for wasi-authz policy decision providers"
 version.workspace = true
 authors.workspace = true
@@ -11,7 +12,7 @@ homepage.workspace = true
 
 [dependencies]
 thiserror.workspace = true
-wasi-authz-client = { path = "../wasi-authz-client", version = "=0.1.0-alpha.3" }
+wasi-authz-client = { path = "../wasi-authz-client", version = "=0.1.0-rc.1" }
 wasi-authz-contract.workspace = true
 
 [lints]

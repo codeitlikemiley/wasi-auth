@@ -1,0 +1,34 @@
+[graph]
+all-features = true
+targets = ["wasm32-wasip2"]
+
+[advisories]
+yanked = "deny"
+ignore = []
+
+[licenses]
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.8
+
+[bans]
+# `wasip3 0.7.0` currently embeds wit-bindgen 0.57.1 while component exports
+# require the pinned final-WIT generator 0.59.0. Keep this warning visible and
+# remove the allowance when the upstream runtime and generator converge.
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

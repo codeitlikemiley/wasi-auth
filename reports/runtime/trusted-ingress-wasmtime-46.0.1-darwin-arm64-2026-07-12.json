@@ -1,0 +1,115 @@
+{
+  "matrix": {
+    "concurrency": 100,
+    "edge_pairs_passing": 2,
+    "edge_pairs_total": 5,
+    "profiles": {
+      "authn-only": {
+        "failures": 354,
+        "median_p99_ms": 21.151,
+        "median_requests_per_second": 14892.110383300582,
+        "worst_p99_ms": 24.255
+      },
+      "cedar": {
+        "failures": 630,
+        "median_p99_ms": 25.471,
+        "median_requests_per_second": 10590.416615933276,
+        "worst_p99_ms": 45.407
+      },
+      "edge-anonymous": {
+        "failures": 114,
+        "median_p99_ms": 15.431,
+        "median_requests_per_second": 18390.10828926424,
+        "worst_p99_ms": 47.647
+      },
+      "hybrid-deny": {
+        "failures": 1260,
+        "median_p99_ms": 21.407,
+        "median_requests_per_second": 10503.414652751218,
+        "worst_p99_ms": 152.447
+      },
+      "hybrid-direct": {
+        "failures": 8265,
+        "median_p99_ms": 54.495,
+        "median_requests_per_second": 5893.072101137122,
+        "worst_p99_ms": 102.911
+      },
+      "proxy-baseline": {
+        "failures": 108,
+        "median_p99_ms": 13.431,
+        "median_requests_per_second": 19684.380640805324,
+        "worst_p99_ms": 16.687
+      },
+      "relationship-direct": {
+        "failures": 6534,
+        "median_p99_ms": 38.015,
+        "median_requests_per_second": 6812.999299680901,
+        "worst_p99_ms": 299.775
+      }
+    },
+    "promotion_passed": false,
+    "repetitions": 5,
+    "requests_per_profile_repetition": 5000,
+    "terminal_replicas": 1
+  },
+  "platform": {
+    "machine": "arm64",
+    "runtime": "wasmtime 46.0.1 (823d1b8f2 2026-06-24)",
+    "system": "Darwin"
+  },
+  "soak": {
+    "canceled": 0,
+    "completed": 2586955,
+    "concurrency": 100,
+    "duration_seconds": 600.008566084,
+    "first_body_byte_p99_ms": 73.023,
+    "hung": 0,
+    "process_rss": {
+      "authentication-broker": {
+        "end_kib": 20624,
+        "final_quarter_growth_kib": 992,
+        "max_kib": 33008,
+        "start_kib": 24016
+      },
+      "ingress": {
+        "end_kib": 21024,
+        "final_quarter_growth_kib": -192,
+        "max_kib": 23616,
+        "start_kib": 15456
+      },
+      "spicedb": {
+        "end_kib": 84256,
+        "final_quarter_growth_kib": -27920,
+        "max_kib": 139328,
+        "start_kib": 100544
+      },
+      "terminal-1": {
+        "end_kib": 59136,
+        "final_quarter_growth_kib": -18256,
+        "max_kib": 108768,
+        "start_kib": 64496
+      },
+      "terminal-2": {
+        "end_kib": 54816,
+        "final_quarter_growth_kib": -11440,
+        "max_kib": 113568,
+        "start_kib": 54928
+      }
+    },
+    "promotion_passed": false,
+    "requests_per_second": 4311.530111784823,
+    "response_headers_p99_ms": 72.767,
+    "status_failures": 1005636,
+    "successful_total_p99_ms": 81.407,
+    "terminal_replicas": 2,
+    "transport_failures": 42793
+  },
+  "source": {
+    "leptos_wasi_dirty": true,
+    "leptos_wasi_revision": "b1b0fabe987bc059f27a91020bf2f929faadc0d3",
+    "wasi_auth_dirty": true,
+    "wasi_auth_revision": "1bf80347b2fdff65408f3d239ff6f02b1033658e"
+  },
+  "support_status": "blocked",
+  "verification_scope": "local consolidated-source diagnostic; signed artifact verification was bypassed only under the explicit dirty-tree diagnostic flag; not release provenance"
+}

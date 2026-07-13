@@ -14,35 +14,10 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  MIDDLEWARE_REPOSITORY: codeitlikemiley/wasi-http-middleware
 
 jobs:
-  source-contract:
-    name: Pinned unpublished sibling source
-    runs-on: ubuntu-24.04
-    outputs:
-      middleware-revision: ${{ steps.middleware-lock.outputs.revision }}
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          path: wasi-authz
-      - name: Read middleware compatibility lock
-        id: middleware-lock
-        working-directory: wasi-authz
-        run: echo "revision=$(awk -F'\"' '/^wasi_http_middleware_revision/{print $2}' compatibility.toml)" >> "$GITHUB_OUTPUT"
-      - name: Checkout exact middleware source
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: ${{ env.MIDDLEWARE_REPOSITORY }}
-          ref: ${{ steps.middleware-lock.outputs.revision }}
-          path: wasi-http-middleware
-      - name: Enforce the compatibility lock
-        working-directory: wasi-authz
-        run: bash scripts/check-sibling-source.sh
-
   rust:
     name: Rust ${{ matrix.toolchain }} quality gates
-    needs: source-contract
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -50,16 +25,12 @@ jobs:
         toolchain: ["1.93.0", stable]
     defaults:
       run:
-        working-directory: wasi-authz
+        working-directory: wasi-auth
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          path: wasi-authz
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: ${{ env.MIDDLEWARE_REPOSITORY }}
-          ref: ${{ needs.source-contract.outputs.middleware-revision }}
-          path: wasi-http-middleware
+          fetch-depth: 0
+          path: wasi-auth
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -67,7 +38,7 @@ jobs:
           targets: wasm32-wasip2
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
-          workspaces: wasi-authz
+          workspaces: wasi-auth
       - run: bash scripts/check-sibling-source.sh
       - if: matrix.toolchain == '1.93.0'
         run: cargo fmt --all -- --check
@@ -82,7 +53,6 @@ jobs:
 
   clients:
     name: Additive client (${{ matrix.features }})
-    needs: source-contract
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -90,16 +60,11 @@ jobs:
         features: [wasip2, wasip3, "wasip2,wasip3"]
     defaults:
       run:
-        working-directory: wasi-authz
+        working-directory: wasi-auth
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          path: wasi-authz
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: ${{ env.MIDDLEWARE_REPOSITORY }}
-          ref: ${{ needs.source-contract.outputs.middleware-revision }}
-          path: wasi-http-middleware
+          path: wasi-auth
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: 1.93.0
@@ -107,58 +72,68 @@ jobs:
           targets: wasm32-wasip2
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
-          workspaces: wasi-authz
+          workspaces: wasi-auth
       - run: cargo clippy --locked --package wasi-authz-client --all-targets --no-default-features --features '${{ matrix.features }}' -- -D warnings
       - run: cargo check --locked --target wasm32-wasip2 --package wasi-authz-client --no-default-features --features '${{ matrix.features }}'
 
-  alpha-api-inventory:
-    name: Private alpha API inventory
-    needs: source-contract
+  auth-feature-powerset:
+    name: wasi-auth feature powerset (depth 2)
     runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: wasi-authz
+        working-directory: wasi-auth
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          fetch-depth: 0
-          path: wasi-authz
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: ${{ env.MIDDLEWARE_REPOSITORY }}
-          ref: ${{ needs.source-contract.outputs.middleware-revision }}
-          path: wasi-http-middleware
+          path: wasi-auth
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: 1.93.0
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
-          workspaces: wasi-authz
+          workspaces: wasi-auth
+      - run: cargo install cargo-hack --locked --version 0.6.45
+      - name: Check every supported feature pair
+        run: >-
+          cargo hack check --locked --package wasi-auth --feature-powerset --depth 2
+          --include-features password,jwt,oauth,passkeys,mfa,sessions,http,cedar,spicedb,leptos,spin-grpc,postgres-kernel,postgres-native,postgres-spin,mail-http,mail-capture,testkit,testkit-evaluator
+
+  alpha-api-inventory:
+    name: Private alpha API inventory
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: wasi-auth
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          path: wasi-auth
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
+        with:
+          toolchain: 1.93.0
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with:
+          workspaces: wasi-auth
       - run: cargo install cargo-semver-checks --locked --version 0.48.0
       - run: bash scripts/check-alpha-api-inventory.sh
 
   dependency-policy:
     name: Dependency and advisory policy
-    needs: source-contract
     runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: wasi-authz
+        working-directory: wasi-auth
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          path: wasi-authz
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: ${{ env.MIDDLEWARE_REPOSITORY }}
-          ref: ${{ needs.source-contract.outputs.middleware-revision }}
-          path: wasi-http-middleware
+          path: wasi-auth
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: 1.93.0
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
-          workspaces: wasi-authz
+          workspaces: wasi-auth
       - run: cargo install cargo-audit --locked --version 0.22.1
       - run: cargo install cargo-deny --locked --version 0.20.2
       - run: cargo audit --deny warnings
@@ -166,47 +141,35 @@ jobs:
 
   authzen-providers:
     name: AuthZEN and provider conformance
-    needs: source-contract
     runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: wasi-authz
+        working-directory: wasi-auth
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          path: wasi-authz
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: ${{ env.MIDDLEWARE_REPOSITORY }}
-          ref: ${{ needs.source-contract.outputs.middleware-revision }}
-          path: wasi-http-middleware
+          path: wasi-auth
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: 1.93.0
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
-          workspaces: wasi-authz
+          workspaces: wasi-auth
       - run: bash scripts/check-authzen-vectors.sh
       - run: cargo test --locked --package wasi-authz-cedar
       - run: cargo test --locked --package wasi-authz-spicedb
 
   spicedb-live:
     name: SpiceDB 1.54 live conformance
-    needs: source-contract
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
       run:
-        working-directory: wasi-authz
+        working-directory: wasi-auth
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          path: wasi-authz
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: ${{ env.MIDDLEWARE_REPOSITORY }}
-          ref: ${{ needs.source-contract.outputs.middleware-revision }}
-          path: wasi-http-middleware
+          path: wasi-auth
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: 1.93.0
@@ -219,31 +182,61 @@ jobs:
           SPICEDB_BIN: ${{ runner.temp }}/provider-tools/spicedb
           ZED_BIN: ${{ runner.temp }}/provider-tools/zed
 
-  component:
-    name: Final-WASI component and artifact contracts
-    needs: source-contract
+  postgres-live:
+    name: PostgreSQL relational kernel live contracts
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16.9-bookworm
+        env:
+          POSTGRES_DB: wasi_auth_ci
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wasi_auth_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     defaults:
       run:
-        working-directory: wasi-authz
+        working-directory: wasi-auth
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          path: wasi-authz
+          path: wasi-auth
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
+        with:
+          toolchain: 1.93.0
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with:
+          workspaces: wasi-auth
+      - run: bash scripts/test-postgres-kernel-live.sh
+        env:
+          WASI_AUTH_POSTGRES_TEST_URL: postgresql://postgres:postgres@127.0.0.1:5432/wasi_auth_ci
+
+  component:
+    name: Final-WASI component and artifact contracts
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: wasi-auth
+    steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          repository: ${{ env.MIDDLEWARE_REPOSITORY }}
-          ref: ${{ needs.source-contract.outputs.middleware-revision }}
-          path: wasi-http-middleware
+          path: wasi-auth
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: 1.93.0
           targets: wasm32-wasip2
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
-          workspaces: wasi-authz
+          workspaces: wasi-auth
       - run: cargo install wasm-tools --locked --version 1.253.0
       - run: cargo install cargo-cyclonedx --locked --version 0.5.9
+      - run: python3 scripts/test-normalize-sbom.py
       - run: bash scripts/build-components.sh
       - run: bash scripts/build-native-pdp.sh
         env:
@@ -264,28 +257,22 @@ jobs:
         run: git diff --exit-code -- artifacts/SHA256SUMS artifacts/sbom reports/wit
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: wasi-authz-final-wasi-artifacts
+          name: wasi-auth-final-wasi-artifacts
           path: |
-            wasi-authz/artifacts/
-            wasi-authz/reports/wit/
+            wasi-auth/artifacts/
+            wasi-auth/reports/wit/
           if-no-files-found: error
 
   fuzz:
     name: Authorization parser fuzz smoke
-    needs: source-contract
     runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: wasi-authz
+        working-directory: wasi-auth
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          path: wasi-authz
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: ${{ env.MIDDLEWARE_REPOSITORY }}
-          ref: ${{ needs.source-contract.outputs.middleware-revision }}
-          path: wasi-http-middleware
+          path: wasi-auth
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: nightly-2026-03-06
@@ -296,20 +283,14 @@ jobs:
 
   package:
     name: Unpublished package structure
-    needs: source-contract
     runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: wasi-authz
+        working-directory: wasi-auth
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          path: wasi-authz
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: ${{ env.MIDDLEWARE_REPOSITORY }}
-          ref: ${{ needs.source-contract.outputs.middleware-revision }}
-          path: wasi-http-middleware
+          path: wasi-auth
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: 1.93.0
@@ -317,37 +298,32 @@ jobs:
 
   supply-chain:
     name: Local OCI, provenance, and signature dry run
-    needs: [source-contract, component]
+    needs: component
     runs-on: ubuntu-24.04
     env:
-      GOBIN: ${{ runner.temp }}/go-bin
+      GOBIN: ${{ github.workspace }}/go-bin
     defaults:
       run:
-        working-directory: wasi-authz
+        working-directory: wasi-auth
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          path: wasi-authz
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          repository: ${{ env.MIDDLEWARE_REPOSITORY }}
-          ref: ${{ needs.source-contract.outputs.middleware-revision }}
-          path: wasi-http-middleware
+          path: wasi-auth
       - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
         with:
           go-version: "1.26.2"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: wasi-authz-final-wasi-artifacts
-          path: wasi-authz
+          name: wasi-auth-final-wasi-artifacts
+          path: wasi-auth
       - run: go install github.com/sigstore/cosign/v3/cmd/cosign@v3.1.1
       - run: go install oras.land/oras/cmd/oras@v1.3.2
       - run: bash scripts/dry-run-supply-chain.sh
         env:
-          COSIGN_BIN: ${{ runner.temp }}/go-bin/cosign
-          ORAS_BIN: ${{ runner.temp }}/go-bin/oras
+          COSIGN_BIN: ${{ github.workspace }}/go-bin/cosign
+          ORAS_BIN: ${{ github.workspace }}/go-bin/oras
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: wasi-authz-supply-chain-dry-run
-          path: wasi-authz/reports/supply-chain/
+          name: wasi-auth-supply-chain-dry-run
+          path: wasi-auth/reports/supply-chain/
           if-no-files-found: error

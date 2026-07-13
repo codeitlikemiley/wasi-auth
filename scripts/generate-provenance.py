@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate deterministic SLSA/in-toto provenance for local alpha artifacts."""
+"""Generate deterministic SLSA/in-toto provenance for local release artifacts."""
 
 from __future__ import annotations
 
@@ -16,20 +16,19 @@ def digest(path: pathlib.Path) -> str:
 
 def main() -> int:
     """Write one deterministic in-toto statement."""
-    if len(sys.argv) != 8:
+    if len(sys.argv) != 7:
         print(
             "usage: generate-provenance.py REPOSITORY VERSION REVISION "
-            "MIDDLEWARE_REVISION SHA256SUMS WIT_REPORT_DIRECTORY OUTPUT",
+            "SHA256SUMS WIT_REPORT_DIRECTORY OUTPUT",
             file=sys.stderr,
         )
         return 2
     repository = pathlib.Path(sys.argv[1])
     version = sys.argv[2]
     revision = sys.argv[3]
-    middleware_revision = sys.argv[4]
-    checksums = pathlib.Path(sys.argv[5])
-    wit_report_directory = pathlib.Path(sys.argv[6])
-    output = pathlib.Path(sys.argv[7])
+    checksums = pathlib.Path(sys.argv[4])
+    wit_report_directory = pathlib.Path(sys.argv[5])
+    output = pathlib.Path(sys.argv[6])
     subjects = []
     for line in checksums.read_text().splitlines():
         checksum, name = line.split(maxsplit=1)
@@ -47,17 +46,13 @@ def main() -> int:
         "predicateType": "https://slsa.dev/provenance/v1",
         "predicate": {
             "buildDefinition": {
-                "buildType": "https://github.com/codeitlikemiley/wasi-authz/build/v1",
+                "buildType": "https://github.com/codeitlikemiley/wasi-auth/build/v1",
                 "externalParameters": {"version": version},
                 "internalParameters": {},
                 "resolvedDependencies": [
                     {
-                        "uri": "git+https://github.com/codeitlikemiley/wasi-authz",
+                        "uri": "git+https://github.com/codeitlikemiley/wasi-auth",
                         "digest": {"gitCommit": revision},
-                    },
-                    {
-                        "uri": "git+https://github.com/codeitlikemiley/wasi-http-middleware",
-                        "digest": {"gitCommit": middleware_revision},
                     },
                     {
                         "uri": "file:Cargo.lock",
@@ -74,7 +69,7 @@ def main() -> int:
                 ],
             },
             "runDetails": {
-                "builder": {"id": "https://github.com/codeitlikemiley/wasi-authz/local"},
+                "builder": {"id": "https://github.com/codeitlikemiley/wasi-auth/local"},
                 "metadata": {"invocationId": revision},
                 "byproducts": [],
             },

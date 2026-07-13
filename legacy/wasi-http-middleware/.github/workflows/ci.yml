@@ -1,0 +1,215 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "23 4 * * *"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  rust:
+    name: Rust 1.93 quality gates
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
+        with:
+          toolchain: 1.93.0
+          components: clippy,rustfmt
+          targets: wasm32-wasip2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --locked --all-targets --all-features -- -D warnings
+      - run: cargo test --workspace --locked --all-features
+      - run: cargo test --workspace --locked --doc
+      - run: cargo doc --workspace --locked --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: -Dmissing-docs -Drustdoc::broken-intra-doc-links
+
+  current-stable:
+    name: Current stable Rust canary
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
+        with:
+          toolchain: stable
+          components: clippy,rustfmt
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+      - run: cargo clippy --workspace --locked --all-targets --all-features -- -D warnings
+      - run: cargo test --workspace --locked --all-features
+
+  release-structure:
+    name: Semver and package structure
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
+        with:
+          toolchain: 1.93.0
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+      - run: cargo install cargo-semver-checks --locked --version 0.48.0
+      - run: bash scripts/check-semver-baseline.sh
+      - run: bash scripts/check-packages.sh
+
+  dependencies:
+    name: Dependency policy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
+        with:
+          toolchain: 1.93.0
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+      - run: cargo install cargo-audit --locked --version 0.22.1
+      - run: cargo install cargo-deny --locked --version 0.20.2
+      - run: cargo audit --deny warnings
+      - run: cargo deny check
+
+  components:
+    name: Final-WASI component contracts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
+        with:
+          toolchain: 1.93.0
+          targets: wasm32-wasip2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+      - run: cargo install wasm-tools --locked --version 1.253.0
+      - run: cargo install wac-cli --locked --version 0.10.1
+      - run: cargo install cargo-cyclonedx --locked --version 0.5.9
+      - run: bash scripts/build-components.sh
+      - run: bash scripts/check-component-contracts.sh
+      - run: bash scripts/compose-wasmtime.sh artifacts/test-components/echo-service.wasm
+      - run: bash scripts/compose-secure-defaults.sh artifacts/test-components/echo-service.wasm
+      - run: bash scripts/generate-checksums.sh
+      - run: bash scripts/generate-sbom.sh
+      - name: Verify checked-in WIT reports are current
+        run: git diff --exit-code -- reports/wit
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: final-wasi-components
+          path: |
+            artifacts/
+            reports/wit/
+          if-no-files-found: error
+
+  wasmtime:
+    name: Wasmtime 46 behavioral gates
+    needs: components
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
+        with:
+          toolchain: 1.93.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: final-wasi-components
+          path: .
+      - run: cargo install wac-cli --locked --version 0.10.1
+      - run: cargo install wasm-tools --locked --version 1.253.0
+      - uses: bytecodealliance/actions/wasmtime/setup@9152e710e9f7182e4c29ad218e4f335a7b203613
+        with:
+          version: "46.0.1"
+      - run: cargo install oha --locked --version 1.14.0
+      - run: bash scripts/run-wasmtime-e2e.sh
+        env:
+          STREAM_FAILURE_REPEATS: "50"
+      - run: bash scripts/run-wasmtime-secure-defaults-e2e.sh
+        env:
+          STREAM_FAILURE_REPEATS: "50"
+      - run: bash scripts/compare-wasmtime-profiles.sh
+      - name: Record diagnostic component-boundary overhead
+        run: bash scripts/benchmark-components.sh
+      - name: Scheduled ten-minute Wasmtime soak
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: HOST=wasmtime bash scripts/soak-runtime.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: wasmtime-reports
+          path: reports/
+          if-no-files-found: warn
+
+  spin-canary:
+    name: Spin expected incompatibility (${{ matrix.profile }})
+    needs: components
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: stable-final
+            revision: v4.0.2
+          - profile: native-middleware
+            revision: 27451471b8ba0faeffa01c5a4ddd6daee9a9d526
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
+        with:
+          toolchain: 1.93.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: final-wasi-components
+          path: .
+      - run: cargo install wac-cli --locked --version 0.10.1
+      - run: cargo install wasm-tools --locked --version 1.253.0
+      - name: Build exact Spin canary
+        run: |
+          git clone --filter=blob:none https://github.com/spinframework/spin.git "${RUNNER_TEMP}/spin"
+          git -C "${RUNNER_TEMP}/spin" checkout "${{ matrix.revision }}"
+          cargo install --locked --path "${RUNNER_TEMP}/spin" --root "${RUNNER_TEMP}/spin-install" --no-default-features
+      - run: bash scripts/run-spin-e2e.sh
+        env:
+          SPIN_BIN: ${{ runner.temp }}/spin-install/bin/spin
+          SPIN_COMPAT_PROFILE: ${{ matrix.profile }}
+
+  fuzz:
+    name: Metadata parser fuzz smoke
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
+        with:
+          toolchain: nightly-2026-03-06
+      - run: cargo install cargo-fuzz --locked --version 0.13.2
+      - run: bash scripts/run-fuzz-smoke.sh
+        env:
+          FUZZ_RUNS: "10000"
+
+  supply-chain:
+    name: Local OCI and signature dry run
+    needs: components
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
+        with:
+          go-version: "1.26.2"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: final-wasi-components
+          path: .
+      - run: go install github.com/sigstore/cosign/v3/cmd/cosign@v3.1.1
+      - run: go install oras.land/oras/cmd/oras@v1.3.2
+      - run: bash scripts/dry-run-supply-chain.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: supply-chain-dry-run
+          path: reports/supply-chain/
+          if-no-files-found: error

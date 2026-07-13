@@ -1,0 +1,22 @@
+[package]
+name = "wasi-http-middleware-mock-authn-broker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Deterministic WASIp3 authentication broker fixture"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+wasip3 = { workspace = true, features = ["async-spawn"] }
+wit-bindgen.workspace = true
+
+[lints]
+workspace = true

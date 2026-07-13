@@ -1,0 +1,35 @@
+[package]
+name = "wasi-http-middleware-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+http = "1.4.1"
+libfuzzer-sys = "0.4"
+wasi-http-metadata = { path = "../crates/metadata" }
+wasi-http-policy-core = { path = "../crates/policy-core" }
+
+[[bin]]
+name = "auth-context"
+path = "fuzz_targets/auth_context.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "headers"
+path = "fuzz_targets/headers.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "path"
+path = "fuzz_targets/path.rs"
+test = false
+doc = false
+bench = false

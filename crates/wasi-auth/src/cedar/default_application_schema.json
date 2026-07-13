@@ -1,0 +1,29 @@
+{
+  "": {
+    "entityTypes": {
+      "User": {"shape": {"type": "Record", "attributes": {
+        "wasi_issuer": {"type": "String", "required": true},
+        "wasi_assurance": {"type": "String", "required": true},
+        "wasi_system_administrator": {"type": "Boolean", "required": true},
+        "wasi_permissions": {"type": "Set", "element": {"type": "String"}, "required": true},
+        "wasi_organization_id": {"type": "String", "required": false}
+      }}},
+      "ApplicationResource": {"shape": {"type": "Record", "attributes": {
+        "wasi_organization_id": {"type": "String", "required": false}
+      }}}
+    },
+    "actions": {
+      "authorization.check": {"appliesTo": {
+        "principalTypes": ["User"],
+        "resourceTypes": ["ApplicationResource"],
+        "context": {"type": "Record", "attributes": {
+          "requested_action": {"type": "String", "required": true},
+          "requested_resource_type": {"type": "String", "required": true},
+          "resource_owner_id": {"type": "String", "required": false},
+          "resource_state": {"type": "String", "required": false},
+          "wasi_organization_id": {"type": "String", "required": false}
+        }}
+      }}
+    }
+  }
+}

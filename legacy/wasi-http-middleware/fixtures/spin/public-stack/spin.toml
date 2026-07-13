@@ -1,0 +1,32 @@
+spin_manifest_version = 2
+
+[application]
+name = "wasi-http-middleware-public-stack"
+version = "0.2.0-alpha.1"
+
+[[trigger.http]]
+route = "/..."
+component = "application"
+dependencies.middleware = [
+  { component = "request-id" },
+  { component = "security-headers" },
+  { component = "cors", inherit_configuration = ["environment"] },
+]
+
+[component.application]
+source = "../../../artifacts/test-components/echo-service.wasm"
+
+[component.application.environment]
+WASI_MIDDLEWARE_CORS_ORIGINS = "https://public.example"
+WASI_MIDDLEWARE_CORS_METHODS = "GET,HEAD"
+WASI_MIDDLEWARE_CORS_HEADERS = "content-type"
+WASI_MIDDLEWARE_CORS_ALLOW_CREDENTIALS = "false"
+
+[component.request-id]
+source = "../../../artifacts/components/request-id.wasm"
+
+[component.security-headers]
+source = "../../../artifacts/components/security-headers.wasm"
+
+[component.cors]
+source = "../../../artifacts/components/cors.wasm"

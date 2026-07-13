@@ -3,6 +3,9 @@
 # graph, not known vulnerabilities. They remain visible in SECURITY.md and are
 # reviewed before every release.
 ignore = [
+    # Private RSA operations are denied by wasi-auth's installed JWT provider;
+    # this transitive crate is retained only for provider public-key verify.
+    "RUSTSEC-2023-0071",
     "RUSTSEC-2024-0436", # paste
     "RUSTSEC-2026-0173", # proc-macro-error2
 ]

@@ -1,0 +1,52 @@
+[workspace]
+members = [
+    "crates/*",
+    "components/passthrough",
+    "components/authn-policy",
+    "components/request-id",
+    "components/security-headers",
+    "components/cors",
+    "components/secure-defaults",
+    "test-components/echo-service",
+    "test-components/mock-authn-broker",
+]
+resolver = "2"
+exclude = ["fuzz"]
+
+[workspace.package]
+version = "0.2.0-alpha.3"
+edition = "2024"
+rust-version = "1.93.0"
+license = "MIT OR Apache-2.0"
+authors = ["Uriah Galang <codeitlikemiley@gmail.com>"]
+repository = "https://github.com/codeitlikemiley/wasi-http-middleware"
+
+[workspace.dependencies]
+futures = "0.3.31"
+http = "1.4.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+wit-bindgen = { version = "=0.59.0", features = ["async-spawn"] }
+wasip3 = { version = "=0.7.0", features = ["http-compat"] }
+wasi-http-metadata = { path = "crates/metadata", version = "=0.2.0-alpha.3" }
+wasi-http-authn = { path = "crates/authn", version = "=0.2.0-alpha.3" }
+wasi-http-authn-runtime = { path = "crates/authn-runtime", version = "=0.2.0-alpha.3" }
+wasi-http-policy-core = { path = "crates/policy-core", version = "=0.2.0-alpha.3" }
+wasi-http-middleware-component-support = { path = "crates/component-support", version = "=0.2.0-alpha.3" }
+
+[workspace.lints.rust]
+missing_docs = "deny"
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

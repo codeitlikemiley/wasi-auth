@@ -1,0 +1,21 @@
+[package]
+name = "wasi-http-authn"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "In-process authentication boundary for WASI HTTP applications"
+
+[dependencies]
+http.workspace = true
+thiserror.workspace = true
+wasi-http-metadata.workspace = true
+wasi-http-policy-core.workspace = true
+
+[dev-dependencies]
+futures.workspace = true
+
+[lints]
+workspace = true

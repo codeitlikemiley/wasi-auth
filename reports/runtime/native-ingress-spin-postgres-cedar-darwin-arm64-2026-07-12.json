@@ -1,0 +1,86 @@
+{
+  "report_version": 1,
+  "recorded_at": "2026-07-12",
+  "promotion_status": "passed-local-rc",
+  "profile": "native-ingress-spin-postgres-embedded-cedar",
+  "environment": {
+    "cpu": "Apple M1 Pro",
+    "memory_bytes": 17179869184,
+    "os": "macOS arm64",
+    "rustc": "1.95.0 (59807616e 2026-04-14)",
+    "spin": "4.1.0-pre0 c34c584d (Rust 1.94 minimum)",
+    "postgresql": "14.20 Homebrew",
+    "network": "loopback HTTP; public TLS and load-balancer latency excluded"
+  },
+  "artifacts": {
+    "fullstack_wasm_sha256": "3f2723b0e088a52f4197df7cfa08d6577345950d0493bdc51fa5b13c944b9026",
+    "trusted_ingress_sha256": "e076fc4a900f9c225b348005bc96784cb2defcab7af704d8d2ef32ea0b159d02",
+    "spin_runtime_sha256": "14705044a678d2b1ae4ddf0a1ce62c451eae7b432912662dae0ea609a6293de1",
+    "final_wasi_http_export": "wasi:http/handler@0.3.0",
+    "preview1_imports": 0
+  },
+  "paired_protected_authorization": {
+    "repetitions": 5,
+    "duration_seconds": 15,
+    "concurrency": 100,
+    "max_regression_percent": 10.0,
+    "median_throughput_regression_percent": -382.639,
+    "median_p99_regression_percent": -76.98,
+    "status_failures": 0,
+    "transport_failures": 0,
+    "promotion_passed": true,
+    "pairs": [
+      { "direct_rps": 4996.964, "ingress_rps": 24164.613, "direct_p99_ms": 47.069, "ingress_p99_ms": 10.391 },
+      { "direct_rps": 4592.608, "ingress_rps": 23804.383, "direct_p99_ms": 53.751, "ingress_p99_ms": 10.674 },
+      { "direct_rps": 5099.535, "ingress_rps": 23828.434, "direct_p99_ms": 43.941, "ingress_p99_ms": 10.642 },
+      { "direct_rps": 4997.136, "ingress_rps": 23325.945, "direct_p99_ms": 45.78, "ingress_p99_ms": 11.86 },
+      { "direct_rps": 5111.001, "ingress_rps": 24667.664, "direct_p99_ms": 44.583, "ingress_p99_ms": 10.263 }
+    ]
+  },
+  "absolute_authorization": {
+    "repetitions": 5,
+    "duration_seconds": 60,
+    "concurrency": 100,
+    "p99_limit_ms": 25.0,
+    "median_requests_per_second": 24501.972,
+    "worst_p99_ms": 10.847,
+    "revocation_http_status": 401,
+    "revocation_propagation_ms": 56.533,
+    "status_failures": 0,
+    "transport_failures": 0,
+    "promotion_passed": true,
+    "samples": [
+      { "requests_per_second": 24264.31, "p99_ms": 10.485 },
+      { "requests_per_second": 23616.355, "p99_ms": 10.847 },
+      { "requests_per_second": 24501.972, "p99_ms": 10.467 },
+      { "requests_per_second": 25269.922, "p99_ms": 9.952 },
+      { "requests_per_second": 24871.542, "p99_ms": 10.285 }
+    ]
+  },
+  "soak": {
+    "duration_seconds": 600,
+    "concurrency": 100,
+    "requests_per_second": 24838.391,
+    "p99_ms": 10.278,
+    "status_failures": 0,
+    "transport_failures": 0,
+    "revocation_http_status": 401,
+    "revocation_propagation_ms": 62.845,
+    "sensitive_log_findings": 0,
+    "ingress_second_half_growth_kib": 0,
+    "spin_second_half_growth_kib": -29536,
+    "promotion_passed": true
+  },
+  "transport_contract": {
+    "fullstack_grpc_capabilities": "passed",
+    "counter_unary": "passed",
+    "counter_server_streaming": "passed",
+    "counter_client_streaming": "passed",
+    "counter_bidirectional_streaming": "passed"
+  },
+  "limitations": [
+    "This is local RC evidence, not signed release provenance.",
+    "Public TLS, a production load balancer, and a remote managed PostgreSQL service must be requalified for each deployment.",
+    "SpiceDB and component-composed middleware have independent unmet promotion gates."
+  ]
+}
