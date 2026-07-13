@@ -484,6 +484,191 @@ struct HttpWebhookResponse {
     delivery_id: String,
 }
 
+/// Secret API credential for the Resend email API.
+#[cfg(feature = "mail-resend")]
+#[derive(Clone)]
+pub struct ResendApiKey(String);
+
+#[cfg(feature = "mail-resend")]
+impl ResendApiKey {
+    /// Validates a bounded Resend API key.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResendConfigurationError::InvalidApiKey`] for malformed input.
+    pub fn new(value: impl Into<String>) -> Result<Self, ResendConfigurationError> {
+        let value = value.into();
+        if !value.starts_with("re_") || value.len() > 4_096 || value.chars().any(char::is_control) {
+            return Err(ResendConfigurationError::InvalidApiKey);
+        }
+        Ok(Self(value))
+    }
+}
+
+#[cfg(feature = "mail-resend")]
+impl fmt::Debug for ResendApiKey {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("ResendApiKey([REDACTED])")
+    }
+}
+
+/// Validated sender identity used by Resend.
+#[cfg(feature = "mail-resend")]
+#[derive(Clone, Debug)]
+pub struct ResendFromAddress(String);
+
+#[cfg(feature = "mail-resend")]
+impl ResendFromAddress {
+    /// Validates a sender address or `Name <address>` identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResendConfigurationError::InvalidFromAddress`] for malformed input.
+    pub fn new(value: impl Into<String>) -> Result<Self, ResendConfigurationError> {
+        let value = value.into();
+        if value.is_empty()
+            || value.len() > 320
+            || value.chars().any(char::is_control)
+            || !value.contains('@')
+        {
+            return Err(ResendConfigurationError::InvalidFromAddress);
+        }
+        Ok(Self(value))
+    }
+}
+
+/// Invalid Resend adapter configuration.
+#[cfg(feature = "mail-resend")]
+#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
+#[non_exhaustive]
+pub enum ResendConfigurationError {
+    /// API key is missing, malformed, or oversized.
+    #[error("Resend API key is invalid")]
+    InvalidApiKey,
+    /// Sender identity is missing, malformed, or oversized.
+    #[error("Resend sender identity is invalid")]
+    InvalidFromAddress,
+}
+
+/// Resend delivery failure with provider details and credentials redacted.
+#[cfg(feature = "mail-resend")]
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ResendMailError {
+    /// Request serialization or construction failed.
+    #[error("Resend mail request is invalid")]
+    InvalidRequest,
+    /// Runtime outbound HTTP failed.
+    #[error("Resend mail transport failed")]
+    Transport(#[source] Box<dyn StdError + Send + Sync>),
+    /// Resend returned a non-success status.
+    #[error("Resend rejected delivery")]
+    Provider,
+    /// Resend returned a malformed or oversized response.
+    #[error("Resend response is invalid")]
+    InvalidResponse,
+}
+
+/// Transactional mail adapter for Resend's `POST /emails` API.
+///
+/// The outbox correlation ID is sent as Resend's idempotency key so retries
+/// remain safe after a provider success followed by a lost database ack.
+#[cfg(feature = "mail-resend")]
+#[derive(Clone)]
+pub struct ResendMailer<T> {
+    api_key: ResendApiKey,
+    from: ResendFromAddress,
+    transport: T,
+}
+
+#[cfg(feature = "mail-resend")]
+impl<T> fmt::Debug for ResendMailer<T> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ResendMailer")
+            .field("api_key", &self.api_key)
+            .field("from", &"[REDACTED]")
+            .field("transport", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[cfg(feature = "mail-resend")]
+impl<T> ResendMailer<T> {
+    /// Constructs a Resend mailer with validated configuration.
+    #[must_use]
+    pub const fn new(api_key: ResendApiKey, from: ResendFromAddress, transport: T) -> Self {
+        Self {
+            api_key,
+            from,
+            transport,
+        }
+    }
+}
+
+#[cfg(feature = "mail-resend")]
+impl<T> Mailer for ResendMailer<T>
+where
+    T: HttpMailTransport,
+{
+    type Error = ResendMailError;
+
+    async fn send(&self, message: &EmailMessage) -> Result<DeliveryId, Self::Error> {
+        let body = serde_json::to_vec(&ResendRequest {
+            from: &self.from.0,
+            to: [message.recipient().as_str()],
+            subject: message.subject(),
+            text: message.text_body(),
+        })
+        .map_err(|_| ResendMailError::InvalidRequest)?;
+        let request = Request::builder()
+            .method(http::Method::POST)
+            .uri("https://api.resend.com/emails")
+            .header(CONTENT_TYPE, "application/json")
+            .header(ACCEPT, "application/json")
+            .header(CONTENT_LENGTH, body.len())
+            .header(AUTHORIZATION, format!("Bearer {}", self.api_key.0))
+            .header("Idempotency-Key", message.correlation_id())
+            .body(body)
+            .map_err(|_| ResendMailError::InvalidRequest)?;
+        let response = self
+            .transport
+            .send(request)
+            .await
+            .map_err(|error| ResendMailError::Transport(Box::new(error)))?;
+        if !response.status().is_success() {
+            return Err(ResendMailError::Provider);
+        }
+        if response.body().len() > MAX_WEBHOOK_RESPONSE_BYTES {
+            return Err(ResendMailError::InvalidResponse);
+        }
+        let response: ResendResponse = serde_json::from_slice(response.body())
+            .map_err(|_| ResendMailError::InvalidResponse)?;
+        if response.id.is_empty()
+            || response.id.len() > 512
+            || response.id.chars().any(char::is_control)
+        {
+            return Err(ResendMailError::InvalidResponse);
+        }
+        Ok(DeliveryId::new(response.id))
+    }
+}
+
+#[cfg(feature = "mail-resend")]
+#[derive(Serialize)]
+struct ResendRequest<'a> {
+    from: &'a str,
+    to: [&'a str; 1],
+    subject: &'a str,
+    text: &'a str,
+}
+
+#[cfg(feature = "mail-resend")]
+#[derive(Deserialize)]
+struct ResendResponse {
+    id: String,
+}
+
 /// In-memory message retained by the development capture adapter.
 #[cfg(any(test, feature = "mail-capture"))]
 #[derive(Clone, Debug)]
@@ -644,5 +829,62 @@ mod tests {
                 HttpMailConfigurationError::InvalidEndpoint
             );
         }
+    }
+
+    #[test]
+    #[cfg(feature = "mail-resend")]
+    fn resend_mailer_uses_provider_contract_and_redacts_credentials() {
+        #[derive(Default)]
+        struct FakeTransport {
+            request: std::sync::Mutex<Option<Request<Vec<u8>>>>,
+        }
+
+        impl HttpMailTransport for FakeTransport {
+            type Error = std::io::Error;
+
+            async fn send(
+                &self,
+                request: Request<Vec<u8>>,
+            ) -> Result<Response<Vec<u8>>, Self::Error> {
+                *self.request.lock().expect("request lock") = Some(request);
+                Ok(Response::builder()
+                    .status(200)
+                    .header(CONTENT_TYPE, "application/json")
+                    .body(br#"{"id":"resend-message-123"}"#.to_vec())
+                    .expect("response"))
+            }
+        }
+
+        let mailer = ResendMailer::new(
+            ResendApiKey::new("re_super-secret").expect("API key"),
+            ResendFromAddress::new("Workspace <auth@example.test>").expect("sender"),
+            FakeTransport::default(),
+        );
+        let message = EmailMessage::new(
+            EmailKind::Verification,
+            Recipient::new("user@example.test").expect("recipient"),
+            "Verify email",
+            "https://example.test/verify?token=one-time-secret",
+            "mail-123",
+        )
+        .expect("message");
+
+        let delivery = futures::executor::block_on(mailer.send(&message)).expect("delivery");
+        assert_eq!(delivery.as_str(), "resend-message-123");
+        let request = mailer
+            .transport
+            .request
+            .lock()
+            .expect("request lock")
+            .take()
+            .expect("request captured");
+        assert_eq!(request.uri(), "https://api.resend.com/emails");
+        assert_eq!(request.headers()["Idempotency-Key"], "mail-123");
+        let body: serde_json::Value = serde_json::from_slice(request.body()).expect("JSON body");
+        assert_eq!(body["from"], "Workspace <auth@example.test>");
+        assert_eq!(body["to"][0], "user@example.test");
+        let debug = format!("{mailer:?}");
+        assert!(!debug.contains("re_super-secret"));
+        assert!(!debug.contains("auth@example.test"));
     }
 }

@@ -1,6 +1,6 @@
 # Release-candidate process
 
-The prepared version is `0.1.0-rc.1`. No command in the implementation phase
+The prepared version is `0.1.0-rc.2`. No command in the implementation phase
 creates a remote, tag, registry push, or crates.io publication.
 
 ## Source order
@@ -27,7 +27,7 @@ The package graph, rather than repository ownership, determines publication
 order:
 
 1. `leptos-wasi-runtime 0.4.2-rc.1`, aliased as `leptos_wasi`;
-2. `wasi-auth 0.1.0-rc.1`;
+2. `wasi-auth 0.1.0-rc.2`;
 3. the `ddd_cqrs_es 0.3.0-rc.1` library;
 4. `ddd-cqrs-es-cli 0.3.0-rc.1`; and
 5. generated fullstack consumers.

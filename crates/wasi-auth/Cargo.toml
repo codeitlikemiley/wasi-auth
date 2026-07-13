@@ -1,7 +1,7 @@
 [package]
 name = "wasi-auth"
 description = "Production authentication, authorization, and trusted ingress for WASI applications"
-version.workspace = true
+version = "0.1.0-rc.2"
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -48,6 +48,7 @@ postgres-native = [
 postgres-spin = ["postgres-kernel", "dep:spin-sdk"]
 mail-smtp = []
 mail-http = ["http"]
+mail-resend = ["mail-http"]
 mail-capture = []
 component-experimental = []
 testkit = []
@@ -56,6 +57,7 @@ outbox-worker = [
     "password",
     "postgres-native",
     "mail-http",
+    "mail-resend",
     "mail-capture",
     "spicedb",
     "dep:reqwest",

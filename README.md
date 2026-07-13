@@ -6,7 +6,7 @@ multi-tenant organizations, native HTTP security policy, embedded Cedar,
 optional direct SpiceDB, Leptos context, and Spin gRPC request support behind
 an empty-by-default feature graph.
 
-Current version: `0.1.0-rc.1`.
+Current version: `0.1.0-rc.2`.
 
 The standalone crate baseline is Rust 1.93, `wasip3` 0.7.0 with final
 `wasi:http@0.3.0`, and Wasmtime 46.0.1. Tagged Spin 4.0.2 cannot link the
@@ -28,18 +28,20 @@ also private workspace packages.
 
 ```toml
 [dependencies]
-wasi-auth = { version = "0.1.0-rc.1", default-features = false, features = [
+wasi-auth = { version = "0.1.0-rc.2", default-features = false, features = [
   "fullstack-spin",
   "postgres-spin",
 ] }
 ```
 
 Development templates use PostgreSQL and `mail-capture`. Production startup
-selects PostgreSQL while the native worker owns the documented HTTP webhook
-adapter and optional SpiceDB writes. Install the worker from the same package:
+selects PostgreSQL while the native worker owns the first-class Resend or
+provider-neutral HTTP webhook adapter and optional SpiceDB writes. Provider
+credentials never enter the Spin guest. Install the worker from the same
+package:
 
 ```bash
-cargo install wasi-auth --version 0.1.0-rc.1 \
+cargo install wasi-auth --version 0.1.0-rc.2 \
   --features outbox-worker --bin wasi-auth-outbox-worker
 ```
 
@@ -77,6 +79,22 @@ encrypted; relationship rows use typed, non-secret relational metadata. The
 native worker leases bounded batches with `FOR UPDATE SKIP LOCKED`, retries,
 dead-letters poison records, and acknowledges provider delivery tokens.
 Delivery no longer depends on request traffic.
+
+The outbox worker is not an email server. Resend or the configured HTTP
+provider remains the email service; `wasi-auth-outbox-worker` is the native
+process that reads durable delivery intents from PostgreSQL and calls that
+service. A registration request commits the account change and encrypted mail
+intent together, returns without waiting for the provider, and lets the worker
+record `pending`, `leased`, `delivered`, retry, or `dead_letter` state. If the
+worker is stopped, no intent is lost: jobs remain pending until a worker is
+started again. Provider credentials stay in the worker environment and never
+enter the Spin guest.
+
+Run the worker beside every production Spin deployment. For a local fullstack
+application, `make dev` starts the worker automatically; running only `make
+spin` starts the request component but cannot deliver email. Use separate
+`make spin` and `make outbox-worker` terminals only when independent logs are
+needed.
 
 Install the checksum-pinned SpiceDB and `zed` binaries and run the live
 relationship matrix with:

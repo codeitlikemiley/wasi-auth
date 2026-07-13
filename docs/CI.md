@@ -38,7 +38,7 @@ immutable migration catalog before and after the contracts.
 The legacy API inventory is not a SemVer compatibility claim. The compatibility
 packages are private and the gate only detects behavioral drift from
 [`reports/semver/alpha-api-inventory.md`](../reports/semver/alpha-api-inventory.md).
-The final `wasi-auth 0.1.0-rc.1` revision becomes the public baseline for
+The final `wasi-auth 0.1.0-rc.2` revision becomes the public baseline for
 subsequent release checks. No CI lane checks out DDD: the authentication crate,
 package archive, and PostgreSQL live runner are independently releasable.
 `PACKAGE_STRUCTURAL_ONLY=1` exists for archive inspection only and is never

@@ -1848,7 +1848,7 @@ dependencies = [
 
 [[package]]
 name = "leptos-wasi-authz"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "axum-core",
  "bytes",
@@ -4338,7 +4338,7 @@ dependencies = [
 
 [[package]]
 name = "wasi-auth"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -4377,7 +4377,7 @@ dependencies = [
 
 [[package]]
 name = "wasi-auth-ingress"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "axum",
  "base64",
@@ -4397,7 +4397,7 @@ dependencies = [
 
 [[package]]
 name = "wasi-auth-migrate"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "serde_json",
  "tokio",
@@ -4406,7 +4406,7 @@ dependencies = [
 
 [[package]]
 name = "wasi-authz-cedar"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "base64",
  "cedar-policy",
@@ -4419,7 +4419,7 @@ dependencies = [
 
 [[package]]
 name = "wasi-authz-cedar-pdp"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "http",
  "wasi-authz-cedar",
@@ -4429,7 +4429,7 @@ dependencies = [
 
 [[package]]
 name = "wasi-authz-cedar-pdp-component"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "bytes",
  "http",
@@ -4442,7 +4442,7 @@ dependencies = [
 
 [[package]]
 name = "wasi-authz-client"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "bytes",
  "futures",
@@ -4456,7 +4456,7 @@ dependencies = [
 
 [[package]]
 name = "wasi-authz-contract"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -4465,7 +4465,7 @@ dependencies = [
 
 [[package]]
 name = "wasi-authz-http"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "http",
  "wasi-authz-client",
@@ -4477,7 +4477,7 @@ dependencies = [
 
 [[package]]
 name = "wasi-authz-http-pep"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "http",
  "wasi-authz-client",
@@ -4492,7 +4492,7 @@ dependencies = [
 
 [[package]]
 name = "wasi-authz-spicedb"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "base64",
  "http",
@@ -4506,7 +4506,7 @@ dependencies = [
 
 [[package]]
 name = "wasi-authz-spicedb-pdp-component"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "bytes",
  "http",
@@ -4519,7 +4519,7 @@ dependencies = [
 
 [[package]]
 name = "wasi-authz-testkit"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "thiserror 2.0.18",
  "wasi-authz-client",
