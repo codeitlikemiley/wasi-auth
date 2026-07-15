@@ -16,7 +16,7 @@ use crate::{
 };
 use crate::{
     authentication::{Clock, RandomSource, RelationshipOutboxIntent},
-    mail::{EmailKind, EmailMessage, Mailer, Recipient},
+    mail::{EmailKind, EmailMessage, MailActionUrl, Mailer, Recipient},
     postgres::workflows::OutboxSealingKey,
 };
 
@@ -115,7 +115,12 @@ impl Drop for OutboxLease {
 }
 
 #[derive(Deserialize)]
-struct MailPayload {
+struct MailPayloadVersion {
+    version: u8,
+}
+
+#[derive(Deserialize)]
+struct MailPayloadV1 {
     version: u8,
     kind: String,
     recipient: String,
@@ -123,9 +128,28 @@ struct MailPayload {
     redirect_uri: String,
 }
 
-impl Drop for MailPayload {
+impl Drop for MailPayloadV1 {
     fn drop(&mut self) {
         self.token.zeroize();
+    }
+}
+
+#[derive(Deserialize)]
+struct MailPayloadV2 {
+    version: u8,
+    kind: String,
+    recipient: String,
+    subject: String,
+    text_body: String,
+    html_body: String,
+    action_url: String,
+}
+
+impl Drop for MailPayloadV2 {
+    fn drop(&mut self) {
+        self.text_body.zeroize();
+        self.html_body.zeroize();
+        self.action_url.zeroize();
     }
 }
 
@@ -333,7 +357,20 @@ where
                 .open(key_version, payload_ciphertext)
                 .map_err(|_| ())?,
         );
-        let payload = serde_json::from_slice::<MailPayload>(&plaintext).map_err(|_| ())?;
+        let version = serde_json::from_slice::<MailPayloadVersion>(&plaintext).map_err(|_| ())?;
+        match version.version {
+            1 => self.message_from_v1(deduplication_key, &plaintext),
+            2 => self.message_from_v2(deduplication_key, &plaintext),
+            _ => Err(()),
+        }
+    }
+
+    fn message_from_v1(
+        &self,
+        deduplication_key: &str,
+        plaintext: &[u8],
+    ) -> Result<EmailMessage, ()> {
+        let payload = serde_json::from_slice::<MailPayloadV1>(plaintext).map_err(|_| ())?;
         if payload.version != 1
             || !payload.redirect_uri.starts_with('/')
             || payload.redirect_uri.starts_with("//")
@@ -359,13 +396,47 @@ where
             _ => return Err(()),
         };
         let recipient = Recipient::new(payload.recipient.clone()).map_err(|_| ())?;
+        let action_url =
+            MailActionUrl::new(self.public_base_url.one_time_url(path, &payload.token))
+                .map_err(|_| ())?;
         EmailMessage::new(
             kind,
             recipient,
             subject,
-            self.public_base_url.one_time_url(path, &payload.token),
+            action_url.as_str(),
             deduplication_key.to_owned(),
         )
+        .map(|message| message.with_action_url(action_url))
+        .map_err(|_| ())
+    }
+
+    fn message_from_v2(
+        &self,
+        deduplication_key: &str,
+        plaintext: &[u8],
+    ) -> Result<EmailMessage, ()> {
+        let payload = serde_json::from_slice::<MailPayloadV2>(plaintext).map_err(|_| ())?;
+        if payload.version != 2 {
+            return Err(());
+        }
+        let kind = match payload.kind.as_str() {
+            "email_verification" => EmailKind::Verification,
+            "password_reset" => EmailKind::PasswordReset,
+            "invitation" => EmailKind::Invitation,
+            "security_notification" => EmailKind::SecurityNotification,
+            _ => return Err(()),
+        };
+        let recipient = Recipient::new(payload.recipient.clone()).map_err(|_| ())?;
+        let action_url = MailActionUrl::new(payload.action_url.clone()).map_err(|_| ())?;
+        EmailMessage::new(
+            kind,
+            recipient,
+            payload.subject.clone(),
+            payload.text_body.clone(),
+            deduplication_key.to_owned(),
+        )
+        .and_then(|message| message.with_html_body(payload.html_body.clone()))
+        .map(|message| message.with_action_url(action_url))
         .map_err(|_| ())
     }
 

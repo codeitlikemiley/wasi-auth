@@ -2,7 +2,7 @@
 
 pub use wasi_auth::schema::native::{
     MigrationAction as MigrationCommand, MigrationReport,
-    MigrationRunnerError as MigrationToolError,
+    MigrationRunnerError as MigrationToolError, OrganizationSlugBackfillReport,
 };
 use wasi_auth::schema::{native::MigrationRunner, schema_migrations};
 
@@ -17,6 +17,19 @@ pub async fn run(
     command: MigrationCommand,
 ) -> Result<MigrationReport, MigrationToolError> {
     MigrationRunner::run(database_url, command).await
+}
+
+/// Backfills one bounded batch of missing organization slugs.
+///
+/// # Errors
+///
+/// Returns validation, connection, or PostgreSQL failures from the reusable
+/// migration runner.
+pub async fn backfill_organization_slugs(
+    database_url: &str,
+    batch_size: u32,
+) -> Result<OrganizationSlugBackfillReport, MigrationToolError> {
+    MigrationRunner::backfill_organization_slugs(database_url, batch_size).await
 }
 
 /// Returns the immutable migration versions bundled with this binary.
@@ -47,6 +60,9 @@ mod tests {
                 "0008_fullstack_redirects",
                 "0009_context_invalidation",
                 "0010_typed_relationship_outbox",
+                "0011_organization_slug_expand",
+                "0012_organization_slug_unique_index",
+                "0013_fullstack_permissions",
             ]
         );
     }

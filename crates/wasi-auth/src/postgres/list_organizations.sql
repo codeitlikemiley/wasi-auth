@@ -1,6 +1,7 @@
 SELECT
     organizations.organization_id::text AS organization_id,
     organizations.name,
+    organizations.slug,
     organizations.status,
     organizations.created_at_ms,
     memberships.role_id,
@@ -21,6 +22,7 @@ WHERE memberships.user_id = $1::text::uuid
 GROUP BY
     organizations.organization_id,
     organizations.name,
+    organizations.slug,
     organizations.status,
     organizations.created_at_ms,
     memberships.role_id

@@ -14,10 +14,9 @@ WITH eligible AS (
       AND sessions.expires_at_ms > $3
       AND sessions.user_security_revision = users.security_revision
       AND users.status = 'active'
-      AND (
-          memberships.role_id NOT IN ('owner', 'admin')
-          OR sessions.assurance IN ('aal2', 'aal3')
-      )
+      -- Selecting a workspace only requires an active membership.
+      -- Privileged mutations (invite, role change, org update, …) still
+      -- enforce AAL2 on their own SQL paths.
     FOR UPDATE OF sessions
 ),
 selected AS (

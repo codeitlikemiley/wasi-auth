@@ -290,6 +290,15 @@ fn live_postgres_verification_replay_and_password_login() -> Result<(), Box<dyn 
                 idempotency_key: format!("create-organization-{unique}"),
                 session_id: first.session_id.clone(),
                 name: "Contract Organization".to_owned(),
+                slug: format!(
+                    "corg{}",
+                    unique
+                        .chars()
+                        .filter(|c| c.is_ascii_alphanumeric())
+                        .take(12)
+                        .collect::<String>()
+                        .to_ascii_lowercase()
+                ),
                 request_id: RequestId::new(format!("create-organization-{unique}"))
                     .expect("request id"),
             };
@@ -439,9 +448,8 @@ fn live_postgres_verification_replay_and_password_login() -> Result<(), Box<dyn 
             );
             let invitation_token = invitation_mailer.messages()?[0]
                 .message()
-                .text_body()
-                .split("?token=")
-                .nth(1)
+                .action_url()
+                .and_then(|url| url.split("?token=").nth(1))
                 .expect("invitation token")
                 .to_owned();
             let invited_session = SessionId::new(invited_session_id.to_string())?;
@@ -572,17 +580,18 @@ fn live_postgres_verification_replay_and_password_login() -> Result<(), Box<dyn 
             let reset_report = reset_worker.dispatch(&reset_mailer, 25).await?;
             assert_eq!(reset_report.delivered, 1);
             let reset_messages = reset_mailer.messages()?;
-            let reset_body = reset_messages
+            let reset_message = reset_messages
                 .iter()
                 .find(|message| {
                     message.message().kind() == wasi_auth::mail::EmailKind::PasswordReset
                 })
                 .expect("password reset mail")
-                .message()
-                .text_body();
-            let reset_token = reset_body
-                .split("?token=")
-                .nth(1)
+                .message();
+            assert!(reset_message.html_body().is_some());
+            assert!(reset_message.text_body().contains("If you did not request"));
+            let reset_token = reset_message
+                .action_url()
+                .and_then(|url| url.split("?token=").nth(1))
                 .expect("reset token")
                 .to_owned();
             let new_password = "an entirely new correct password";
@@ -759,8 +768,9 @@ fn live_postgres_registration_mail_outbox_contract() -> Result<(), Box<dyn Error
                 message.message().recipient().as_str() == email
                     && message
                         .message()
-                        .text_body()
-                        .contains("/verify-email?token=")
+                        .action_url()
+                        .is_some_and(|url| url.contains("/verify-email?token="))
+                    && message.message().html_body().is_some()
             }));
 
             transport

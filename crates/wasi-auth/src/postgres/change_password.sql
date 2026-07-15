@@ -7,7 +7,9 @@ WITH eligible AS (
       AND sessions.revoked_at_ms IS NULL
       AND sessions.expires_at_ms > $5
       AND sessions.user_security_revision = users.security_revision
-      AND sessions.assurance IN ('aal2', 'aal3')
+      -- AAL1 is allowed: current-password verification is the re-auth step.
+      -- AAL2/AAL3 also work after MFA step-up.
+      AND sessions.assurance IN ('aal1', 'aal2', 'aal3')
       AND users.status = 'active'
     FOR UPDATE OF sessions, users
 ),

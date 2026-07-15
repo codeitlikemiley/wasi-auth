@@ -18,6 +18,8 @@ use super::organizations::OrganizationRecord;
 #[cfg(feature = "password")]
 use super::workflows::OutboxSealingKey;
 use super::{PgRow, PgValue, PostgresAuthStore, PostgresTransport, RowDecodeError};
+#[cfg(feature = "password")]
+use crate::mail::{EmailKind, TransactionalMailConfig, durable_transactional_mail_payload};
 use crate::{
     authentication::{Clock, RandomSource},
     context::{RequestId, SessionId},
@@ -52,14 +54,25 @@ pub const ORGANIZATION_PERMISSION_CATALOG: &[&str] = &[
     "counter.change",
     "counter.reset",
     "counter.view",
+    "dashboard.manage",
+    "dashboard.view",
     "member.invite",
     "member.manage",
     "member.view",
     "organization.update",
     "organization.view",
     "ownership.transfer",
+    "query.execute",
+    "query.execute_mutation",
+    "query.manage",
+    "query.view",
+    "resource.manage",
+    "resource.view",
     "role.manage",
     "role.view",
+    "vault.manage",
+    "vault.reveal",
+    "vault.view",
 ];
 
 /// One organization membership.
@@ -600,6 +613,7 @@ pub struct InvitationService<T, C, R> {
     clock: C,
     randomness: R,
     outbox_key: OutboxSealingKey,
+    transactional_mail_config: Option<TransactionalMailConfig>,
 }
 
 #[cfg(feature = "password")]
@@ -617,7 +631,15 @@ impl<T, C, R> InvitationService<T, C, R> {
             clock,
             randomness,
             outbox_key,
+            transactional_mail_config: None,
         }
+    }
+
+    /// Enables enqueue-time rendering with startup-validated mail settings.
+    #[must_use]
+    pub fn with_transactional_mail_config(mut self, config: TransactionalMailConfig) -> Self {
+        self.transactional_mail_config = Some(config);
+        self
     }
 }
 
@@ -658,11 +680,21 @@ where
             .map_err(|_| ManagementError::RandomnessUnavailable)?;
         let token = Zeroizing::new(URL_SAFE_NO_PAD.encode(raw));
         let token_hash: [u8; 32] = Sha256::digest(token.as_bytes()).into();
-        let payload = serde_json::to_vec(&json!({
-            "version": 1, "kind": "invitation", "recipient": email,
-            "token": token.as_str(), "redirect_uri": "/organizations",
-        }))
-        .map_err(|_| ManagementError::Crypto)?;
+        let payload = if let Some(config) = &self.transactional_mail_config {
+            durable_transactional_mail_payload(
+                config,
+                EmailKind::Invitation,
+                &email,
+                token.as_str(),
+            )
+            .map_err(|_| ManagementError::InvalidRequest)?
+        } else {
+            serde_json::to_vec(&json!({
+                "version": 1, "kind": "invitation", "recipient": email,
+                "token": token.as_str(), "redirect_uri": "/organizations",
+            }))
+            .map_err(|_| ManagementError::Crypto)?
+        };
         let sealed = self
             .outbox_key
             .seal(nonce, &payload)
@@ -758,6 +790,7 @@ where
     Ok(OrganizationRecord {
         organization_id: row.required_text("organization_id")?.to_owned(),
         name: row.required_text("name")?.to_owned(),
+        slug: row.text("slug")?.unwrap_or("").to_owned(),
         status: row.required_text("status")?.to_owned(),
         role_id: row.required_text("role_id")?.to_owned(),
         permissions: decode_permissions(row)?,
