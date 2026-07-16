@@ -38,6 +38,9 @@ const UPSERT_ROLE_SQL: &str = include_str!("upsert_role.sql");
 const DELETE_ROLE_SQL: &str = include_str!("delete_role.sql");
 const ASSIGN_MEMBERSHIP_ROLE_SQL: &str = include_str!("assign_membership_role.sql");
 const REMOVE_MEMBERSHIP_SQL: &str = include_str!("remove_membership.sql");
+const TRANSFER_OWNERSHIP_SQL: &str = include_str!("transfer_ownership.sql");
+const LEAVE_ORGANIZATION_SQL: &str = include_str!("leave_organization.sql");
+const ARCHIVE_ORGANIZATION_SQL: &str = include_str!("archive_organization.sql");
 const LIST_INVITATIONS_SQL: &str = include_str!("list_invitations.sql");
 #[cfg(feature = "password")]
 const CREATE_INVITATION_SQL: &str = include_str!("create_invitation.sql");
@@ -487,6 +490,127 @@ where
         } else {
             Err(ManagementError::ProtectedInvariant)
         }
+    }
+
+    /// Transfers organization ownership under AAL2 and `ownership.transfer`.
+    ///
+    /// Atomically promotes `target_user_id` to `owner` then demotes the actor
+    /// from `owner` to `admin`, so the organization never has zero owners.
+    /// Returns the new owner's membership. Audit metadata includes
+    /// `previous_owner_id` and `new_owner_id`.
+    ///
+    /// # Errors
+    ///
+    /// Rejects self-transfer, unauthorized actors, missing targets, and
+    /// final-owner violations surfaced by the owner-count trigger.
+    pub async fn transfer_ownership(
+        &self,
+        session_id: &SessionId,
+        organization_id: &str,
+        target_user_id: &str,
+        request_id: &RequestId,
+    ) -> Result<MembershipRecord, ManagementError<T::Error>> {
+        let organization_id = parse_uuid(organization_id)?;
+        let target_user_id = parse_uuid(target_user_id)?;
+        let now_ms = now_ms(&self.clock);
+        let audit_id = self.uuid(now_ms)?;
+        let rows = self
+            .query(
+                TRANSFER_OWNERSHIP_SQL,
+                vec![
+                    text(session_id.as_str()),
+                    text(organization_id),
+                    text(target_user_id),
+                    i64_value(now_ms),
+                    text(audit_id),
+                    text(request_id.as_str()),
+                ],
+            )
+            .await?;
+        rows.first()
+            .map(decode_membership)
+            .transpose()?
+            .ok_or(ManagementError::ProtectedInvariant)
+    }
+
+    /// Leaves an organization (self-remove) without `member.manage`.
+    ///
+    /// Clears `selected_organization_id` on the actor's sessions that pointed
+    /// at this organization. Fails with [`ManagementError::ProtectedInvariant`]
+    /// when the actor is the last active owner.
+    ///
+    /// # Errors
+    ///
+    /// Rejects missing membership and final-owner violations.
+    pub async fn leave_organization(
+        &self,
+        session_id: &SessionId,
+        organization_id: &str,
+        request_id: &RequestId,
+    ) -> Result<(), ManagementError<T::Error>> {
+        let organization_id = parse_uuid(organization_id)?;
+        let now_ms = now_ms(&self.clock);
+        let audit_id = self.uuid(now_ms)?;
+        let rows = self
+            .query(
+                LEAVE_ORGANIZATION_SQL,
+                vec![
+                    text(session_id.as_str()),
+                    text(organization_id),
+                    i64_value(now_ms),
+                    text(audit_id),
+                    text(request_id.as_str()),
+                ],
+            )
+            .await?;
+        if rows
+            .first()
+            .and_then(|row| row.required_text("outcome").ok())
+            == Some("left")
+        {
+            Ok(())
+        } else {
+            Err(ManagementError::ProtectedInvariant)
+        }
+    }
+
+    /// Soft-deactivates an organization (`status = archived`) under AAL2 and
+    /// `ownership.transfer`.
+    ///
+    /// Revokes pending invitations (and consumes their invitation OTTs), clears
+    /// `selected_organization_id` for sessions bound to this organization, and
+    /// bumps `authorization_revision`. Memberships are **not** frozen and no
+    /// bulk relationship-outbox revoke is emitted — product SQL continues to
+    /// require `organizations.status = 'active'` for management/selection.
+    ///
+    /// # Errors
+    ///
+    /// Rejects unauthorized actors and already-archived or missing organizations.
+    pub async fn archive_organization(
+        &self,
+        session_id: &SessionId,
+        organization_id: &str,
+        request_id: &RequestId,
+    ) -> Result<OrganizationRecord, ManagementError<T::Error>> {
+        let organization_id = parse_uuid(organization_id)?;
+        let now_ms = now_ms(&self.clock);
+        let audit_id = self.uuid(now_ms)?;
+        let rows = self
+            .query(
+                ARCHIVE_ORGANIZATION_SQL,
+                vec![
+                    text(session_id.as_str()),
+                    text(organization_id),
+                    i64_value(now_ms),
+                    text(audit_id),
+                    text(request_id.as_str()),
+                ],
+            )
+            .await?;
+        rows.first()
+            .map(decode_organization)
+            .transpose()?
+            .ok_or(ManagementError::NotAuthorized)
     }
 
     /// Lists organization invitations under `member.view`.
@@ -1311,5 +1435,48 @@ mod tests {
         assert!(message.contains("1"));
         assert!(message.contains("active member"));
         assert!(message.contains("pending invitation"));
+    }
+
+    #[test]
+    fn ownership_lifecycle_ids_must_be_uuids() {
+        assert!(matches!(
+            parse_uuid::<std::convert::Infallible>("not-an-org"),
+            Err(ManagementError::InvalidRequest)
+        ));
+        assert!(parse_uuid::<std::convert::Infallible>(
+            "0190f0c2-6f3a-7b6e-9c1d-2e4f5a6b7c8d"
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn transfer_ownership_sql_promotes_before_demote() {
+        // Promote-first ordering is load-bearing for owner_count trigger safety.
+        let promote = TRANSFER_OWNERSHIP_SQL
+            .find("promoted_target AS")
+            .expect("promote CTE");
+        let demote = TRANSFER_OWNERSHIP_SQL
+            .find("demoted_actor AS")
+            .expect("demote CTE");
+        assert!(promote < demote);
+        assert!(TRANSFER_OWNERSHIP_SQL.contains("ownership.transfer"));
+        assert!(TRANSFER_OWNERSHIP_SQL.contains("previous_owner_id"));
+        assert!(TRANSFER_OWNERSHIP_SQL.contains("new_owner_id"));
+    }
+
+    #[test]
+    fn leave_organization_sql_guards_last_owner() {
+        assert!(LEAVE_ORGANIZATION_SQL.contains("member.leave"));
+        assert!(LEAVE_ORGANIZATION_SQL.contains("role_id <> 'owner'"));
+        assert!(LEAVE_ORGANIZATION_SQL.contains("selected_organization_id = NULL"));
+    }
+
+    #[test]
+    fn archive_organization_sql_soft_deactivates() {
+        assert!(ARCHIVE_ORGANIZATION_SQL.contains("status = 'archived'"));
+        assert!(ARCHIVE_ORGANIZATION_SQL.contains("authorization_revision"));
+        assert!(ARCHIVE_ORGANIZATION_SQL.contains("organization.archive"));
+        assert!(ARCHIVE_ORGANIZATION_SQL.contains("ownership.transfer"));
+        assert!(ARCHIVE_ORGANIZATION_SQL.contains("status = 'revoked'"));
     }
 }
