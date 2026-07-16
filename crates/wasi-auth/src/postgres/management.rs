@@ -18,6 +18,11 @@ use super::organizations::OrganizationRecord;
 #[cfg(feature = "password")]
 use super::workflows::OutboxSealingKey;
 use super::{PgRow, PgValue, PostgresAuthStore, PostgresTransport, RowDecodeError};
+
+pub use super::access_model::{
+    AccessModelError, ORGANIZATION_PERMISSION_CATALOG, OrganizationAccessModel, PermissionCatalog,
+    PermissionDefinition, PermissionRisk,
+};
 #[cfg(feature = "password")]
 use crate::mail::{EmailKind, TransactionalMailConfig, durable_transactional_mail_payload};
 use crate::{
@@ -47,33 +52,6 @@ const TOKEN_BYTES: usize = 32;
 const OUTBOX_NONCE_BYTES: usize = 12;
 #[cfg(feature = "password")]
 const INVITATION_TTL_MS: u64 = 7 * 24 * 60 * 60 * 1_000;
-
-/// Permissions available to tenant roles in the canonical product.
-pub const ORGANIZATION_PERMISSION_CATALOG: &[&str] = &[
-    "audit.view",
-    "counter.change",
-    "counter.reset",
-    "counter.view",
-    "dashboard.manage",
-    "dashboard.view",
-    "member.invite",
-    "member.manage",
-    "member.view",
-    "organization.update",
-    "organization.view",
-    "ownership.transfer",
-    "query.execute",
-    "query.execute_mutation",
-    "query.manage",
-    "query.view",
-    "resource.manage",
-    "resource.view",
-    "role.manage",
-    "role.view",
-    "vault.manage",
-    "vault.reveal",
-    "vault.view",
-];
 
 /// One organization membership.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -342,12 +320,15 @@ where
         }
         request.permissions.sort();
         request.permissions.dedup();
-        if request.permissions.iter().any(|permission| {
-            permission == "ownership.transfer"
-                || !ORGANIZATION_PERMISSION_CATALOG.contains(&permission.as_str())
-        }) {
-            return Err(ManagementError::RestrictedPermission);
-        }
+        // Auto-expand transitive dependencies for custom-role UX, then reject
+        // unknown and non-eligible permissions (including ownership.transfer).
+        let access_model = OrganizationAccessModel::product_default();
+        request.permissions = access_model
+            .expand_with_dependencies(&request.permissions)
+            .map_err(map_access_model_error)?;
+        access_model
+            .validate_custom_role_permissions(&request.permissions)
+            .map_err(map_access_model_error)?;
         let permissions = serde_json::to_value(&request.permissions)
             .map_err(|_| ManagementError::InvalidRequest)?;
         let now_ms = now_ms(&self.clock);
@@ -783,6 +764,17 @@ where
     }
 }
 
+fn map_access_model_error<E: StdError + Send + Sync + 'static>(
+    error: AccessModelError,
+) -> ManagementError<E> {
+    match error {
+        AccessModelError::UnknownPermission | AccessModelError::RestrictedPermission => {
+            ManagementError::RestrictedPermission
+        }
+        AccessModelError::IncompleteDependencies => ManagementError::InvalidRequest,
+    }
+}
+
 fn decode_organization<E>(row: &PgRow) -> Result<OrganizationRecord, ManagementError<E>>
 where
     E: StdError + Send + Sync + 'static,
@@ -1025,5 +1017,25 @@ mod tests {
                 .windows(2)
                 .all(|pair| pair[0] < pair[1])
         );
+    }
+
+    #[test]
+    fn access_model_error_maps_to_management_variants() {
+        assert!(matches!(
+            map_access_model_error::<std::convert::Infallible>(AccessModelError::UnknownPermission),
+            ManagementError::RestrictedPermission
+        ));
+        assert!(matches!(
+            map_access_model_error::<std::convert::Infallible>(
+                AccessModelError::RestrictedPermission
+            ),
+            ManagementError::RestrictedPermission
+        ));
+        assert!(matches!(
+            map_access_model_error::<std::convert::Infallible>(
+                AccessModelError::IncompleteDependencies
+            ),
+            ManagementError::InvalidRequest
+        ));
     }
 }
