@@ -35,6 +35,7 @@ const UPDATE_ORGANIZATION_SQL: &str = include_str!("update_organization.sql");
 const LIST_MEMBERSHIPS_SQL: &str = include_str!("list_memberships.sql");
 const LIST_ROLES_SQL: &str = include_str!("list_roles.sql");
 const UPSERT_ROLE_SQL: &str = include_str!("upsert_role.sql");
+const DELETE_ROLE_SQL: &str = include_str!("delete_role.sql");
 const ASSIGN_MEMBERSHIP_ROLE_SQL: &str = include_str!("assign_membership_role.sql");
 const REMOVE_MEMBERSHIP_SQL: &str = include_str!("remove_membership.sql");
 const LIST_INVITATIONS_SQL: &str = include_str!("list_invitations.sql");
@@ -356,6 +357,58 @@ where
             .map(decode_role)
             .transpose()?
             .ok_or(ManagementError::NotAuthorized)
+    }
+
+    /// Deletes a custom role under AAL2 and `role.manage`.
+    ///
+    /// Built-in roles cannot be deleted. Active memberships or pending invitations
+    /// that still use the role fail with [`ManagementError::RoleInUse`]. Residual
+    /// non-active memberships and non-pending invitations are re-pointed to the
+    /// built-in `member` role so foreign keys allow removal. Successful deletes
+    /// bump `authorization_revision` and write an audit event.
+    ///
+    /// # Errors
+    ///
+    /// Returns validation, authorization, conflict, row, or transport failures.
+    pub async fn delete_role(
+        &self,
+        session_id: &SessionId,
+        organization_id: &str,
+        role_id: &str,
+        request_id: &RequestId,
+    ) -> Result<(), ManagementError<T::Error>> {
+        let organization_id = parse_uuid(organization_id)?;
+        validate_role_id(role_id, false)?;
+        let now_ms = now_ms(&self.clock);
+        let audit_id = self.uuid(now_ms)?;
+        let rows = self
+            .query(
+                DELETE_ROLE_SQL,
+                vec![
+                    text(session_id.as_str()),
+                    text(organization_id),
+                    text(role_id),
+                    i64_value(now_ms),
+                    text(audit_id),
+                    text(request_id.as_str()),
+                ],
+            )
+            .await?;
+        let Some(row) = rows.first() else {
+            return Err(ManagementError::NotAuthorized);
+        };
+        match row.required_text("outcome")? {
+            "deleted" => Ok(()),
+            "in_use" => {
+                let member_count = to_u64(row.required_i64("member_count")?)?;
+                let invitation_count = to_u64(row.required_i64("invitation_count")?)?;
+                Err(ManagementError::RoleInUse {
+                    member_count,
+                    invitation_count,
+                })
+            }
+            _ => Err(ManagementError::InvalidRow),
+        }
     }
 
     /// Assigns a role while serializing ownership transitions.
@@ -1146,6 +1199,16 @@ pub enum ManagementError<E: StdError + Send + Sync + 'static> {
     /// The operation would remove a final owner or violate account state.
     #[error("operation would violate an ownership or account invariant")]
     ProtectedInvariant,
+    /// A custom role is still assigned to active members or pending invitations.
+    #[error(
+        "custom role is still used by {member_count} active member(s) and {invitation_count} pending invitation(s)"
+    )]
+    RoleInUse {
+        /// Active memberships still assigned this role.
+        member_count: u64,
+        /// Pending invitations that still grant this role.
+        invitation_count: u64,
+    },
     /// A custom role requested a system or ownership permission.
     #[error("custom role contains a restricted permission")]
     RestrictedPermission,
@@ -1226,5 +1289,27 @@ mod tests {
         // Live SQL coverage for revoke/resend: extend tests/postgres_kernel.rs and
         // run via scripts/test-postgres-kernel-live.sh (suite is #[ignore] by default).
         assert_eq!(INVITATION_TTL_MS, 7 * 24 * 60 * 60 * 1_000);
+    }
+
+    #[test]
+    fn custom_role_delete_rejects_built_in_ids() {
+        assert!(matches!(
+            validate_role_id::<std::convert::Infallible>("owner", false),
+            Err(ManagementError::InvalidRequest)
+        ));
+        assert!(validate_role_id::<std::convert::Infallible>("billing-editor", false).is_ok());
+    }
+
+    #[test]
+    fn role_in_use_error_exposes_counts() {
+        let error = ManagementError::<std::convert::Infallible>::RoleInUse {
+            member_count: 2,
+            invitation_count: 1,
+        };
+        let message = error.to_string();
+        assert!(message.contains("2"));
+        assert!(message.contains("1"));
+        assert!(message.contains("active member"));
+        assert!(message.contains("pending invitation"));
     }
 }
