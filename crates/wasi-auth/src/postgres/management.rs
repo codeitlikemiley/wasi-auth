@@ -42,6 +42,10 @@ const LIST_INVITATIONS_SQL: &str = include_str!("list_invitations.sql");
 const CREATE_INVITATION_SQL: &str = include_str!("create_invitation.sql");
 #[cfg(feature = "password")]
 const ACCEPT_INVITATION_SQL: &str = include_str!("accept_invitation.sql");
+#[cfg(feature = "password")]
+const REVOKE_INVITATION_SQL: &str = include_str!("revoke_invitation.sql");
+#[cfg(feature = "password")]
+const RESEND_INVITATION_SQL: &str = include_str!("resend_invitation.sql");
 const LIST_ADMIN_USERS_SQL: &str = include_str!("list_admin_users.sql");
 const SET_USER_DISABLED_SQL: &str = include_str!("set_user_disabled.sql");
 const LIST_AUDIT_EVENTS_SQL: &str = include_str!("list_audit_events.sql");
@@ -748,10 +752,175 @@ where
             .ok_or(ManagementError::InvalidToken)
     }
 
+    /// Revokes a pending invitation and consumes its one-time token.
+    ///
+    /// Requires AAL2+ and `member.invite`. Only `pending` invitations transition
+    /// to `revoked`.
+    ///
+    /// # Errors
+    ///
+    /// Returns validation, authorization, randomness, row, or transport failures.
+    pub async fn revoke(
+        &self,
+        session_id: &SessionId,
+        organization_id: &str,
+        invitation_id: &str,
+        request_id: &RequestId,
+    ) -> Result<InvitationRecord, ManagementError<T::Error>> {
+        let organization_id = parse_uuid(organization_id)?;
+        let invitation_id = parse_uuid(invitation_id)?;
+        let now_ms = now_ms(&self.clock);
+        let audit_id = self.uuid(now_ms)?;
+        let rows = self
+            .store
+            .transport()
+            .query(
+                REVOKE_INVITATION_SQL,
+                vec![
+                    text(session_id.as_str()),
+                    text(organization_id),
+                    text(invitation_id),
+                    i64_value(now_ms),
+                    text(audit_id),
+                    text(request_id.as_str()),
+                ],
+            )
+            .await
+            .map_err(map_transport_error::<T>)?;
+        rows.first()
+            .map(decode_invitation)
+            .transpose()?
+            .ok_or(ManagementError::NotAuthorized)
+    }
+
+    /// Resends a pending invitation with a rotated token and extended TTL.
+    ///
+    /// Requires AAL2+ and `member.invite`. Prior one-time tokens are consumed so
+    /// the previous mail link stops working. Mutation SQL is one statement; a
+    /// short preflight only loads the recipient email for outbox sealing.
+    ///
+    /// # Errors
+    ///
+    /// Returns validation, authorization, crypto, randomness, row, or transport failures.
+    pub async fn resend(
+        &self,
+        session_id: &SessionId,
+        organization_id: &str,
+        invitation_id: &str,
+        request_id: &RequestId,
+    ) -> Result<InvitationRecord, ManagementError<T::Error>> {
+        let organization_id = parse_uuid(organization_id)?;
+        let invitation_id = parse_uuid(invitation_id)?;
+        let email = self
+            .pending_invitation_email(session_id, &organization_id, &invitation_id)
+            .await?;
+        let now_ms = now_ms(&self.clock);
+        let outbox_id = self.uuid(now_ms)?;
+        let audit_id = self.uuid(now_ms)?;
+        let mut raw = [0_u8; TOKEN_BYTES];
+        let mut nonce = [0_u8; OUTBOX_NONCE_BYTES];
+        self.randomness
+            .fill_bytes(&mut raw)
+            .map_err(|_| ManagementError::RandomnessUnavailable)?;
+        self.randomness
+            .fill_bytes(&mut nonce)
+            .map_err(|_| ManagementError::RandomnessUnavailable)?;
+        let token = Zeroizing::new(URL_SAFE_NO_PAD.encode(raw));
+        let token_hash: [u8; 32] = Sha256::digest(token.as_bytes()).into();
+        let payload = if let Some(config) = &self.transactional_mail_config {
+            durable_transactional_mail_payload(
+                config,
+                EmailKind::Invitation,
+                &email,
+                token.as_str(),
+            )
+            .map_err(|_| ManagementError::InvalidRequest)?
+        } else {
+            serde_json::to_vec(&json!({
+                "version": 1, "kind": "invitation", "recipient": email,
+                "token": token.as_str(), "redirect_uri": "/organizations",
+            }))
+            .map_err(|_| ManagementError::Crypto)?
+        };
+        let sealed = self
+            .outbox_key
+            .seal(nonce, &payload)
+            .map_err(|_| ManagementError::Crypto)?;
+        let rows = self
+            .store
+            .transport()
+            .query(
+                RESEND_INVITATION_SQL,
+                vec![
+                    text(session_id.as_str()),
+                    text(organization_id),
+                    text(invitation_id),
+                    PgValue::Bytes(token_hash.to_vec()),
+                    i64_value(now_ms.saturating_add(INVITATION_TTL_MS)),
+                    text(outbox_id),
+                    text(format!("invitation-resend:{outbox_id}")),
+                    text(sealed.key_version),
+                    PgValue::Bytes(sealed.ciphertext),
+                    text(audit_id),
+                    text(request_id.as_str()),
+                    i64_value(now_ms),
+                ],
+            )
+            .await
+            .map_err(map_transport_error::<T>)?;
+        rows.first()
+            .map(decode_invitation)
+            .transpose()?
+            .ok_or(ManagementError::NotAuthorized)
+    }
+
+    /// Loads the recipient email for a pending invitation under `member.view`.
+    ///
+    /// Authorization for the subsequent mutation is re-checked in the write SQL.
+    async fn pending_invitation_email(
+        &self,
+        session_id: &SessionId,
+        organization_id: &str,
+        invitation_id: &str,
+    ) -> Result<String, ManagementError<T::Error>> {
+        let invitations = self
+            .store
+            .transport()
+            .query(
+                LIST_INVITATIONS_SQL,
+                vec![
+                    text(session_id.as_str()),
+                    text(organization_id),
+                    now_value(&self.clock),
+                ],
+            )
+            .await
+            .map_err(map_transport_error::<T>)?;
+        if invitations
+            .first()
+            .and_then(|row| row.bool("authorized").ok())
+            .flatten()
+            != Some(true)
+        {
+            return Err(ManagementError::NotAuthorized);
+        }
+        invitations
+            .iter()
+            .filter_map(|row| decode_invitation::<T::Error>(row).ok())
+            .find(|row| {
+                row.invitation_id == invitation_id
+                    && row.organization_id == organization_id
+                    && row.status == "pending"
+            })
+            .map(|row| row.email)
+            .ok_or(ManagementError::NotAuthorized)
+    }
+
     fn uuid(&self, now_ms: u64) -> Result<Uuid, ManagementError<T::Error>> {
         uuid_v7(now_ms, &self.randomness).map_err(|_| ManagementError::RandomnessUnavailable)
     }
 }
+
 
 fn map_transport_error<T>(error: T::Error) -> ManagementError<T::Error>
 where
@@ -1037,5 +1206,25 @@ mod tests {
             ),
             ManagementError::InvalidRequest
         ));
+    }
+
+    #[test]
+    fn invitation_ids_must_be_uuids() {
+        assert!(matches!(
+            parse_uuid::<std::convert::Infallible>("not-a-uuid"),
+            Err(ManagementError::InvalidRequest)
+        ));
+        assert!(parse_uuid::<std::convert::Infallible>(
+            "0190f0c2-6f3a-7b6e-9c1d-2e4f5a6b7c8d"
+        )
+        .is_ok());
+    }
+
+    #[cfg(feature = "password")]
+    #[test]
+    fn invitation_ttl_is_seven_days() {
+        // Live SQL coverage for revoke/resend: extend tests/postgres_kernel.rs and
+        // run via scripts/test-postgres-kernel-live.sh (suite is #[ignore] by default).
+        assert_eq!(INVITATION_TTL_MS, 7 * 24 * 60 * 60 * 1_000);
     }
 }
