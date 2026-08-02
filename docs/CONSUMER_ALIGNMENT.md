@@ -182,6 +182,17 @@ that change on every CI run. Those digests can only be satisfied by pinning one
 immutable published bundle, or by switching the release to a stable signing
 key. Regenerating the bundle will not reproduce them.
 
+For completeness, the ephemeral-key outputs of the bundle produced here were:
+
+| File | sha256 |
+|---|---|
+| `reports/supply-chain/provenance.intoto.json.sigstore.json` | `c4cc125403dbfbcebd484b68804555e799afde58bf463cc01f85feff0f2c760e` |
+| `reports/supply-chain/manifest.json.sigstore.json` | `385434777d5b4ac90601dd187d2c83c8b58dfccf91096262509018a5dc916680` |
+| `reports/supply-chain/cosign.pub` | `1ddc0274bbfd890528d2a16ba5f8c53e9ff7016d8a9a84f19fdd255e2a0496fa` |
+
+Do not copy these into the consumer's lock unless that exact bundle is the one
+published. Whichever bundle a release actually publishes supersedes them.
+
 Also note: `reports/supply-chain/` and `artifacts/RELEASE-SHA256SUMS` are
 git-ignored by design. The bundle is a CI upload artifact, not repository
 content, so the consumer must pull it from the run for `artifact_revision`.
