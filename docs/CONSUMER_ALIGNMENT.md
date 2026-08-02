@@ -142,6 +142,11 @@ artifact_version = "0.1.0-rc.1"
 artifact_revision = "bef5e1d20c1a752188f1af6c734521ca670f4191"
 ```
 
+That is the revision the bundle was built from. Anything committed after it on
+this branch is documentation only — this file — and touches no build input, so
+it does not invalidate the bundle. A real release should still cut a tag at the
+revision it signs.
+
 | Component | `sha256` | `sbom_sha256` | `wit_sha256` |
 |---|---|---|---|
 | `authz-http-pep` | `29f6d86f…e1d5bb96` | `cd21bb20…b68da086` | `de6325ca…f55912d93` |
