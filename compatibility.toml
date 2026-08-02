@@ -13,7 +13,13 @@ native_ci_target = "x86_64-unknown-linux-gnu"
 http = "0.3.0"
 wasip2_crate = "0.14.7"
 wasip3_crate = "0.7.0"
-wit_bindgen = "0.59.0"
+# The `wasi-auth` workspace pins `wit-bindgen 0.57.1` to match the generator
+# embedded by tagged `wasip3 0.7.0`; mixed versions duplicate async stream
+# intrinsics. The excluded `legacy/wasi-http-middleware` workspace still binds
+# with 0.59.0 and records that separately in its own compatibility lock. A
+# consumer building components against this repository must use 0.57.1.
+wit_bindgen = "0.57.1"
+legacy_middleware_wit_bindgen = "0.59.0"
 
 [runtimes]
 wasmtime = "46.0.1"

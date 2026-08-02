@@ -295,6 +295,9 @@ jobs:
         with:
           toolchain: 1.93.0
       - run: bash scripts/check-packages.sh
+      - run: bash scripts/generate-companion-manifest.sh
+      - name: Verify tracked companion surface manifest
+        run: git diff --exit-code -- companion.toml
 
   supply-chain:
     name: Local OCI, provenance, and signature dry run

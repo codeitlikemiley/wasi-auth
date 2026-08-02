@@ -66,3 +66,27 @@ headers are marked sensitive, and `Content-Length` must be one decimal value
 that is within the response limit and exactly matches the collected body.
 Malformed, duplicate, oversized, or mismatched lengths are protocol failures.
 Host error strings are never returned through the transport error surface.
+
+## Companion surface
+
+A downstream consumer such as `leptos_wasi` depends on this repository through
+local path dependencies that span two workspaces at two different versions.
+Only `wasi-auth` is publishable; every other companion crate is a path-only
+compatibility fixture, so a consumer cannot pin them from a registry and must
+pin a repository revision instead.
+
+[`companion.toml`](../companion.toml) is the machine-readable record of that
+surface. It lists every crate a consumer may depend on with its resolved
+version, owning workspace, and publishability; every built component with its
+source directory, artifact path, SBOM, and WIT report; and the release-bundle
+evidence paths a consumer pins. `scripts/generate-companion-manifest.sh`
+derives it from `cargo metadata` for both workspaces, and CI fails if the
+tracked copy drifts, so a rename, a move, or a version bump cannot silently
+desynchronize a consumer's lock.
+
+The six supported companion crates are `leptos-wasi-authz`,
+`wasi-authz-cedar`, `wasi-authz-client`, `wasi-authz-contract`,
+`wasi-authz-spicedb` — all at the workspace version — and `wasi-http-authn`,
+which lives in the excluded `legacy/wasi-http-middleware` workspace and moves
+on its own `0.2.0-alpha.3` line. The two version lines are independent by
+design; a consumer must pin both.

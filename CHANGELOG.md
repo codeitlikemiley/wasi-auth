@@ -36,6 +36,16 @@
   production-performance target.
 - Classified component PDP services as experimental/compatibility profiles;
   production terminals embed Cedar and call SpiceDB directly.
+- Added `companion.toml`, the generated record of the surface downstream
+  consumers pin: all six path-dependency crates across both workspaces with
+  their resolved versions and publishability, the three built components with
+  their source directories, SBOMs, and WIT reports, and the release-bundle
+  evidence paths. `scripts/generate-companion-manifest.sh` derives it from
+  `cargo metadata` and CI rejects drift.
+- Corrected the `wit-bindgen` version recorded in `compatibility.toml` from
+  `0.59.0` to the `0.57.1` the workspace actually pins, and recorded the
+  legacy middleware workspace's own `0.59.0` binding separately. The key had
+  no script consumer, so the stale value was never caught.
 
 ## 0.1.0-alpha.2
 
