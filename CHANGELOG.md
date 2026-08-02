@@ -43,9 +43,11 @@
   evidence paths. `scripts/generate-companion-manifest.sh` derives it from
   `cargo metadata` and CI rejects drift.
 - Corrected the `wit-bindgen` version recorded in `compatibility.toml` from
-  `0.59.0` to the `0.57.1` the workspace actually pins, and recorded the
-  legacy middleware workspace's own `0.59.0` binding separately. The key had
-  no script consumer, so the stale value was never caught.
+  `0.59.0` to the `0.57.1` this workspace's component code actually binds
+  with, and recorded the legacy middleware workspace's `0.59.0` separately.
+  The HTTP PEP links both generators because it depends on
+  `wasi-http-middleware-component-support`, so both values are load-bearing.
+  The key had no script consumer, so the single stale value was never caught.
 
 ## 0.1.0-alpha.2
 
