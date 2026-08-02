@@ -6,7 +6,7 @@ produced for it. Nothing in `leptos_wasi` was modified to produce this; every
 build check below ran against a scratch copy.
 
 Verified against `leptos_wasi` `main` = `fa424c1` and this repository at
-`b08c046`. The `0.1.0-alpha.4` baseline is `901d283`, the last commit carrying
+`f53f73e`. The `0.1.0-alpha.4` baseline is `901d283`, the last commit carrying
 that workspace version.
 
 ## 1. API surface
@@ -15,7 +15,7 @@ that workspace version.
 than a signature comparison:
 
 ```
-git diff --stat 901d283 b08c046 -- \
+git diff --stat 901d283 f53f73e -- \
   crates/leptos-wasi-authz crates/wasi-authz-client crates/wasi-authz-contract \
   crates/wasi-authz-cedar crates/wasi-authz-spicedb \
   legacy/wasi-http-middleware/crates/authn
@@ -95,7 +95,7 @@ Nothing beyond the version pins has to change on the consumer side.
 
 Both still hold at `0.1.0-rc.1`.
 
-`reports/wit/` is byte-identical between `901d283` and `b08c046`, so the
+`reports/wit/` is byte-identical between `901d283` and `f53f73e`, so the
 component contracts did not move at all.
 
 | Locked component | Source directory | Cargo package | Built artifact |
@@ -123,7 +123,7 @@ middleware components (`request-id`, `security-headers`, `cors`,
 ## 3. The regenerated bundle
 
 Produced from a clean, non-dirty tree at revision
-`b08c046ae6aa07a73d9e6a810eca0e01a8d86e67` on Ubuntu 24.04.4 / x86_64 /
+`f53f73e50e2861828237d1cb3318e9b1747982b8` on Ubuntu 24.04.4 / x86_64 /
 Rust 1.93.0 — the canonical CI lane — with `wasm-tools 1.253.0`,
 `cargo-cyclonedx 0.5.9`, `cosign 3.1.1`, `oras 1.3.2`.
 
@@ -139,7 +139,7 @@ Values the consumer should record:
 ```
 artifact_name    = "wasi-authz"
 artifact_version = "0.1.0-rc.1"
-artifact_revision = "b08c046ae6aa07a73d9e6a810eca0e01a8d86e67"
+artifact_revision = "f53f73e50e2861828237d1cb3318e9b1747982b8"
 ```
 
 | Component | `sha256` | `sbom_sha256` | `wit_sha256` |
@@ -151,11 +151,11 @@ artifact_revision = "b08c046ae6aa07a73d9e6a810eca0e01a8d86e67"
 | Evidence file | sha256 |
 |---|---|
 | `artifacts/RELEASE-SHA256SUMS` | `f0f1a0b70ebd81d7f97388604e4ae81c40872792af46452ae69d978277236fd0` |
-| `artifacts/provenance.intoto.json` | `885f541db74526c52aa7abf7e5921bc0ee2399375335951ae887c06741a668f8` |
-| `reports/supply-chain/manifest.json` | `acd832ecb70090ddcaf0fb51f478c9bea79ca72d60828c61c00a216ae5bbcba9` |
+| `artifacts/provenance.intoto.json` | `12b8fcf41df2e11a2e2912c4db7bfc5a21294d64ca5531a2b5893c8433762913` |
+| `reports/supply-chain/manifest.json` | `35124e06b5440c7a13c5639eeed7e6122660f6ac3266519f3012231e53695f6d` |
 
 The OCI artifact digest is
-`sha256:acd832ecb70090ddcaf0fb51f478c9bea79ca72d60828c61c00a216ae5bbcba9`,
+`sha256:35124e06b5440c7a13c5639eeed7e6122660f6ac3266519f3012231e53695f6d`,
 artifact type `application/vnd.wasi.authz.bundle.v1`.
 
 ### What "attested" does and does not mean here
@@ -232,12 +232,12 @@ requirement.
 -# Last signed pre-consolidation bundle. Release promotion must regenerate and
 -# attest an alpha.4 wasi-auth bundle from a clean consolidated revision.
 +baseline_revision = "27689e087af7946ff280102dbec94fb9b2fe0590"
-+source_revision = "b08c046ae6aa07a73d9e6a810eca0e01a8d86e67"
++source_revision = "f53f73e50e2861828237d1cb3318e9b1747982b8"
  artifact_name = "wasi-authz"
 -artifact_version = "0.1.0-alpha.3"
 -artifact_revision = "d4a755e7a4a5abe3b38868a71b063bf33592254c"
 +artifact_version = "0.1.0-rc.1"
-+artifact_revision = "b08c046ae6aa07a73d9e6a810eca0e01a8d86e67"
++artifact_revision = "f53f73e50e2861828237d1cb3318e9b1747982b8"
  fixture_manifest = "tests/authz-fixture/Cargo.toml"
 ```
 
