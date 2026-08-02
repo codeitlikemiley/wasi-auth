@@ -16,6 +16,18 @@
 # Everything is idempotent: a tool already present at the pinned version is
 # skipped, so re-running is cheap.
 #
+# The hook runs asynchronously, so the session starts immediately and
+# provisioning continues in the background. A warm container finishes in under
+# a second and a cold one in about eight, but that is still a race: work can
+# begin before a tool exists. `$HOME/.cache/leptos-wasi-tools/.ready` is written
+# last and names anything that failed, so a caller that needs certainty can
+# wait for it:
+#
+#   until [ -f "$HOME/.cache/leptos-wasi-tools/.ready" ]; do sleep 1; done
+#
+# The marker is removed at the start of every run, so its presence always means
+# "this run finished", never "a previous run once finished".
+#
 # Optional stages, off by default because they are large and rarely needed:
 #   WASI_AUTH_SETUP_FUZZ=1       nightly toolchain + cargo-fuzz
 #   WASI_AUTH_SETUP_PROVIDERS=1  SpiceDB + zed live-provider binaries
@@ -31,6 +43,15 @@ if [[ "${CLAUDE_CODE_REMOTE:-}" != "true" ]]; then
     exit 0
 fi
 
+# Hand the session back now and provision in the background. The timeout covers
+# the worst realistic cold start: a container with no cargo-cyclonedx, which is
+# the one tool still built from source.
+echo '{"async": true, "asyncTimeout": 600000}'
+
+# Everything from here is progress reporting, not hook protocol. Send it to
+# stderr so nothing can be mistaken for a second control message on stdout.
+exec 1>&2
+
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # `common.sh` sets REPO_ROOT from its own location and provides compat_value,
 # version_matches, sha256_file, and the require_* helpers.
@@ -43,7 +64,12 @@ source "${HOOK_DIR}/../../scripts/common.sh"
 cd "${REPO_ROOT}"
 
 TOOL_ROOT="${WASI_AUTHZ_TOOL_ROOT:-${HOME}/.cache/leptos-wasi-tools}"
+READY_MARKER="${TOOL_ROOT}/.ready"
 ARCH="$(uname -m)"
+
+# Clear it up front so a marker left by an earlier run can never be read as
+# this run having finished.
+rm -f "${READY_MARKER}"
 
 log() { printf '[wasi-auth setup] %s\n' "$*"; }
 
@@ -348,9 +374,16 @@ for line in "${PROVIDER_ENV_LINES[@]:-}"; do
     [[ -n "${line}" ]] && record_env "${line}"
 done
 
+# Written last, so its existence means this run reached the end. Anything that
+# failed is named inside rather than signalled by the marker's absence, which
+# would be indistinguishable from "still running".
+mkdir -p "${TOOL_ROOT}"
 if ((${#MISSING[@]} > 0)); then
+    printf 'incomplete: %s\n' "${MISSING[*]}" >"${READY_MARKER}"
     log "NOT installed: ${MISSING[*]}"
     log "re-run .claude/hooks/session-start.sh to retry just those"
+else
+    printf 'complete\n' >"${READY_MARKER}"
 fi
 
 log "ready. Pinned tools resolve from ${TOOL_ROOT}"

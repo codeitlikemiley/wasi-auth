@@ -50,6 +50,20 @@ release evidence.
 with the same tools the lanes above use. It runs only when
 `CLAUDE_CODE_REMOTE=true`, so a local checkout is left alone.
 
+It runs asynchronously: the session starts immediately and provisioning
+continues behind it. That trades a wait for a race, so the hook writes
+`$HOME/.cache/leptos-wasi-tools/.ready` as its final act. Anything needing
+certainty before it runs a gate can block on that marker:
+
+```bash
+until [ -f "$HOME/.cache/leptos-wasi-tools/.ready" ]; do sleep 1; done
+```
+
+The marker is deleted at the start of every run, so its presence always means
+the current run finished — never that some earlier one did. Its contents are
+`complete`, or `incomplete: <tools>` naming whatever failed. A failed download
+never aborts the session; re-running the hook retries only what is missing.
+
 It hardcodes no versions. Every one is read through `compat_value` from
 [`compatibility.toml`](../compatibility.toml), the same accessor the release
 scripts use, so bumping a version there is enough.
@@ -74,9 +88,7 @@ from an unattested third-party rebuild is not a trade worth making.
 
 The hook never writes to the working tree. `cargo fetch` runs with `--locked`
 so it cannot rewrite a lockfile and leave `require_clean_tree` failing, and
-`fuzz/` is skipped for that reason — its lockfile trails its manifest. A failed
-download is reported and skipped rather than aborting the session; re-running
-the hook retries only what is missing.
+`fuzz/` is skipped for that reason — its lockfile trails its manifest.
 
 Two stages are off by default because they are large and rarely needed:
 
