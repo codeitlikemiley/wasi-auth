@@ -2,8 +2,14 @@
 #
 # This is the supported companion surface of this repository: the crates a
 # downstream consumer may path-depend on, the components a release builds,
-# and the evidence files a consumer pins. Regenerate after any version or
+# and the evidence a release bundle carries. Regenerate after any version or
 # packaging change; CI requires the tracked copy to match.
+#
+# Paths under [artifact] other than `components` name files in the release
+# bundle, NOT files in this repository. They are git-ignored by design, so
+# they do not resolve in a checkout at any revision; a consumer obtains them
+# from the bundle a release run uploads. Crate and component paths below are
+# repository-relative and do resolve.
 #
 # `direct = true` marks a crate a consumer is supported in naming in its own
 # manifest. `direct = false` marks a path-local crate reached only through

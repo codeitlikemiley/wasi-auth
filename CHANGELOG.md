@@ -10,6 +10,11 @@
   carrying RUSTSEC-2026-0221 (`event-listener 5.4.1`) and a yanked
   `spin 0.9.8`; the repository's own lockfile is clean, and the gate now fails
   on an archive like that instead of letting it reach the registry.
+- Corrected `companion.toml` and `docs/COMPATIBILITY.md`, which described the
+  release-bundle evidence paths as files a consumer pins. They are git-ignored
+  by design and resolve in no checkout at any revision; a consumer pins a
+  revision for source and takes the evidence from the bundle a release run
+  uploads. Crate and component paths are repository-relative and do resolve.
 
 ## 0.1.0-rc.2
 

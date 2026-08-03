@@ -6,8 +6,10 @@ produced for it. Nothing in `leptos_wasi` was modified to produce this; every
 build check below ran against a scratch copy.
 
 Verified against `leptos_wasi` `main` = `fa424c1` and this repository at
-`e3e8ca5`. The `0.1.0-alpha.4` baseline is `901d283`, the last commit carrying
-that workspace version.
+`2e8a1b9`, the revision section 3 recommends pinning. The `0.1.0-alpha.4`
+baseline is `901d283`, the last commit carrying that workspace version. The
+signed bundle was built earlier at `e3e8ca5`; section 3 shows why the two carry
+identical artifacts.
 
 ## 1. API surface
 
@@ -15,7 +17,7 @@ that workspace version.
 than a signature comparison:
 
 ```
-git diff --stat 901d283 e3e8ca5 -- \
+git diff --stat 901d283 2e8a1b9 -- \
   crates/leptos-wasi-authz crates/wasi-authz-client crates/wasi-authz-contract \
   crates/wasi-authz-cedar crates/wasi-authz-spicedb \
   legacy/wasi-http-middleware/crates/authn
@@ -95,7 +97,7 @@ Nothing beyond the version pins has to change on the consumer side.
 
 Both still hold at `0.1.0-rc.2`.
 
-`reports/wit/` is byte-identical between `901d283` and `e3e8ca5`, so the
+`reports/wit/` is byte-identical between `901d283` and `2e8a1b9`, so the
 component contracts did not move at all.
 
 | Locked component | Source directory | Cargo package | Built artifact |
@@ -152,13 +154,29 @@ Values the consumer should record:
 ```
 artifact_name    = "wasi-authz"
 artifact_version = "0.1.0-rc.2"
-artifact_revision = "e3e8ca50090f192820af99fa061029a6aba6001f"
+artifact_revision = "2e8a1b9793579f5b7f5c12d95028a9dcee8b069c"
 ```
 
-That is the revision the bundle was built from. Anything committed after it on
-this branch is documentation only — this file — and touches no build input, so
-it does not invalidate the bundle. A real release should still cut a tag at the
-revision it signs.
+The bundle was *built* at `e3e8ca5`, but the revision to pin is `2e8a1b9`, the
+current `main`. The two carry identical artifacts, and the later one also
+carries the complete `companion.toml` and the packaged-lock gate, so pinning the
+build revision would hand a consumer a strictly worse tree for the same digests.
+
+That identity is verified two independent ways rather than assumed:
+
+- **Statically.** `git diff e3e8ca5 2e8a1b9` is empty across `crates/`,
+  `components/`, `legacy/`, `wit/`, `Cargo.toml`, `Cargo.lock`,
+  `rust-toolchain.toml`, and `compatibility.toml`. Every commit in between
+  touched only documentation, `companion.toml`, `scripts/`, and CI.
+- **Empirically, by CI.** The `component` job rebuilds all three components from
+  source and then runs
+  `git diff --exit-code -- artifacts/SHA256SUMS artifacts/sbom reports/wit`.
+  That job passes on `2e8a1b9`, so the components rebuilt at that revision
+  reproduce the tracked digests byte for byte on the canonical lane. This is
+  stronger evidence than the file-list argument above, because it does not
+  depend on anyone correctly enumerating which paths are build inputs.
+
+A real release should still cut a tag at the revision it signs.
 
 | Component | `sha256` | `sbom_sha256` | `wit_sha256` |
 |---|---|---|---|
@@ -261,12 +279,12 @@ requirement.
 -# Last signed pre-consolidation bundle. Release promotion must regenerate and
 -# attest an alpha.4 wasi-auth bundle from a clean consolidated revision.
 +baseline_revision = "27689e087af7946ff280102dbec94fb9b2fe0590"
-+source_revision = "e3e8ca50090f192820af99fa061029a6aba6001f"
++source_revision = "2e8a1b9793579f5b7f5c12d95028a9dcee8b069c"
  artifact_name = "wasi-authz"
 -artifact_version = "0.1.0-alpha.3"
 -artifact_revision = "d4a755e7a4a5abe3b38868a71b063bf33592254c"
 +artifact_version = "0.1.0-rc.2"
-+artifact_revision = "e3e8ca50090f192820af99fa061029a6aba6001f"
++artifact_revision = "2e8a1b9793579f5b7f5c12d95028a9dcee8b069c"
  fixture_manifest = "tests/authz-fixture/Cargo.toml"
 ```
 
@@ -401,7 +419,7 @@ mainline history agree.
 `rc.3` was considered and rejected for this purpose. The metadata defect
 described in section 3 never reached the registry, and the consumer pins this
 repository by revision rather than consuming the published crate — so
-"`rc.2` at revision `e3e8ca5`" is a precise, verifiable pin, and burning a
+"`rc.2` at revision `2e8a1b9`" is a precise, verifiable pin, and burning a
 version number to correct metadata that was never published would buy nothing.
 
 One defect in the published `rc.2` is real and is not fixed by any of this.
