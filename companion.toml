@@ -4,6 +4,13 @@
 # downstream consumer may path-depend on, the components a release builds,
 # and the evidence files a consumer pins. Regenerate after any version or
 # packaging change; CI requires the tracked copy to match.
+#
+# `direct = true` marks a crate a consumer is supported in naming in its own
+# manifest. `direct = false` marks a path-local crate reached only through
+# one of those — never named by a consumer, but required in the checkout for
+# a `--locked` build, and in at least one case re-exporting types through a
+# direct crate's public API. The indirect set is derived from the resolved
+# dependency graph, so a new intermediate crate cannot slip in unrecorded.
 schema = 1
 
 [release]
@@ -27,6 +34,7 @@ path = "crates/leptos-wasi-authz"
 version = "0.1.0-rc.2"
 workspace = "wasi-auth"
 publish = false
+direct = true
 
 [[crate]]
 package = "wasi-authz-cedar"
@@ -34,6 +42,7 @@ path = "crates/wasi-authz-cedar"
 version = "0.1.0-rc.2"
 workspace = "wasi-auth"
 publish = false
+direct = true
 
 [[crate]]
 package = "wasi-authz-client"
@@ -41,6 +50,7 @@ path = "crates/wasi-authz-client"
 version = "0.1.0-rc.2"
 workspace = "wasi-auth"
 publish = false
+direct = true
 
 [[crate]]
 package = "wasi-authz-contract"
@@ -48,6 +58,7 @@ path = "crates/wasi-authz-contract"
 version = "0.1.0-rc.2"
 workspace = "wasi-auth"
 publish = false
+direct = true
 
 [[crate]]
 package = "wasi-authz-spicedb"
@@ -55,6 +66,7 @@ path = "crates/wasi-authz-spicedb"
 version = "0.1.0-rc.2"
 workspace = "wasi-auth"
 publish = false
+direct = true
 
 [[crate]]
 package = "wasi-http-authn"
@@ -62,6 +74,39 @@ path = "legacy/wasi-http-middleware/crates/authn"
 version = "0.2.0-alpha.3"
 workspace = "wasi-http-middleware"
 publish = true
+direct = true
+
+[[crate]]
+package = "wasi-authz-http"
+path = "crates/wasi-authz-http"
+version = "0.1.0-rc.2"
+workspace = "wasi-auth"
+publish = false
+direct = false
+
+[[crate]]
+package = "wasi-authz-testkit"
+path = "crates/wasi-authz-testkit"
+version = "0.1.0-rc.2"
+workspace = "wasi-auth"
+publish = false
+direct = false
+
+[[crate]]
+package = "wasi-http-metadata"
+path = "legacy/wasi-http-middleware/crates/metadata"
+version = "0.2.0-alpha.3"
+workspace = "wasi-http-middleware"
+publish = true
+direct = false
+
+[[crate]]
+package = "wasi-http-policy-core"
+path = "legacy/wasi-http-middleware/crates/policy-core"
+version = "0.2.0-alpha.3"
+workspace = "wasi-http-middleware"
+publish = true
+direct = false
 
 [[component]]
 component = "authz-http-pep"

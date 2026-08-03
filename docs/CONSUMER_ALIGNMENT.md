@@ -363,6 +363,17 @@ companion_manifest_sha256 = "<digest of the pinned revision's companion.toml>"
 and to derive the per-crate table from that file, so a rename or a version
 bump here surfaces as a digest mismatch instead of a build break.
 
+`companion.toml` records ten crates, not six. The six above carry
+`direct = true` — a consumer is supported in naming them. Four more carry
+`direct = false`: `wasi-authz-http`, `wasi-authz-testkit`,
+`wasi-http-metadata`, and `wasi-http-policy-core`. A consumer should not depend
+on those directly, but they are not incidental. They must exist in the checkout
+for a `--locked` build, and `wasi-http-metadata`'s types — `AuthContextV1`,
+`AuthStateV1`, `PrincipalV1`, `VerifiedAuthContext` — are re-exported from
+`leptos-wasi-authz`'s root, so a consumer handles them by value while never
+naming the crate. The indirect set is derived from the resolved dependency
+graph, so a new intermediate crate cannot appear unrecorded.
+
 ## 7. Not verified
 
 - Runtime behaviour. Everything above is source, type-check, WIT-contract, and

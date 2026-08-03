@@ -91,9 +91,122 @@ def metadata(manifest: pathlib.Path) -> dict[str, dict]:
     return {package["name"]: package for package in json.loads(raw)["packages"]}
 
 
+def resolve_graph(manifest: pathlib.Path) -> tuple[dict, dict, dict]:
+    """Return (packages-by-id, resolve-nodes-by-id, names-by-id) for a workspace.
+
+    Unlike `metadata`, this resolves the dependency graph, which is what the
+    path-only closure below is walked from.
+    """
+    raw = subprocess.run(
+        [
+            "cargo",
+            "metadata",
+            "--locked",
+            "--format-version",
+            "1",
+            "--manifest-path",
+            str(manifest),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    data = json.loads(raw)
+    packages = {package["id"]: package for package in data["packages"]}
+    nodes = {node["id"]: node for node in data["resolve"]["nodes"]}
+    return packages, nodes, {i: p["name"] for i, p in packages.items()}
+
+
+def local_closure(manifest: pathlib.Path, roots: set[str]) -> set[str]:
+    """Return every path-local crate reachable from `roots` in one workspace.
+
+    A crate with no `source` came from a path, not a registry, so it must exist
+    in the consumer's checkout for a `--locked` build to resolve. Recording only
+    the directly-imported crates under-describes what a consumer actually
+    compiles — and some of these leak types through a direct crate's public API,
+    so they are part of the observable surface even when never named in a
+    consumer manifest.
+    """
+    packages, nodes, _ = resolve_graph(manifest)
+    is_local = {i: p.get("source") is None for i, p in packages.items()}
+    seen: set[str] = set()
+
+    def walk(package_id: str) -> None:
+        for dependency in nodes.get(package_id, {}).get("deps", []):
+            target = dependency["pkg"]
+            if not is_local.get(target):
+                continue
+            name = packages[target]["name"]
+            if name in seen:
+                continue
+            seen.add(name)
+            walk(target)
+
+    for package_id, package in packages.items():
+        if package["name"] in roots and is_local.get(package_id):
+            walk(package_id)
+    return seen
+
+
 def publishable(package: dict) -> bool:
     """Return whether Cargo would allow publishing this package."""
     return package.get("publish") != []
+
+
+def transitive_lines(repository: pathlib.Path, workspaces: dict) -> list[str]:
+    """Emit `[[crate]]` entries for path-local crates reached only indirectly.
+
+    These are not part of the supported surface — a consumer should not name
+    them in its own manifest — but they must exist in the checkout for a
+    `--locked` build, and at least one of them (`wasi-http-metadata`) has its
+    types re-exported through a direct crate's public API. Recording them with
+    `direct = false` keeps the distinction explicit rather than leaving the
+    closure undescribed.
+
+    Derived, not hardcoded, so a new intermediate crate cannot slip in
+    unrecorded.
+    """
+    direct = {name for name, _, _ in COMPANION_CRATES}
+    seen: dict[str, tuple[str, str]] = {}
+    for workspace, manifest in (
+        ("wasi-auth", repository / "Cargo.toml"),
+        (
+            "wasi-http-middleware",
+            repository / "legacy/wasi-http-middleware/Cargo.toml",
+        ),
+    ):
+        roots = {name for name, _, ws in COMPANION_CRATES if ws == workspace}
+        for name in sorted(local_closure(manifest, roots)):
+            if name in direct or name in seen:
+                continue
+            seen[name] = (workspace, manifest)
+
+    lines: list[str] = []
+    for name in sorted(seen):
+        workspace, _ = seen[name]
+        package = workspaces[workspace].get(name)
+        if package is None:
+            # Reachable from the other workspace's graph; look there instead.
+            other = "wasi-auth" if workspace != "wasi-auth" else "wasi-http-middleware"
+            package = workspaces[other].get(name)
+            workspace = other
+        if package is None:
+            print(f"error: transitive crate is unresolvable: {name}", file=sys.stderr)
+            raise SystemExit(1)
+        path = pathlib.Path(package["manifest_path"]).parent.relative_to(repository)
+        lines.extend(
+            [
+                "",
+                "[[crate]]",
+                "package = " + quote(name),
+                "path = " + quote(str(path)),
+                "version = " + quote(package["version"]),
+                "workspace = " + quote(workspace),
+                "publish = " + ("true" if publishable(package) else "false"),
+                "direct = false",
+            ]
+        )
+    return lines
 
 
 def quote(value: str) -> str:
@@ -128,6 +241,13 @@ def main() -> int:
         "# downstream consumer may path-depend on, the components a release builds,",
         "# and the evidence files a consumer pins. Regenerate after any version or",
         "# packaging change; CI requires the tracked copy to match.",
+        "#",
+        "# `direct = true` marks a crate a consumer is supported in naming in its own",
+        "# manifest. `direct = false` marks a path-local crate reached only through",
+        "# one of those — never named by a consumer, but required in the checkout for",
+        "# a `--locked` build, and in at least one case re-exporting types through a",
+        "# direct crate's public API. The indirect set is derived from the resolved",
+        "# dependency graph, so a new intermediate crate cannot slip in unrecorded.",
         f"schema = {SCHEMA}",
         "",
         "[release]",
@@ -171,8 +291,11 @@ def main() -> int:
                 "version = " + quote(package["version"]),
                 "workspace = " + quote(workspace),
                 "publish = " + ("true" if publishable(package) else "false"),
+                "direct = true",
             ]
         )
+
+    lines.extend(transitive_lines(repository, workspaces))
 
     for component, package_name, source_path, wit_stem in COMPONENTS:
         packages = workspaces["wasi-auth"]
