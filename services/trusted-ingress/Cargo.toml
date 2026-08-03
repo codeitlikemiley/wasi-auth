@@ -21,4 +21,4 @@ tokio = { version = "1.52.0", features = ["macros", "net", "rt-multi-thread", "s
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 uuid = { version = "1.23.4", features = ["v7"] }
-wasi-auth = { version = "=0.1.0-rc.1", path = "../../crates/wasi-auth", features = ["cedar", "http", "jwt", "password", "postgres-native"] }
+wasi-auth = { version = "=0.1.0-rc.2", path = "../../crates/wasi-auth", features = ["cedar", "http", "jwt", "password", "postgres-native"] }

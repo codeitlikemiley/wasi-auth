@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-rc.2
+
+- Added the first-class Resend mail adapter to the native outbox worker.
+- Documented the outbox worker as a durable delivery process rather than an
+  email server, including local and production process topology.
+
 ## Unreleased
 
 - Consolidated authentication, authorization, trusted HTTP ingress, Leptos,

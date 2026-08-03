@@ -1,6 +1,6 @@
 # Production support matrix
 
-`0.1.0-rc.1` is a production release candidate. “Supported” below means the
+`0.1.0-rc.2` is a production release candidate. “Supported” below means the
 named contract has an executable release gate; stable promotion still requires
 the complete default-profile matrix.
 

@@ -13,6 +13,7 @@ use tracing_subscriber::EnvFilter;
 use wasi_auth::authentication::{Clock, RandomSource};
 use wasi_auth::mail::{
     CaptureMailer, HttpMailBearerToken, HttpMailEndpoint, HttpMailTransport, HttpMailer, Mailer,
+    ResendApiKey, ResendFromAddress, ResendMailer,
 };
 use wasi_auth::postgres::PostgresAuthStore;
 use wasi_auth::postgres::native::{NativePostgresTransport, connection_requires_tls};
@@ -81,6 +82,19 @@ async fn run() -> Result<(), WorkerError> {
             run_worker_loop(
                 store,
                 HttpMailer::new(endpoint, token, http),
+                sealing_key,
+                configuration.public_base_url,
+                relationship_writer,
+                configuration.mail_batch_size,
+                configuration.relationship_batch_size,
+                configuration.poll_interval,
+            )
+            .await
+        }
+        MailConfiguration::Resend { api_key, from } => {
+            run_worker_loop(
+                store,
+                ResendMailer::new(api_key, from, http),
                 sealing_key,
                 configuration.public_base_url,
                 relationship_writer,
@@ -311,6 +325,10 @@ enum MailConfiguration {
         endpoint: HttpMailEndpoint,
         token: HttpMailBearerToken,
     },
+    Resend {
+        api_key: ResendApiKey,
+        from: ResendFromAddress,
+    },
 }
 
 struct SpiceDbConfiguration {
@@ -395,6 +413,12 @@ impl WorkerConfig {
                     .map_err(|_| WorkerError::MailConfiguration)?,
                 }
             }
+            "resend" => MailConfiguration::Resend {
+                api_key: ResendApiKey::new(required(&mut value, "AUTH_RESEND_API_KEY", 4_096)?)
+                    .map_err(|_| WorkerError::MailConfiguration)?,
+                from: ResendFromAddress::new(required(&mut value, "AUTH_RESEND_FROM", 320)?)
+                    .map_err(|_| WorkerError::MailConfiguration)?,
+            },
             _ => return Err(WorkerError::MailConfiguration),
         };
 
@@ -616,6 +640,26 @@ mod tests {
         assert!(matches!(
             configuration(&values),
             Err(WorkerError::InvalidOutboxKey)
+        ));
+    }
+
+    #[test]
+    fn resend_configuration_requires_key_and_sender() {
+        let mut values = valid_values();
+        values.insert("AUTH_MAIL_TRANSPORT", "resend".to_owned());
+        assert!(matches!(
+            configuration(&values),
+            Err(WorkerError::MissingOrInvalid("AUTH_RESEND_API_KEY"))
+        ));
+
+        values.insert("AUTH_RESEND_API_KEY", "re_test_key".to_owned());
+        values.insert(
+            "AUTH_RESEND_FROM",
+            "Workspace <auth@example.test>".to_owned(),
+        );
+        assert!(matches!(
+            configuration(&values).expect("valid Resend config").mail,
+            MailConfiguration::Resend { .. }
         ));
     }
 
