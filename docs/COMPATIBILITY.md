@@ -84,9 +84,21 @@ derives it from `cargo metadata` for both workspaces, and CI fails if the
 tracked copy drifts, so a rename, a move, or a version bump cannot silently
 desynchronize a consumer's lock.
 
-The six supported companion crates are `leptos-wasi-authz`,
-`wasi-authz-cedar`, `wasi-authz-client`, `wasi-authz-contract`,
-`wasi-authz-spicedb` — all at the workspace version — and `wasi-http-authn`,
-which lives in the excluded `legacy/wasi-http-middleware` workspace and moves
-on its own `0.2.0-alpha.3` line. The two version lines are independent by
-design; a consumer must pin both.
+The six supported companion crates, marked `direct = true`, are
+`leptos-wasi-authz`, `wasi-authz-cedar`, `wasi-authz-client`,
+`wasi-authz-contract`, `wasi-authz-spicedb` — all at the workspace version —
+and `wasi-http-authn`, which lives in the excluded
+`legacy/wasi-http-middleware` workspace and moves on its own `0.2.0-alpha.3`
+line. The two version lines are independent by design; a consumer must pin
+both.
+
+Four further path-local crates are recorded with `direct = false`:
+`wasi-authz-http`, `wasi-authz-testkit`, `wasi-http-metadata`, and
+`wasi-http-policy-core`. A consumer should not name these in its own manifest,
+but they are not incidental either — they must be present in the checkout for a
+`--locked` build to resolve, and `wasi-http-metadata`'s types (`AuthContextV1`,
+`VerifiedAuthContext`, and siblings) are re-exported through
+`leptos-wasi-authz`, so they are part of the surface a consumer observes even
+without depending on them. That set is derived from the resolved dependency
+graph rather than listed by hand, so a new intermediate crate cannot appear
+unrecorded.
