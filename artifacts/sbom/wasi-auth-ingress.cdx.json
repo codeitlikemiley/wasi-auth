@@ -3,7 +3,7 @@
   "components": [
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-auth@0.1.0-rc.1",
+      "bom-ref": "pkg:cargo/wasi-auth@0.1.0-rc.2",
       "description": "Production authentication, authorization, and trusted ingress for WASI applications",
       "externalReferences": [
         {
@@ -21,10 +21,10 @@
         }
       ],
       "name": "wasi-auth",
-      "purl": "pkg:cargo/wasi-auth@0.1.0-rc.1",
+      "purl": "pkg:cargo/wasi-auth@0.1.0-rc.2",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.1"
+      "version": "0.1.0-rc.2"
     },
     {
       "author": "RustCrypto Developers",
@@ -7493,7 +7493,7 @@
     },
     {
       "author": "Mathijs van de Nes <git@mathijs.vd-nes.nl>, John Ericson <git@JohnEricson.me>, Joshua Barretto <joshua.s.barretto@gmail.com>",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#spin@0.9.8",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#spin@0.9.9",
       "description": "Spin-based synchronization primitives",
       "externalReferences": [
         {
@@ -7504,7 +7504,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+          "content": "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
         }
       ],
       "licenses": [
@@ -7513,10 +7513,10 @@
         }
       ],
       "name": "spin",
-      "purl": "pkg:cargo/spin@0.9.8",
+      "purl": "pkg:cargo/spin@0.9.9",
       "scope": "required",
       "type": "library",
-      "version": "0.9.8"
+      "version": "0.9.9"
     },
     {
       "author": "RustCrypto Developers",
@@ -10467,7 +10467,7 @@
         "registry+https://github.com/rust-lang/crates.io-index#uuid@1.23.4",
         "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.9.0"
       ],
-      "ref": "pkg:cargo/wasi-auth@0.1.0-rc.1"
+      "ref": "pkg:cargo/wasi-auth@0.1.0-rc.2"
     },
     {
       "dependsOn": [
@@ -10484,9 +10484,9 @@
         "registry+https://github.com/rust-lang/crates.io-index#tracing@0.1.44",
         "registry+https://github.com/rust-lang/crates.io-index#tracing-subscriber@0.3.23",
         "registry+https://github.com/rust-lang/crates.io-index#uuid@1.23.4",
-        "pkg:cargo/wasi-auth@0.1.0-rc.1"
+        "pkg:cargo/wasi-auth@0.1.0-rc.2"
       ],
-      "ref": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.1"
+      "ref": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.2"
     },
     {
       "dependsOn": [
@@ -11393,7 +11393,7 @@
     },
     {
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#spin@0.9.8"
+        "registry+https://github.com/rust-lang/crates.io-index#spin@0.9.9"
       ],
       "ref": "registry+https://github.com/rust-lang/crates.io-index#lazy_static@1.5.0"
     },
@@ -11520,7 +11520,7 @@
         "registry+https://github.com/rust-lang/crates.io-index#httparse@1.10.1",
         "registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.3",
         "registry+https://github.com/rust-lang/crates.io-index#mime@0.3.17",
-        "registry+https://github.com/rust-lang/crates.io-index#spin@0.9.8",
+        "registry+https://github.com/rust-lang/crates.io-index#spin@0.9.9",
         "registry+https://github.com/rust-lang/crates.io-index#version_check@0.9.5"
       ],
       "ref": "registry+https://github.com/rust-lang/crates.io-index#multer@3.1.0"
@@ -12180,7 +12180,7 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#socket2@0.6.4"
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#spin@0.9.8"
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#spin@0.9.9"
     },
     {
       "dependsOn": [
@@ -12832,14 +12832,14 @@
   ],
   "metadata": {
     "component": {
-      "bom-ref": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.1",
+      "bom-ref": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.2",
       "components": [
         {
-          "bom-ref": "path+file://./services/trusted-ingress#wasi-auth-ingress@0.1.0-rc.1 bin-target-0",
+          "bom-ref": "path+file://./services/trusted-ingress#wasi-auth-ingress@0.1.0-rc.2 bin-target-0",
           "name": "wasi-auth-ingress",
-          "purl": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.1?download_url=file://.#src/main.rs",
+          "purl": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.2?download_url=file://.#src/main.rs",
           "type": "application",
-          "version": "0.1.0-rc.1"
+          "version": "0.1.0-rc.2"
         }
       ],
       "description": "Native trusted ingress for wasi-auth Spin applications",
@@ -12849,10 +12849,10 @@
         }
       ],
       "name": "wasi-auth-ingress",
-      "purl": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.1",
+      "purl": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.2",
       "scope": "required",
       "type": "application",
-      "version": "0.1.0-rc.1"
+      "version": "0.1.0-rc.2"
     },
     "properties": [
       {
@@ -12868,7 +12868,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:9d80c002-2cd1-5740-8967-9310ddb032c0",
+  "serialNumber": "urn:uuid:bf586278-6cc3-5741-9f89-ddd4587c7901",
   "specVersion": "1.5",
   "version": 1
 }

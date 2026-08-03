@@ -3,7 +3,7 @@
   "components": [
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.1",
+      "bom-ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.2",
       "description": "Transport-neutral AuthZEN client with additive WASIp2 and WASIp3 transports",
       "externalReferences": [
         {
@@ -21,14 +21,14 @@
         }
       ],
       "name": "wasi-authz-client",
-      "purl": "pkg:cargo/wasi-authz-client@0.1.0-rc.1",
+      "purl": "pkg:cargo/wasi-authz-client@0.1.0-rc.2",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.1"
+      "version": "0.1.0-rc.2"
     },
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.1",
+      "bom-ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.2",
       "description": "Bounded AuthZEN 1.0 authorization request and decision types",
       "externalReferences": [
         {
@@ -46,14 +46,14 @@
         }
       ],
       "name": "wasi-authz-contract",
-      "purl": "pkg:cargo/wasi-authz-contract@0.1.0-rc.1",
+      "purl": "pkg:cargo/wasi-authz-contract@0.1.0-rc.2",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.1"
+      "version": "0.1.0-rc.2"
     },
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-authz-http@0.1.0-rc.1",
+      "bom-ref": "pkg:cargo/wasi-authz-http@0.1.0-rc.2",
       "description": "Coarse HTTP policy enforcement helpers for wasi-authz",
       "externalReferences": [
         {
@@ -71,10 +71,10 @@
         }
       ],
       "name": "wasi-authz-http",
-      "purl": "pkg:cargo/wasi-authz-http@0.1.0-rc.1",
+      "purl": "pkg:cargo/wasi-authz-http@0.1.0-rc.2",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.1"
+      "version": "0.1.0-rc.2"
     },
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
@@ -736,33 +736,6 @@
       "version": "1.0.3"
     },
     {
-      "author": "Stjepan Glavina <stjepang@gmail.com>, Taiki Endo <te316e89@gmail.com>, John Nunley <dev@notgull.net>",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#concurrent-queue@2.5.0",
-      "description": "Concurrent multi-producer multi-consumer queue",
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/smol-rs/concurrent-queue"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "4ca0197aee26d1ae37445ee532fefce43251d24cc7c166799f4d46817f1d3973"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "Apache-2.0 OR MIT"
-        }
-      ],
-      "name": "concurrent-queue",
-      "purl": "pkg:cargo/concurrent-queue@2.5.0",
-      "scope": "required",
-      "type": "library",
-      "version": "2.5.0"
-    },
-    {
       "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#config@0.15.25",
       "description": "Layered configuration system for Rust applications.",
       "externalReferences": [
@@ -1042,36 +1015,6 @@
       "scope": "required",
       "type": "library",
       "version": "0.2.17"
-    },
-    {
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#crossbeam-utils@0.8.22",
-      "description": "Utilities for concurrent programming",
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://github.com/crossbeam-rs/crossbeam/tree/master/crossbeam-utils"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/crossbeam-rs/crossbeam"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "61803da095bee82a81bb1a452ecc25d3b2f1416d1897eb86430c6159ef717c17"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "crossbeam-utils",
-      "purl": "pkg:cargo/crossbeam-utils@0.8.22",
-      "scope": "required",
-      "type": "library",
-      "version": "0.8.22"
     },
     {
       "author": "RustCrypto Developers",
@@ -1431,7 +1374,7 @@
     },
     {
       "author": "Stjepan Glavina <stjepang@gmail.com>, John Nunley <dev@notgull.net>",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#event-listener@5.4.1",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#event-listener@5.4.2",
       "description": "Notify async tasks or threads",
       "externalReferences": [
         {
@@ -1442,7 +1385,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "e13b66accf52311f30a0db42147dadea9850cb48cd070028831ae5f5d4b856ab"
+          "content": "5a23add41df1562121a9393cb065eab5146a1242410f23a644851e90cfd669d2"
         }
       ],
       "licenses": [
@@ -1451,10 +1394,10 @@
         }
       ],
       "name": "event-listener",
-      "purl": "pkg:cargo/event-listener@5.4.1",
+      "purl": "pkg:cargo/event-listener@5.4.2",
       "scope": "required",
       "type": "library",
-      "version": "5.4.1"
+      "version": "5.4.2"
     },
     {
       "author": "Alex Crichton <alex@alexcrichton.com>",
@@ -5117,7 +5060,7 @@
     },
     {
       "author": "Mathijs van de Nes <git@mathijs.vd-nes.nl>, John Ericson <git@JohnEricson.me>, Joshua Barretto <joshua.s.barretto@gmail.com>",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#spin@0.9.8",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#spin@0.9.9",
       "description": "Spin-based synchronization primitives",
       "externalReferences": [
         {
@@ -5128,7 +5071,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+          "content": "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
         }
       ],
       "licenses": [
@@ -5137,10 +5080,10 @@
         }
       ],
       "name": "spin",
-      "purl": "pkg:cargo/spin@0.9.8",
+      "purl": "pkg:cargo/spin@0.9.9",
       "scope": "required",
       "type": "library",
-      "version": "0.9.8"
+      "version": "0.9.9"
     },
     {
       "author": "Robert Grosse <n210241048576@gmail.com>",
@@ -7479,12 +7422,12 @@
         "registry+https://github.com/rust-lang/crates.io-index#leptos@0.8.20",
         "registry+https://github.com/rust-lang/crates.io-index#server_fn@0.8.13",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
-        "pkg:cargo/wasi-authz-client@0.1.0-rc.1",
-        "pkg:cargo/wasi-authz-contract@0.1.0-rc.1",
-        "pkg:cargo/wasi-authz-http@0.1.0-rc.1",
+        "pkg:cargo/wasi-authz-client@0.1.0-rc.2",
+        "pkg:cargo/wasi-authz-contract@0.1.0-rc.2",
+        "pkg:cargo/wasi-authz-http@0.1.0-rc.2",
         "pkg:cargo/wasi-http-metadata@0.2.0-alpha.3"
       ],
-      "ref": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.1"
+      "ref": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.2"
     },
     {
       "dependsOn": [
@@ -7493,10 +7436,10 @@
         "registry+https://github.com/rust-lang/crates.io-index#http@1.4.2",
         "registry+https://github.com/rust-lang/crates.io-index#http-body-util@0.1.3",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
-        "pkg:cargo/wasi-authz-contract@0.1.0-rc.1",
+        "pkg:cargo/wasi-authz-contract@0.1.0-rc.2",
         "registry+https://github.com/rust-lang/crates.io-index#wasip3@0.7.0+wasi-0.3.0"
       ],
-      "ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.1"
+      "ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.2"
     },
     {
       "dependsOn": [
@@ -7504,17 +7447,17 @@
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18"
       ],
-      "ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.1"
+      "ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.2"
     },
     {
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#http@1.4.2",
-        "pkg:cargo/wasi-authz-client@0.1.0-rc.1",
-        "pkg:cargo/wasi-authz-contract@0.1.0-rc.1",
+        "pkg:cargo/wasi-authz-client@0.1.0-rc.2",
+        "pkg:cargo/wasi-authz-contract@0.1.0-rc.2",
         "pkg:cargo/wasi-http-metadata@0.2.0-alpha.3",
         "pkg:cargo/wasi-http-policy-core@0.2.0-alpha.3"
       ],
-      "ref": "pkg:cargo/wasi-authz-http@0.1.0-rc.1"
+      "ref": "pkg:cargo/wasi-authz-http@0.1.0-rc.2"
     },
     {
       "dependsOn": [
@@ -7555,7 +7498,7 @@
     },
     {
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#event-listener@5.4.1",
+        "registry+https://github.com/rust-lang/crates.io-index#event-listener@5.4.2",
         "registry+https://github.com/rust-lang/crates.io-index#event-listener-strategy@0.5.4",
         "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17"
       ],
@@ -7686,12 +7629,6 @@
     },
     {
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#crossbeam-utils@0.8.22"
-      ],
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#concurrent-queue@2.5.0"
-    },
-    {
-      "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#convert_case@0.6.0",
         "registry+https://github.com/rust-lang/crates.io-index#pathdiff@0.2.3",
         "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228",
@@ -7747,9 +7684,6 @@
         "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186"
       ],
       "ref": "registry+https://github.com/rust-lang/crates.io-index#cpufeatures@0.2.17"
-    },
-    {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#crossbeam-utils@0.8.22"
     },
     {
       "dependsOn": [
@@ -7818,18 +7752,17 @@
     },
     {
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#event-listener@5.4.1",
+        "registry+https://github.com/rust-lang/crates.io-index#event-listener@5.4.2",
         "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17"
       ],
       "ref": "registry+https://github.com/rust-lang/crates.io-index#event-listener-strategy@0.5.4"
     },
     {
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#concurrent-queue@2.5.0",
         "registry+https://github.com/rust-lang/crates.io-index#parking@2.2.1",
         "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17"
       ],
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#event-listener@5.4.1"
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#event-listener@5.4.2"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#fnv@1.0.7"
@@ -8363,7 +8296,7 @@
         "registry+https://github.com/rust-lang/crates.io-index#httparse@1.10.1",
         "registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.3",
         "registry+https://github.com/rust-lang/crates.io-index#mime@0.3.17",
-        "registry+https://github.com/rust-lang/crates.io-index#spin@0.9.8",
+        "registry+https://github.com/rust-lang/crates.io-index#spin@0.9.9",
         "registry+https://github.com/rust-lang/crates.io-index#version_check@0.9.5"
       ],
       "ref": "registry+https://github.com/rust-lang/crates.io-index#multer@3.1.0"
@@ -8760,7 +8693,7 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#socket2@0.6.4"
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#spin@0.9.8"
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#spin@0.9.9"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#stable_deref_trait@1.2.1"
@@ -9329,14 +9262,14 @@
     ],
     "component": {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.1",
+      "bom-ref": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.2",
       "components": [
         {
-          "bom-ref": "path+file://./crates/leptos-wasi-authz#0.1.0-rc.1 bin-target-0",
+          "bom-ref": "path+file://./crates/leptos-wasi-authz#0.1.0-rc.2 bin-target-0",
           "name": "leptos_wasi_authz",
-          "purl": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.1?download_url=file://.#src/lib.rs",
+          "purl": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.2?download_url=file://.#src/lib.rs",
           "type": "library",
-          "version": "0.1.0-rc.1"
+          "version": "0.1.0-rc.2"
         }
       ],
       "description": "Typed Leptos context and server-function authorization layers for wasi-authz",
@@ -9356,10 +9289,10 @@
         }
       ],
       "name": "leptos-wasi-authz",
-      "purl": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.1",
+      "purl": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.2",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.1"
+      "version": "0.1.0-rc.2"
     },
     "properties": [
       {
@@ -9375,7 +9308,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:c2557b6f-3553-5b38-8f90-6ba62b144b0d",
+  "serialNumber": "urn:uuid:4e9fd1fd-45cb-54d5-a93e-8d4f805369d2",
   "specVersion": "1.5",
   "version": 1
 }
