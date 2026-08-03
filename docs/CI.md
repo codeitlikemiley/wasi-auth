@@ -43,3 +43,62 @@ subsequent release checks. No CI lane checks out DDD: the authentication crate,
 package archive, and PostgreSQL live runner are independently releasable.
 `PACKAGE_STRUCTURAL_ONLY=1` exists for archive inspection only and is never
 release evidence.
+
+## Provisioning an agent session
+
+`.claude/hooks/session-start.sh` provisions a Claude Code on the web container
+with the same tools the lanes above use. It runs only when
+`CLAUDE_CODE_REMOTE=true`, so a local checkout is left alone.
+
+It runs asynchronously: the session starts immediately and provisioning
+continues behind it. That trades a wait for a race, so the hook writes
+`$HOME/.cache/leptos-wasi-tools/.ready` as its final act. Anything needing
+certainty before it runs a gate can block on that marker:
+
+```bash
+until [ -f "$HOME/.cache/leptos-wasi-tools/.ready" ]; do sleep 1; done
+```
+
+The marker is deleted at the start of every run, so its presence always means
+the current run finished — never that some earlier one did. Its contents are
+`complete`, or `incomplete: <tools>` naming whatever failed. A failed download
+never aborts the session; re-running the hook retries only what is missing.
+
+It hardcodes no versions. Every one is read through `compat_value` from
+[`compatibility.toml`](../compatibility.toml), the same accessor the release
+scripts use, so bumping a version there is enough.
+
+Downloaded binaries — `wasm-tools`, `wasmtime`, `cosign`, `oras` — install to
+`$HOME/.cache/leptos-wasi-tools/<name>-<version>/`, one of the locations
+`resolve_pinned_tool` already searches. No environment variable is needed for
+the scripts to find them, and because the cache sits outside the working tree
+it survives both a fresh clone and `cargo clean`.
+
+Cargo subcommands install to `$CARGO_HOME/bin` from upstream release assets by
+direct URL. Discovery-based installers do not work here: the managed container
+answers 403 for the GitHub REST and GraphQL APIs, with or without a token,
+while `releases/download/...` answers 200, so discovery concludes no prebuilt
+binary exists and falls back to a multi-minute source build per tool. Direct
+URLs keep a cold run at roughly eight seconds. `cargo-binstall` and
+`cargo install` remain as fallbacks if an asset is renamed upstream.
+
+`cargo-cyclonedx` is the exception and is built from source. It publishes no
+upstream binary, and taking the tool that generates this repository's SBOMs
+from an unattested third-party rebuild is not a trade worth making.
+
+The hook never writes to the working tree. `cargo fetch` runs with `--locked`
+so it cannot rewrite a lockfile and leave `require_clean_tree` failing, and
+`fuzz/` is skipped for that reason — its lockfile trails its manifest.
+
+Two stages are off by default because they are large and rarely needed:
+
+| Variable | Effect |
+|---|---|
+| `WASI_AUTH_SETUP_FUZZ=1` | installs the pinned nightly toolchain and `cargo-fuzz` |
+| `WASI_AUTH_SETUP_PROVIDERS=1` | installs checksum-verified SpiceDB and zed, and exports `SPICEDB_BIN`/`ZED_BIN` |
+| `WASI_AUTH_SETUP_SKIP_CARGO_TOOLS=1` | skips the cargo subcommands |
+| `WASI_AUTH_SETUP_SKIP_FETCH=1` | skips prefetching the three lockfiles |
+
+The PostgreSQL lanes need a live server rather than a binary, so the hook does
+not provision one; export `WASI_AUTH_POSTGRES_TEST_URL` against a reachable
+instance to run them.

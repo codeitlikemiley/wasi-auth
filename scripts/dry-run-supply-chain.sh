@@ -80,10 +80,27 @@ done
 temporary_keys="$(mktemp -d "${TMPDIR:-/tmp}/wasi-authz-cosign.XXXXXX")"
 COSIGN_PASSWORD="" "${cosign_bin}" generate-key-pair \
     --output-key-prefix "${temporary_keys}/cosign" >/dev/null
+# This dry run signs with an ephemeral key and verifies with
+# --insecure-ignore-tlog, so it never uses a transparency log, a certificate
+# authority, or a timestamp authority. Cosign 3 nevertheless resolves a signing
+# config from Sigstore's TUF repository unless one is supplied, which makes an
+# otherwise local step fail on any host without egress to that service. Supply
+# an explicit config carrying no Fulcio, Rekor, OIDC, or TSA endpoint so the
+# assembly and signature-verification proof stays hermetic. A real release does
+# not reuse this path; it signs with an authorized identity and publishes
+# transparency evidence.
+signing_config="${temporary_keys}/signing-config.json"
+"${cosign_bin}" signing-config create \
+    --no-default-fulcio \
+    --no-default-rekor \
+    --no-default-oidc \
+    --no-default-tsa \
+    --out "${signing_config}" >/dev/null
 for signed in "${provenance}" "${output_root}/manifest.json"; do
     name="$(basename "${signed}")"
     bundle="${output_root}/${name}.sigstore.json"
     COSIGN_PASSWORD="" "${cosign_bin}" sign-blob --yes \
+        --signing-config "${signing_config}" \
         --key "${temporary_keys}/cosign.key" \
         --bundle "${bundle}" "${signed}" >/dev/null
     "${cosign_bin}" verify-blob \

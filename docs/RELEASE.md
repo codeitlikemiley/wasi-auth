@@ -74,8 +74,14 @@ bash scripts/generate-native-checksums.sh
 bash scripts/generate-sbom.sh
 git diff --exit-code -- artifacts/SHA256SUMS artifacts/sbom reports/wit
 bash scripts/check-packages.sh
+bash scripts/generate-companion-manifest.sh
+git diff --exit-code -- companion.toml
 bash scripts/dry-run-supply-chain.sh
 ```
+
+`companion.toml` is the surface a downstream consumer pins. Regenerate it in
+the same clean lane; a drift there means a consumer's lock is recording crates
+or artifact paths this repository no longer produces.
 
 The generated fullstack consumer must additionally pass its protected-path
 paired benchmark, five-sample absolute benchmark, and soak against the exact
