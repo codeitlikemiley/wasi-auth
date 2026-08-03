@@ -404,10 +404,39 @@ repository by revision rather than consuming the published crate — so
 "`rc.2` at revision `e3e8ca5`" is a precise, verifiable pin, and burning a
 version number to correct metadata that was never published would buy nothing.
 
-One defect in the published `rc.2` is real and is not fixed by any of this:
-`Cargo.lock` **is** included in the published tarball, and the published lock
-resolves `event-listener 5.4.1` (RUSTSEC-2026-0221) and yanked `spin 0.9.8`.
-Since this crate ships a binary, `cargo install wasi-auth --locked` pulls the
-advisory. The repository is fixed; the published tarball cannot be. That is an
-argument for cutting `rc.3` on its own schedule — it does not block the
-consumer, which never installs the binary.
+One defect in the published `rc.2` is real and is not fixed by any of this.
+Confirmed by downloading the published archive rather than by reading the
+repository: `Cargo.lock` **is** included, and it resolves
+`event-listener 5.4.1` (RUSTSEC-2026-0221) and yanked `spin 0.9.8`. The
+repository's own lockfile is clean at `5.4.2` and `0.9.9`.
+
+Who this reaches, verified rather than assumed:
+
+| Path | Affected | Why |
+|---|---|---|
+| A registry consumer of the library | No | Cargo ignores a dependency's `Cargo.lock` entirely |
+| `leptos_wasi`, the consumer in this brief | No | It path-depends on this repository and never resolves the published archive |
+| `cargo install wasi-auth` | No | Without `--locked`, Cargo re-resolves and picks the fixed versions |
+| `cargo install wasi-auth --locked` | **Yes** | The crate ships the `wasi-auth-outbox-worker` binary, and `--locked` builds it against the archived lockfile |
+
+So the exposure is one install path, not the consumer-facing surface. A
+published version is immutable, so only a republish corrects it.
+
+The root cause is narrower than the symptom and worth naming separately.
+`rc.2` was published from `3b31527`, a commit that only ever existed on the
+unmerged branch `codex/fullstack-verification-flow`. No gate ran against it,
+and at that commit the workspace lockfile still carried both crates. The
+repository has no publish automation at all — one workflow, no `cargo publish`,
+no registry token — so `rc.1` and `rc.2` were both hand-published, and nothing
+structurally prevented a release from a commit that never passed CI.
+
+`scripts/audit-packaged-lock.sh` now closes the half of this that a gate can
+close: it audits the lockfile inside the archive, denying advisories and yanked
+crates alike. It was verified in both directions — clean against the archive
+`main` builds today, and failing against the archive `rc.2` actually shipped,
+reporting exactly those two crates. The other half, publishing only from a
+verified commit, is a process rule rather than a check, and is recorded in
+[`RELEASE.md`](RELEASE.md).
+
+Whether to spend `rc.3` on the one affected install path is a release decision
+rather than a compatibility one; it does not block the consumer.

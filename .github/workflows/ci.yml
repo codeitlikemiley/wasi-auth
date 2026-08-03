@@ -295,6 +295,9 @@ jobs:
         with:
           toolchain: 1.93.0
       - run: bash scripts/check-packages.sh
+      - run: cargo install cargo-audit --locked --version 0.22.1
+      - name: Audit the lockfile the archive actually ships
+        run: bash scripts/audit-packaged-lock.sh
       - run: bash scripts/generate-companion-manifest.sh
       - name: Verify tracked companion surface manifest
         run: git diff --exit-code -- companion.toml
