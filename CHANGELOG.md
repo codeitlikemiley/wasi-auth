@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased (post-0.1.0-rc.2)
+
+- Added `scripts/audit-packaged-lock.sh` and a CI gate that audits the lockfile
+  inside the published archive, denying both advisories and yanked crates. The
+  workspace lockfile and the packaged lockfile are different files, and only
+  the packaged one is what `cargo install --locked wasi-auth` resolves the
+  outbox worker against. The published `0.1.0-rc.2` archive ships a lockfile
+  carrying RUSTSEC-2026-0221 (`event-listener 5.4.1`) and a yanked
+  `spin 0.9.8`; the repository's own lockfile is clean, and the gate now fails
+  on an archive like that instead of letting it reach the registry.
+
 ## 0.1.0-rc.2
 
 - Added the first-class Resend mail adapter to the native outbox worker.

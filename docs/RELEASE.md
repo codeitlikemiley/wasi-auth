@@ -26,6 +26,19 @@ The legacy authorization packages, Leptos bridge, HTTP PEP, Cedar/SpiceDB PDP
 components, and native Cedar PDP are all `publish = false` compatibility or
 deployment artifacts.
 
+`scripts/audit-packaged-lock.sh` then audits the lockfile inside that archive.
+That is a different file from the workspace lockfile: it resolves only
+`wasi-auth`'s own closure, and it is what `cargo install --locked wasi-auth`
+builds the outbox worker against. Auditing the workspace lockfile alone leaves
+the shipped one ungated. Both advisories and yanked crates are denied, because
+a yank is the registry's own statement that a version must not be used.
+
+Release from a commit on `main` that has passed these gates. `0.1.0-rc.2` was
+published from a commit that only ever existed on an unmerged branch, so no
+gate ran against it, and it reached crates.io with a lockfile carrying
+RUSTSEC-2026-0221 and a yanked `spin 0.9.8`. Publishing from an unverified
+commit is what the packaged-lock gate above cannot catch on its own.
+
 There is no prior public `wasi-auth` release, so this RC becomes the first
 SemVer baseline. `scripts/check-alpha-api-inventory.sh` remains a private
 compatibility regression inventory and does not create additional supported
@@ -74,6 +87,7 @@ bash scripts/generate-native-checksums.sh
 bash scripts/generate-sbom.sh
 git diff --exit-code -- artifacts/SHA256SUMS artifacts/sbom reports/wit
 bash scripts/check-packages.sh
+bash scripts/audit-packaged-lock.sh
 bash scripts/generate-companion-manifest.sh
 git diff --exit-code -- companion.toml
 bash scripts/dry-run-supply-chain.sh
