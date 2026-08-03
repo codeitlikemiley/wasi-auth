@@ -1,12 +1,12 @@
-# Consumer alignment: `leptos_wasi` from `0.1.0-alpha.4` to `0.1.0-rc.1`
+# Consumer alignment: `leptos_wasi` from `0.1.0-alpha.4` to `0.1.0-rc.2`
 
 This records what `leptos_wasi` must change to move its pin of this repository
-from `wasi-auth 0.1.0-alpha.4` to `0.1.0-rc.1`, and what this repository
+from `wasi-auth 0.1.0-alpha.4` to `0.1.0-rc.2`, and what this repository
 produced for it. Nothing in `leptos_wasi` was modified to produce this; every
 build check below ran against a scratch copy.
 
 Verified against `leptos_wasi` `main` = `fa424c1` and this repository at
-`bef5e1d`. The `0.1.0-alpha.4` baseline is `901d283`, the last commit carrying
+`e3e8ca5`. The `0.1.0-alpha.4` baseline is `901d283`, the last commit carrying
 that workspace version.
 
 ## 1. API surface
@@ -15,7 +15,7 @@ that workspace version.
 than a signature comparison:
 
 ```
-git diff --stat 901d283 bef5e1d -- \
+git diff --stat 901d283 e3e8ca5 -- \
   crates/leptos-wasi-authz crates/wasi-authz-client crates/wasi-authz-contract \
   crates/wasi-authz-cedar crates/wasi-authz-spicedb \
   legacy/wasi-http-middleware/crates/authn
@@ -23,7 +23,7 @@ git diff --stat 901d283 bef5e1d -- \
 
 reports changes to three `Cargo.toml` files and **no `.rs` file at all**. The
 three edits are internal path-dependency pins (`wasi-authz-http` and
-`wasi-authz-testkit`) moving from `=0.1.0-alpha.4` to `=0.1.0-rc.1`; neither
+`wasi-authz-testkit`) moving from `=0.1.0-alpha.4` to `=0.1.0-rc.2`; neither
 crate is part of the consumer's import surface. `legacy/wasi-http-middleware`
 is byte-identical across the range, so `wasi-http-authn 0.2.0-alpha.3` is the
 same code the consumer already compiles.
@@ -32,7 +32,7 @@ The consumer imports 24 symbols, not the 20 previously catalogued —
 `wasi_authz_cedar::CedarProvider` and
 `wasi_authz_spicedb::{PermissionMap, SpiceDbEndpoint, SpiceDbProvider}` were
 missing from the earlier list. All 24 are listed below with their definition
-sites at `0.1.0-rc.1`.
+sites at `0.1.0-rc.2`.
 
 | Crate | Symbol | Kind | Defined at | Verdict |
 |---|---|---|---|---|
@@ -81,7 +81,7 @@ Both consumer fixtures were compiled against this branch with Rust 1.93.0 for
 
 - `tests/authz-fixture` (wasip3, all 24 symbols) — `cargo check --locked
   --all-targets` exits 0 once its five `=0.1.0-alpha.4` pins read
-  `=0.1.0-rc.1`. Left unedited it fails to resolve, which is the only thing
+  `=0.1.0-rc.2`. Left unedited it fails to resolve, which is the only thing
   that fails.
 - `tests/authz-lifecycle-wasip2` — `cargo check --locked --all-targets` exits 0
   with **no edit at all**. It declares `wasi-authz-client` and
@@ -93,9 +93,9 @@ Nothing beyond the version pins has to change on the consumer side.
 
 ## 2. Artifact names and stack order
 
-Both still hold at `0.1.0-rc.1`.
+Both still hold at `0.1.0-rc.2`.
 
-`reports/wit/` is byte-identical between `901d283` and `bef5e1d`, so the
+`reports/wit/` is byte-identical between `901d283` and `e3e8ca5`, so the
 component contracts did not move at all.
 
 | Locked component | Source directory | Cargo package | Built artifact |
@@ -123,23 +123,36 @@ middleware components (`request-id`, `security-headers`, `cors`,
 ## 3. The regenerated bundle
 
 Produced from a clean, non-dirty tree at revision
-`bef5e1d20c1a752188f1af6c734521ca670f4191` on Ubuntu 24.04.4 / x86_64 /
+`e3e8ca50090f192820af99fa061029a6aba6001f` on Ubuntu 24.04.4 / x86_64 /
 Rust 1.93.0 — the canonical CI lane — with `wasm-tools 1.253.0`,
 `cargo-cyclonedx 0.5.9`, `cosign 3.1.1`, `oras 1.3.2`.
 
 The component build embeds absolute source paths, so its digest depends on the
 checkout path and `CARGO_HOME`. Rebuilt under the CI's exact layout, all three
-components reproduce the tracked `artifacts/SHA256SUMS` **byte for byte**; the
-tracked checksums at `rc.1` were already correct and needed no refresh.
-`reports/wit`, `artifacts/sbom`, and `companion.toml` also regenerate with no
+components reproduce the tracked `artifacts/SHA256SUMS` **byte for byte**, and
+`reports/wit`, `artifacts/sbom`, and `companion.toml` all regenerate with no
 drift.
+
+Those tracked checksums are correct only because they were refreshed first. The
+tree that shipped as `0.1.0-rc.2` bumped every manifest but never regenerated
+its artifact metadata, so all fourteen SBOMs still described `rc.1` and all
+three component digests were stale — the crate version is embedded in each
+component, so bumping it moves every digest. That is repository-only: the
+published crate is rooted at `crates/wasi-auth` and `artifacts/` sits at the
+repository root, so no SBOM or checksum was ever inside the published tarball.
+It still mattered here, because a consumer pins this repository by revision.
+
+The WIT reports did **not** move. `reports/wit/*.wit` is byte-identical between
+`rc.1` and `rc.2`, which is the expected result: the contracts carry no crate
+version, so the component interfaces are unchanged and only embedded metadata
+differs.
 
 Values the consumer should record:
 
 ```
 artifact_name    = "wasi-authz"
-artifact_version = "0.1.0-rc.1"
-artifact_revision = "bef5e1d20c1a752188f1af6c734521ca670f4191"
+artifact_version = "0.1.0-rc.2"
+artifact_revision = "e3e8ca50090f192820af99fa061029a6aba6001f"
 ```
 
 That is the revision the bundle was built from. Anything committed after it on
@@ -149,18 +162,18 @@ revision it signs.
 
 | Component | `sha256` | `sbom_sha256` | `wit_sha256` |
 |---|---|---|---|
-| `authz-http-pep` | `29f6d86f…e1d5bb96` | `cd21bb20…b68da086` | `de6325ca…f55912d93` |
-| `cedar-pdp` | `ffa1869a…f53f4074f` | `d77ec229…0d0dd552` | `7394503e…af75629e` |
-| `spicedb-pdp` | `c57b6c7d…92d1cde1` | `0adfc137…cc75c40d` | `7d602957…f87855a2c0` |
+| `authz-http-pep` | `c838663b…a9dad15a` | `9613dd95…45af813d` | `de6325ca…f55912d93` |
+| `cedar-pdp` | `1d898a75…f883c8a924` | `32790d27…8cd20ac4` | `7394503e…af75629e` |
+| `spicedb-pdp` | `006ca504…c8eb1f41` | `f899dea7…da0118bd` | `7d602957…f87855a2c0` |
 
 | Evidence file | sha256 |
 |---|---|
-| `artifacts/RELEASE-SHA256SUMS` | `f0f1a0b70ebd81d7f97388604e4ae81c40872792af46452ae69d978277236fd0` |
-| `artifacts/provenance.intoto.json` | `69fba206024982be2b90ad11d853e643a3ce56a1e7288bed8d1c5fd95a9411d9` |
-| `reports/supply-chain/manifest.json` | `5639b3e8d0d0c6ca588febd12d88cfca74579766f9efe4ce526a5a73e3b3fba7` |
+| `artifacts/RELEASE-SHA256SUMS` | `639dd60ddf55a4c8e30375618107a894b2f5a92241118394380814f1ede70e97` |
+| `artifacts/provenance.intoto.json` | `597f7f1d4e82a17449b1a0cd734f51672423fe48855d873cd113c1d9e2aeb01d` |
+| `reports/supply-chain/manifest.json` | `e9a301f8bdebc57288fe56d337e81d244e30442291e2daf1d2afd60f2906dd60` |
 
 The OCI artifact digest is
-`sha256:5639b3e8d0d0c6ca588febd12d88cfca74579766f9efe4ce526a5a73e3b3fba7`,
+`sha256:e9a301f8bdebc57288fe56d337e81d244e30442291e2daf1d2afd60f2906dd60`,
 artifact type `application/vnd.wasi.authz.bundle.v1`.
 
 ### What "attested" does and does not mean here
@@ -191,9 +204,9 @@ For completeness, the ephemeral-key outputs of the bundle produced here were:
 
 | File | sha256 |
 |---|---|
-| `reports/supply-chain/provenance.intoto.json.sigstore.json` | `8c8abe5b220a9bdae47675e2de0317a05ddee8c171ee9d834a3ac3b6eeb9e62c` |
-| `reports/supply-chain/manifest.json.sigstore.json` | `c6c65e9105a72e3a7ccfeaa572bb65540ee70faaae61a03e4ce6cfb4323a2b91` |
-| `reports/supply-chain/cosign.pub` | `5eb2bebaaa50ea3901033ccaf96cf99ceda75c9a8b773c11e823c4152d612ef6` |
+| `reports/supply-chain/provenance.intoto.json.sigstore.json` | `4c1aad8f16c35732d0ac470f34adc4d8ce530f714e45d1fd3a16a4b67fd00c7c` |
+| `reports/supply-chain/manifest.json.sigstore.json` | `5132fa9f06b8e22ef287c303b0b3131fa55fc0bddde24913131bc99473d64534` |
+| `reports/supply-chain/cosign.pub` | `f2055a61509e463c32d2ae93aa06dd90837f4bfd4bb3016eb1fec88d59f16535` |
 
 Do not copy these into the consumer's lock unless that exact bundle is the one
 published. Whichever bundle a release actually publishes supersedes them.
@@ -213,21 +226,21 @@ did not move.
 
 ```diff
 -leptos-wasi-authz = { path = "../../../wasi-auth/crates/leptos-wasi-authz", version = "=0.1.0-alpha.4" }
-+leptos-wasi-authz = { path = "../../../wasi-auth/crates/leptos-wasi-authz", version = "=0.1.0-rc.1" }
++leptos-wasi-authz = { path = "../../../wasi-auth/crates/leptos-wasi-authz", version = "=0.1.0-rc.2" }
 -wasi-authz-client = { path = "../../../wasi-auth/crates/wasi-authz-client", version = "=0.1.0-alpha.4", features = ["wasip3"] }
-+wasi-authz-client = { path = "../../../wasi-auth/crates/wasi-authz-client", version = "=0.1.0-rc.1", features = ["wasip3"] }
++wasi-authz-client = { path = "../../../wasi-auth/crates/wasi-authz-client", version = "=0.1.0-rc.2", features = ["wasip3"] }
 -wasi-authz-cedar = { path = "../../../wasi-auth/crates/wasi-authz-cedar", version = "=0.1.0-alpha.4" }
-+wasi-authz-cedar = { path = "../../../wasi-auth/crates/wasi-authz-cedar", version = "=0.1.0-rc.1" }
++wasi-authz-cedar = { path = "../../../wasi-auth/crates/wasi-authz-cedar", version = "=0.1.0-rc.2" }
 -wasi-authz-contract = { path = "../../../wasi-auth/crates/wasi-authz-contract", version = "=0.1.0-alpha.4" }
-+wasi-authz-contract = { path = "../../../wasi-auth/crates/wasi-authz-contract", version = "=0.1.0-rc.1" }
++wasi-authz-contract = { path = "../../../wasi-auth/crates/wasi-authz-contract", version = "=0.1.0-rc.2" }
 -wasi-authz-spicedb = { path = "../../../wasi-auth/crates/wasi-authz-spicedb", version = "=0.1.0-alpha.4" }
-+wasi-authz-spicedb = { path = "../../../wasi-auth/crates/wasi-authz-spicedb", version = "=0.1.0-rc.1" }
++wasi-authz-spicedb = { path = "../../../wasi-auth/crates/wasi-authz-spicedb", version = "=0.1.0-rc.2" }
 ```
 
 ### `tests/authz-lifecycle-wasip2/Cargo.toml`
 
 **No change.** It is path-only with no version requirement and compiles against
-`rc.1` unmodified. Worth pinning `version = "=0.1.0-rc.1"` on both entries for
+`rc.2` unmodified. Worth pinning `version = "=0.1.0-rc.2"` on both entries for
 consistency with the other fixture, but that is a hygiene choice, not a
 requirement.
 
@@ -237,7 +250,7 @@ requirement.
  [authorization]
  name = "wasi-auth"
 -version = "0.1.0-alpha.4"
-+version = "0.1.0-rc.1"
++version = "0.1.0-rc.2"
  relative_path = "../wasi-auth"
  leptos_package = "leptos-wasi-authz"
  leptos_crate_path = "crates/leptos-wasi-authz"
@@ -248,12 +261,12 @@ requirement.
 -# Last signed pre-consolidation bundle. Release promotion must regenerate and
 -# attest an alpha.4 wasi-auth bundle from a clean consolidated revision.
 +baseline_revision = "27689e087af7946ff280102dbec94fb9b2fe0590"
-+source_revision = "bef5e1d20c1a752188f1af6c734521ca670f4191"
++source_revision = "e3e8ca50090f192820af99fa061029a6aba6001f"
  artifact_name = "wasi-authz"
 -artifact_version = "0.1.0-alpha.3"
 -artifact_revision = "d4a755e7a4a5abe3b38868a71b063bf33592254c"
-+artifact_version = "0.1.0-rc.1"
-+artifact_revision = "bef5e1d20c1a752188f1af6c734521ca670f4191"
++artifact_version = "0.1.0-rc.2"
++artifact_revision = "e3e8ca50090f192820af99fa061029a6aba6001f"
  fixture_manifest = "tests/authz-fixture/Cargo.toml"
 ```
 
@@ -323,11 +336,11 @@ The reason the consumer cannot simply pin versions is visible in that file:
 
 | Crate | Version | Workspace | Publishable |
 |---|---|---|---|
-| `leptos-wasi-authz` | `0.1.0-rc.1` | `wasi-auth` | no |
-| `wasi-authz-cedar` | `0.1.0-rc.1` | `wasi-auth` | no |
-| `wasi-authz-client` | `0.1.0-rc.1` | `wasi-auth` | no |
-| `wasi-authz-contract` | `0.1.0-rc.1` | `wasi-auth` | no |
-| `wasi-authz-spicedb` | `0.1.0-rc.1` | `wasi-auth` | no |
+| `leptos-wasi-authz` | `0.1.0-rc.2` | `wasi-auth` | no |
+| `wasi-authz-cedar` | `0.1.0-rc.2` | `wasi-auth` | no |
+| `wasi-authz-client` | `0.1.0-rc.2` | `wasi-auth` | no |
+| `wasi-authz-contract` | `0.1.0-rc.2` | `wasi-auth` | no |
+| `wasi-authz-spicedb` | `0.1.0-rc.2` | `wasi-auth` | no |
 | `wasi-http-authn` | `0.2.0-alpha.3` | `wasi-http-middleware` | yes |
 
 Five are `publish = false` and can never come from a registry, so a repository
@@ -361,6 +374,29 @@ bump here surfaces as a digest mismatch instead of a build break.
   (`5fcedc61725b5ca431d07a7a5eeccb2a46b961afed071e7cf0339bb81ced5407`) has no
   tracked baseline to compare against, since `artifacts/native/` is git-ignored.
   It is path-dependent in the same way the components are.
-- Whether `0.1.0-rc.1` is the version the consumer should target, as opposed to
-  waiting for a stable release, is a release-management decision and not
-  addressed here.
+- Whether to wait for a stable release instead of tracking an RC is a
+  release-management decision and not addressed here.
+
+## 8. Why `rc.2` and not `rc.1` or `rc.3`
+
+`0.1.0-rc.1` and `0.1.0-rc.2` were both published to crates.io on 2026-07-13.
+Their `.cargo_vcs_info.json` records the trees they came from: `8374cf2` for
+rc.1, `3b31527` for rc.2. Only rc.1's commit was on `main`; rc.2's sat on an
+unmerged branch until it was landed deliberately, so that the registry and the
+mainline history agree.
+
+`rc.1` is therefore superseded, and this assessment targets `rc.2`.
+
+`rc.3` was considered and rejected for this purpose. The metadata defect
+described in section 3 never reached the registry, and the consumer pins this
+repository by revision rather than consuming the published crate — so
+"`rc.2` at revision `e3e8ca5`" is a precise, verifiable pin, and burning a
+version number to correct metadata that was never published would buy nothing.
+
+One defect in the published `rc.2` is real and is not fixed by any of this:
+`Cargo.lock` **is** included in the published tarball, and the published lock
+resolves `event-listener 5.4.1` (RUSTSEC-2026-0221) and yanked `spin 0.9.8`.
+Since this crate ships a binary, `cargo install wasi-auth --locked` pulls the
+advisory. The repository is fixed; the published tarball cannot be. That is an
+argument for cutting `rc.3` on its own schedule — it does not block the
+consumer, which never installs the binary.
