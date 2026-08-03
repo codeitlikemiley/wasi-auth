@@ -78,11 +78,19 @@ pin a repository revision instead.
 [`companion.toml`](../companion.toml) is the machine-readable record of that
 surface. It lists every crate a consumer may depend on with its resolved
 version, owning workspace, and publishability; every built component with its
-source directory, artifact path, SBOM, and WIT report; and the release-bundle
-evidence paths a consumer pins. `scripts/generate-companion-manifest.sh`
-derives it from `cargo metadata` for both workspaces, and CI fails if the
-tracked copy drifts, so a rename, a move, or a version bump cannot silently
-desynchronize a consumer's lock.
+source directory, artifact path, SBOM, and WIT report; and the evidence a
+release bundle carries. `scripts/generate-companion-manifest.sh` derives it from
+`cargo metadata` for both workspaces, and CI fails if the tracked copy drifts,
+so a rename, a move, or a version bump cannot silently desynchronize a
+consumer's lock.
+
+The two kinds of path in that file resolve differently. Crate and component
+paths are repository-relative and exist in a checkout. The evidence paths under
+`[artifact]` — the checksum manifest, provenance statement, OCI manifest,
+signatures, and signing key — name files in the release bundle, and are
+git-ignored by design; they do not resolve in a checkout at any revision. A
+consumer pins a revision for source and obtains the evidence from the bundle a
+release run uploads.
 
 The six supported companion crates, marked `direct = true`, are
 `leptos-wasi-authz`, `wasi-authz-cedar`, `wasi-authz-client`,

@@ -54,8 +54,15 @@ COMPONENTS = [
     ),
 ]
 
-# Release-bundle evidence, relative to this repository root. These are the
-# exact paths `scripts/dry-run-supply-chain.sh` writes.
+# Release-bundle evidence: the exact paths `scripts/dry-run-supply-chain.sh`
+# writes, relative to the bundle root.
+#
+# These are deliberately not repository content. `.gitignore` excludes
+# `artifacts/RELEASE-SHA256SUMS`, `artifacts/provenance.intoto.json`, and all of
+# `reports/supply-chain/`, so none of them resolve in a checkout at any
+# revision — a consumer obtains them from the release bundle a run uploads, not
+# by pinning a commit. They are recorded here so a consumer knows what to expect
+# in that bundle and under which names.
 BUNDLE_EVIDENCE = [
     ("checksum_manifest", "artifacts/RELEASE-SHA256SUMS"),
     ("provenance", "artifacts/provenance.intoto.json"),
@@ -239,8 +246,14 @@ def main() -> int:
         "#",
         "# This is the supported companion surface of this repository: the crates a",
         "# downstream consumer may path-depend on, the components a release builds,",
-        "# and the evidence files a consumer pins. Regenerate after any version or",
+        "# and the evidence a release bundle carries. Regenerate after any version or",
         "# packaging change; CI requires the tracked copy to match.",
+        "#",
+        "# Paths under [artifact] other than `components` name files in the release",
+        "# bundle, NOT files in this repository. They are git-ignored by design, so",
+        "# they do not resolve in a checkout at any revision; a consumer obtains them",
+        "# from the bundle a release run uploads. Crate and component paths below are",
+        "# repository-relative and do resolve.",
         "#",
         "# `direct = true` marks a crate a consumer is supported in naming in its own",
         "# manifest. `direct = false` marks a path-local crate reached only through",
