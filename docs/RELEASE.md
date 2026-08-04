@@ -1,6 +1,6 @@
 # Release-candidate process
 
-The prepared version is `0.1.0-rc.2`. The DDD repository owns the explicit
+The prepared version is `0.1.0-rc.3`. The DDD repository owns the explicit
 cross-repository release gate:
 
 ```bash
@@ -78,7 +78,7 @@ The package graph, rather than repository ownership, determines publication
 order:
 
 1. `leptos-wasi-runtime 0.4.2-rc.1`, aliased as `leptos_wasi`;
-2. `wasi-auth 0.1.0-rc.2`;
+2. `wasi-auth 0.1.0-rc.3`;
 3. the `ddd_cqrs_es 0.3.0-rc.2` library;
 4. `ddd-cqrs-es-cli 0.3.0-rc.2`; and
 5. generated fullstack consumers.

@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased (post-0.1.0-rc.2)
+## 0.1.0-rc.3
+
+This release exists to republish with a clean archived lockfile. The published
+`0.1.0-rc.2` archive ships a `Cargo.lock` resolving `event-listener 5.4.1`
+(RUSTSEC-2026-0221) and yanked `spin 0.9.8`, which a
+`cargo install wasi-auth --locked` build of the outbox worker uses; published
+versions are immutable, so only a republish corrects that install path. The
+crate's API and the component WIT contracts are unchanged from `rc.2`.
 
 - Added `.github/workflows/release.yml`: releases are now published only from a
   `v*` tag whose commit is on `main` and matches the prepared version, after
@@ -29,15 +36,25 @@
   by design and resolve in no checkout at any revision; a consumer pins a
   revision for source and takes the evidence from the bundle a release run
   uploads. Crate and component paths are repository-relative and do resolve.
+- Added `companion.toml`, the generated record of the surface downstream
+  consumers pin: the six directly-supported path-dependency crates across both
+  workspaces plus the four path-local crates reached only through them, the
+  three built components with their source directories, SBOMs, and WIT
+  reports, and the evidence a release bundle carries.
+  `scripts/generate-companion-manifest.sh` derives it from `cargo metadata`
+  and CI rejects drift.
+- Corrected the `wit-bindgen` version recorded in `compatibility.toml` from
+  `0.59.0` to the `0.57.1` this workspace's component code actually binds
+  with, and recorded the legacy middleware workspace's `0.59.0` separately.
+  The HTTP PEP links both generators because it depends on
+  `wasi-http-middleware-component-support`, so both values are load-bearing.
+  The key had no script consumer, so the single stale value was never caught.
 
 ## 0.1.0-rc.2
 
 - Added the first-class Resend mail adapter to the native outbox worker.
 - Documented the outbox worker as a durable delivery process rather than an
   email server, including local and production process topology.
-
-## Unreleased
-
 - Consolidated authentication, authorization, trusted HTTP ingress, Leptos,
   Spin gRPC, Cedar, optional SpiceDB, mail, DDD/CQRS, and test helpers behind
   the single publishable `wasi-auth` crate. Legacy workspace crates are now
@@ -66,18 +83,6 @@
   production-performance target.
 - Classified component PDP services as experimental/compatibility profiles;
   production terminals embed Cedar and call SpiceDB directly.
-- Added `companion.toml`, the generated record of the surface downstream
-  consumers pin: all six path-dependency crates across both workspaces with
-  their resolved versions and publishability, the three built components with
-  their source directories, SBOMs, and WIT reports, and the release-bundle
-  evidence paths. `scripts/generate-companion-manifest.sh` derives it from
-  `cargo metadata` and CI rejects drift.
-- Corrected the `wit-bindgen` version recorded in `compatibility.toml` from
-  `0.59.0` to the `0.57.1` this workspace's component code actually binds
-  with, and recorded the legacy middleware workspace's `0.59.0` separately.
-  The HTTP PEP links both generators because it depends on
-  `wasi-http-middleware-component-support`, so both values are load-bearing.
-  The key had no script consumer, so the single stale value was never caught.
 
 ## 0.1.0-alpha.2
 
