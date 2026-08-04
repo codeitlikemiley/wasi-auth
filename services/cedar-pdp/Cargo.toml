@@ -12,7 +12,7 @@ publish = false
 
 [dependencies]
 http.workspace = true
-wasi-authz-cedar = { path = "../../crates/wasi-authz-cedar", version = "=0.1.0-rc.2" }
+wasi-authz-cedar = { path = "../../crates/wasi-authz-cedar", version = "=0.1.0-rc.3" }
 wasi-authz-client.workspace = true
 wasi-authz-contract.workspace = true
 

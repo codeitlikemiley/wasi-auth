@@ -1,15 +1,18 @@
-# Consumer alignment: `leptos_wasi` from `0.1.0-alpha.4` to `0.1.0-rc.2`
+# Consumer alignment: `leptos_wasi` from `0.1.0-alpha.4` to `0.1.0-rc.3`
 
 This records what `leptos_wasi` must change to move its pin of this repository
-from `wasi-auth 0.1.0-alpha.4` to `0.1.0-rc.2`, and what this repository
+from `wasi-auth 0.1.0-alpha.4` to `0.1.0-rc.3`, and what this repository
 produced for it. Nothing in `leptos_wasi` was modified to produce this; every
 build check below ran against a scratch copy.
 
-Verified against `leptos_wasi` `main` = `fa424c1` and this repository at
-`2e8a1b9`, the revision section 3 recommends pinning. The `0.1.0-alpha.4`
+The API evidence was verified against `leptos_wasi` `main` = `fa424c1` and
+this repository at `2e8a1b9`, and carries to `rc.3` unchanged: the `rc.3`
+commit over `2e8a1b9` changes only version metadata and regenerated artifact
+records — release automation, version lines, checksums, SBOMs, `companion.toml`
+— and no `.rs` file in any consumer-visible crate. The `0.1.0-alpha.4`
 baseline is `901d283`, the last commit carrying that workspace version. The
-signed bundle was built earlier at `e3e8ca5`; section 3 shows why the two carry
-identical artifacts.
+revision to pin is the commit tagged `v0.1.0-rc.3`; section 3 explains how its
+bundle is produced and where its evidence digests come from.
 
 ## 1. API surface
 
@@ -25,7 +28,8 @@ git diff --stat 901d283 2e8a1b9 -- \
 
 reports changes to three `Cargo.toml` files and **no `.rs` file at all**. The
 three edits are internal path-dependency pins (`wasi-authz-http` and
-`wasi-authz-testkit`) moving from `=0.1.0-alpha.4` to `=0.1.0-rc.2`; neither
+`wasi-authz-testkit`) moving from `=0.1.0-alpha.4` to the workspace version;
+neither
 crate is part of the consumer's import surface. `legacy/wasi-http-middleware`
 is byte-identical across the range, so `wasi-http-authn 0.2.0-alpha.3` is the
 same code the consumer already compiles.
@@ -34,7 +38,7 @@ The consumer imports 24 symbols, not the 20 previously catalogued —
 `wasi_authz_cedar::CedarProvider` and
 `wasi_authz_spicedb::{PermissionMap, SpiceDbEndpoint, SpiceDbProvider}` were
 missing from the earlier list. All 24 are listed below with their definition
-sites at `0.1.0-rc.2`.
+sites, unchanged from `0.1.0-rc.2` through `0.1.0-rc.3`.
 
 | Crate | Symbol | Kind | Defined at | Verdict |
 |---|---|---|---|---|
@@ -82,9 +86,10 @@ Both consumer fixtures were compiled against this branch with Rust 1.93.0 for
 `wasm32-wasip2`, in a scratch tree with `wasi-auth` as the expected sibling:
 
 - `tests/authz-fixture` (wasip3, all 24 symbols) — `cargo check --locked
-  --all-targets` exits 0 once its five `=0.1.0-alpha.4` pins read
-  `=0.1.0-rc.2`. Left unedited it fails to resolve, which is the only thing
-  that fails.
+  --all-targets` exits 0 once its five `=0.1.0-alpha.4` pins read the
+  workspace version (verified at `=0.1.0-rc.2`; `rc.3` changes no `.rs`
+  file, so only the pin literal moves). Left unedited it fails to resolve,
+  which is the only thing that fails.
 - `tests/authz-lifecycle-wasip2` — `cargo check --locked --all-targets` exits 0
   with **no edit at all**. It declares `wasi-authz-client` and
   `wasi-authz-contract` by path with no version requirement, so nothing needs
@@ -95,7 +100,7 @@ Nothing beyond the version pins has to change on the consumer side.
 
 ## 2. Artifact names and stack order
 
-Both still hold at `0.1.0-rc.2`.
+Both still hold at `0.1.0-rc.3`.
 
 `reports/wit/` is byte-identical between `901d283` and `2e8a1b9`, so the
 component contracts did not move at all.
@@ -122,18 +127,22 @@ position in the stack. No component was added or removed since `alpha.4`.
 middleware components (`request-id`, `security-headers`, `cors`,
 `authn-policy`, `secure-defaults`) plus `passthrough`.
 
-## 3. The regenerated bundle
+## 3. The release bundle
 
-Produced from a clean, non-dirty tree at revision
-`e3e8ca50090f192820af99fa061029a6aba6001f` on Ubuntu 24.04.4 / x86_64 /
-Rust 1.93.0 — the canonical CI lane — with `wasm-tools 1.253.0`,
-`cargo-cyclonedx 0.5.9`, `cosign 3.1.1`, `oras 1.3.2`.
+As of `rc.3`, the canonical bundle is no longer a locally-cut artifact: the
+tag-triggered [`release.yml`](../.github/workflows/release.yml) rebuilds the
+components at the canonical lane, requires the tracked digests to reproduce,
+cuts the bundle with `dry-run-supply-chain.sh`, and uploads it as assets on
+the GitHub release for the tag. The consumer records evidence digests from
+those release assets — publicly fetchable, tied to one immutable run — rather
+than from any workstation build. Tooling: Rust 1.93.0, `wasm-tools 1.253.0`,
+`cargo-cyclonedx 0.5.9`, `cosign 3.1.1`, `oras 1.3.2` on ubuntu-24.04.
 
 The component build embeds absolute source paths, so its digest depends on the
-checkout path and `CARGO_HOME`. Rebuilt under the CI's exact layout, all three
-components reproduce the tracked `artifacts/SHA256SUMS` **byte for byte**, and
-`reports/wit`, `artifacts/sbom`, and `companion.toml` all regenerate with no
-drift.
+checkout path and `CARGO_HOME`. The `rc.3` components below were rebuilt under
+the CI's exact layout and match the tracked `artifacts/SHA256SUMS` for the
+`rc.3` tree; the CI `component` job re-proves that byte-for-byte reproduction
+on every push, and the release workflow proves it again at the tag.
 
 Those tracked checksums are correct only because they were refreshed first. The
 tree that shipped as `0.1.0-rc.2` bumped every manifest but never regenerated
@@ -144,68 +153,60 @@ published crate is rooted at `crates/wasi-auth` and `artifacts/` sits at the
 repository root, so no SBOM or checksum was ever inside the published tarball.
 It still mattered here, because a consumer pins this repository by revision.
 
-The WIT reports did **not** move. `reports/wit/*.wit` is byte-identical between
-`rc.1` and `rc.2`, which is the expected result: the contracts carry no crate
-version, so the component interfaces are unchanged and only embedded metadata
-differs.
+The WIT reports did **not** move. `reports/wit/*.wit` is byte-identical from
+`rc.1` through `rc.3`, which is the expected result: the contracts carry no
+crate version, so the component interfaces are unchanged and only embedded
+metadata differs.
 
 Values the consumer should record:
 
 ```
 artifact_name    = "wasi-authz"
-artifact_version = "0.1.0-rc.2"
-artifact_revision = "2e8a1b9793579f5b7f5c12d95028a9dcee8b069c"
+artifact_version = "0.1.0-rc.3"
+artifact_revision = <the commit tagged v0.1.0-rc.3>
 ```
 
-The bundle was *built* at `e3e8ca5`, but the revision to pin is `2e8a1b9`, the
-current `main`. The two carry identical artifacts, and the later one also
-carries the complete `companion.toml` and the packaged-lock gate, so pinning the
-build revision would hand a consumer a strictly worse tree for the same digests.
+The revision to pin is the commit the tag points at — the release commit on
+`main` — because that is the tree the release workflow verifies, publishes,
+and signs. The consumer fills the concrete sha when it records the pin.
 
-That identity is verified two independent ways rather than assumed:
-
-- **Statically.** `git diff e3e8ca5 2e8a1b9` is empty across `crates/`,
-  `components/`, `legacy/`, `wit/`, `Cargo.toml`, `Cargo.lock`,
-  `rust-toolchain.toml`, and `compatibility.toml`. Every commit in between
-  touched only documentation, `companion.toml`, `scripts/`, and CI.
-- **Empirically, by CI.** The `component` job rebuilds all three components from
-  source and then runs
-  `git diff --exit-code -- artifacts/SHA256SUMS artifacts/sbom reports/wit`.
-  That job passes on `2e8a1b9`, so the components rebuilt at that revision
-  reproduce the tracked digests byte for byte on the canonical lane. This is
-  stronger evidence than the file-list argument above, because it does not
-  depend on anyone correctly enumerating which paths are build inputs.
-
-A real release should still cut a tag at the revision it signs.
+The component, SBOM, and WIT digests are fixed by the `rc.3` tree itself (they
+are tracked in `artifacts/SHA256SUMS` and `artifacts/sbom/`, and CI fails if a
+rebuild does not reproduce them), so they are already known:
 
 | Component | `sha256` | `sbom_sha256` | `wit_sha256` |
 |---|---|---|---|
-| `authz-http-pep` | `c838663b…a9dad15a` | `9613dd95…45af813d` | `de6325ca…f55912d93` |
-| `cedar-pdp` | `1d898a75…f883c8a924` | `32790d27…8cd20ac4` | `7394503e…af75629e` |
-| `spicedb-pdp` | `006ca504…c8eb1f41` | `f899dea7…da0118bd` | `7d602957…f87855a2c0` |
+| `authz-http-pep` | `dde57ff5…aec85b00` | `ec441f97…dd0027f` | `de6325ca…f55912d93` |
+| `cedar-pdp` | `6806ca02…04c63eb` | `a944d138…d043731` | `7394503e…af75629e` |
+| `spicedb-pdp` | `efc423c6…3e328bc` | `520243eb…cffd0ff` | `7d602957…f87855a2c0` |
 
-| Evidence file | sha256 |
-|---|---|
-| `artifacts/RELEASE-SHA256SUMS` | `639dd60ddf55a4c8e30375618107a894b2f5a92241118394380814f1ede70e97` |
-| `artifacts/provenance.intoto.json` | `597f7f1d4e82a17449b1a0cd734f51672423fe48855d873cd113c1d9e2aeb01d` |
-| `reports/supply-chain/manifest.json` | `e9a301f8bdebc57288fe56d337e81d244e30442291e2daf1d2afd60f2906dd60` |
+Full component digests:
 
-The OCI artifact digest is
-`sha256:e9a301f8bdebc57288fe56d337e81d244e30442291e2daf1d2afd60f2906dd60`,
-artifact type `application/vnd.wasi.authz.bundle.v1`.
+```
+dde57ff5eb0bd0a7587809be34458ca2741de898073b1673bf91de82aec85b00  components/authz-http-pep.wasm
+6806ca026bd42146cec4f1131c4d750c6d98d3b428c6ad0ff78a455de04c63eb  components/cedar-pdp.wasm
+efc423c61a8ec28de809c6938ecf2318f1a5e6c5106bbd376dbdb7a893e328bc  components/spicedb-pdp.wasm
+```
+
+The bundle-evidence digests — `RELEASE-SHA256SUMS`, the provenance statement,
+the OCI manifest, both signatures, and the signing key — are produced by the
+release run at the tag and recorded from its uploaded assets. They are not
+predicted here.
 
 ### What "attested" does and does not mean here
 
-Signing genuinely ran. `cosign sign-blob` produced detached bundles over both
+Signing genuinely runs: `cosign sign-blob` produces detached bundles over both
 the provenance statement and the OCI manifest, and `cosign verify-blob`
-returned `Verified OK` for both. But this is `dry-run-supply-chain.sh`, which
-generates an **ephemeral** key, publishes the public half, and deletes the
-private half. It is proof of assembly and signature verification, not a release
-identity. A real release must sign with an authorized CI identity or a
-protected key and publish transparency evidence.
+returns `Verified OK` for both. But `dry-run-supply-chain.sh` — which the
+release workflow also uses — generates an **ephemeral** key, publishes the
+public half, and deletes the private half. It is proof of assembly and
+signature verification, not a durable release identity. A future hardening
+step is signing with a persistent CI identity (e.g. keyless Sigstore with
+transparency-log evidence); until then, the trust anchor is the immutable
+release run itself.
 
-**This has a consequence for the consumer's lock design.** Running the pipeline
-twice at the same revision shows:
+**This has a consequence for the consumer's lock design.** Running the
+pipeline twice at the same revision shows:
 
 - `artifacts/provenance.intoto.json` — reproducible
 - `reports/supply-chain/manifest.json` — reproducible
@@ -213,25 +214,16 @@ twice at the same revision shows:
 - `reports/supply-chain/*.sigstore.json` — **differs every run**
 
 So `signing_key_sha256`, `provenance_signature_sha256`, and
-`manifest_signature_sha256` in the consumer's `artifact-sets.toml` pin files
-that change on every CI run. Those digests can only be satisfied by pinning one
-immutable published bundle, or by switching the release to a stable signing
-key. Regenerating the bundle will not reproduce them.
-
-For completeness, the ephemeral-key outputs of the bundle produced here were:
-
-| File | sha256 |
-|---|---|
-| `reports/supply-chain/provenance.intoto.json.sigstore.json` | `4c1aad8f16c35732d0ac470f34adc4d8ce530f714e45d1fd3a16a4b67fd00c7c` |
-| `reports/supply-chain/manifest.json.sigstore.json` | `5132fa9f06b8e22ef287c303b0b3131fa55fc0bddde24913131bc99473d64534` |
-| `reports/supply-chain/cosign.pub` | `f2055a61509e463c32d2ae93aa06dd90837f4bfd4bb3016eb1fec88d59f16535` |
-
-Do not copy these into the consumer's lock unless that exact bundle is the one
-published. Whichever bundle a release actually publishes supersedes them.
+`manifest_signature_sha256` in the consumer's `artifact-sets.toml` can only be
+satisfied by pinning **one immutable published bundle**. That is exactly what
+the release assets provide: the consumer records those three digests from the
+`v0.1.0-rc.3` release assets and re-downloads the same files when it needs to
+re-verify. Regenerating the bundle locally will never reproduce them.
 
 Also note: `reports/supply-chain/` and `artifacts/RELEASE-SHA256SUMS` are
-git-ignored by design. The bundle is a CI upload artifact, not repository
-content, so the consumer must pull it from the run for `artifact_revision`.
+git-ignored by design. The bundle is release-run output, not repository
+content, so the consumer pulls it from the GitHub release for the tag rather
+than from any checkout.
 
 ## 4. Proposed consumer changes
 
@@ -244,23 +236,25 @@ did not move.
 
 ```diff
 -leptos-wasi-authz = { path = "../../../wasi-auth/crates/leptos-wasi-authz", version = "=0.1.0-alpha.4" }
-+leptos-wasi-authz = { path = "../../../wasi-auth/crates/leptos-wasi-authz", version = "=0.1.0-rc.2" }
++leptos-wasi-authz = { path = "../../../wasi-auth/crates/leptos-wasi-authz", version = "=0.1.0-rc.3" }
 -wasi-authz-client = { path = "../../../wasi-auth/crates/wasi-authz-client", version = "=0.1.0-alpha.4", features = ["wasip3"] }
-+wasi-authz-client = { path = "../../../wasi-auth/crates/wasi-authz-client", version = "=0.1.0-rc.2", features = ["wasip3"] }
++wasi-authz-client = { path = "../../../wasi-auth/crates/wasi-authz-client", version = "=0.1.0-rc.3", features = ["wasip3"] }
 -wasi-authz-cedar = { path = "../../../wasi-auth/crates/wasi-authz-cedar", version = "=0.1.0-alpha.4" }
-+wasi-authz-cedar = { path = "../../../wasi-auth/crates/wasi-authz-cedar", version = "=0.1.0-rc.2" }
++wasi-authz-cedar = { path = "../../../wasi-auth/crates/wasi-authz-cedar", version = "=0.1.0-rc.3" }
 -wasi-authz-contract = { path = "../../../wasi-auth/crates/wasi-authz-contract", version = "=0.1.0-alpha.4" }
-+wasi-authz-contract = { path = "../../../wasi-auth/crates/wasi-authz-contract", version = "=0.1.0-rc.2" }
++wasi-authz-contract = { path = "../../../wasi-auth/crates/wasi-authz-contract", version = "=0.1.0-rc.3" }
 -wasi-authz-spicedb = { path = "../../../wasi-auth/crates/wasi-authz-spicedb", version = "=0.1.0-alpha.4" }
-+wasi-authz-spicedb = { path = "../../../wasi-auth/crates/wasi-authz-spicedb", version = "=0.1.0-rc.2" }
++wasi-authz-spicedb = { path = "../../../wasi-auth/crates/wasi-authz-spicedb", version = "=0.1.0-rc.3" }
 ```
 
 ### `tests/authz-lifecycle-wasip2/Cargo.toml`
 
-**No change.** It is path-only with no version requirement and compiles against
-`rc.2` unmodified. Worth pinning `version = "=0.1.0-rc.2"` on both entries for
+**No manifest change required.** It is path-only with no version requirement
+and compiles against `rc.2` unmodified; `rc.3` changes no `.rs` file, so the
+same holds. Worth pinning `version = "=0.1.0-rc.3"` on both entries for
 consistency with the other fixture, but that is a hygiene choice, not a
-requirement.
+requirement. Its `Cargo.lock` does record the resolved sibling versions, so
+the lockfile regenerates even though the manifest may not change.
 
 ### `tests/middleware/components.lock.toml`
 
@@ -268,7 +262,7 @@ requirement.
  [authorization]
  name = "wasi-auth"
 -version = "0.1.0-alpha.4"
-+version = "0.1.0-rc.2"
++version = "0.1.0-rc.3"
  relative_path = "../wasi-auth"
  leptos_package = "leptos-wasi-authz"
  leptos_crate_path = "crates/leptos-wasi-authz"
@@ -279,12 +273,12 @@ requirement.
 -# Last signed pre-consolidation bundle. Release promotion must regenerate and
 -# attest an alpha.4 wasi-auth bundle from a clean consolidated revision.
 +baseline_revision = "27689e087af7946ff280102dbec94fb9b2fe0590"
-+source_revision = "2e8a1b9793579f5b7f5c12d95028a9dcee8b069c"
++source_revision = "<the commit tagged v0.1.0-rc.3>"
  artifact_name = "wasi-authz"
 -artifact_version = "0.1.0-alpha.3"
 -artifact_revision = "d4a755e7a4a5abe3b38868a71b063bf33592254c"
-+artifact_version = "0.1.0-rc.2"
-+artifact_revision = "2e8a1b9793579f5b7f5c12d95028a9dcee8b069c"
++artifact_version = "0.1.0-rc.3"
++artifact_revision = "<the commit tagged v0.1.0-rc.3>"
  fixture_manifest = "tests/authz-fixture/Cargo.toml"
 ```
 
@@ -316,6 +310,31 @@ per-artifact digests replaced with the section 3 values, plus new
 three signature-related digests must come from whichever bundle is published —
 see the reproducibility caveat above. `deployment-policy.toml`'s
 `artifact_set_sha256` must then be recomputed.
+
+### Consumer-side changes the diffs above do not show
+
+Applying the pins alone will not turn the consumer's gates green. Four more
+things move with them, found by reading the consumer's gate scripts rather
+than its manifests:
+
+- `scripts/audit-middleware-manifests.py` hard-codes
+  `authorization_lock["version"] != "0.1.0-alpha.4"` as an assertion (line
+  621); it must move to the new version literal or the static audit fails on
+  exactly the change it is meant to accept.
+- Both fixture `Cargo.lock` files (`tests/authz-fixture/`,
+  `tests/authz-lifecycle-wasip2/`) record the sibling crates at the old
+  version and must regenerate, because the gates build with `--locked`.
+- `scripts/verify-artifact-set.py` compares the authorization bundle's
+  `name`/`version` against the lock's `name`/`version` (`wasi-auth`/…), while
+  `audit-middleware-manifests.py` requires the bundle to match
+  `artifact_name`/`artifact_version`/`artifact_revision` (`wasi-authz`/…).
+  With `artifact_name ≠ name` both can never pass at once — true of the
+  records it ships today, not only after this migration — so the verify script
+  must adopt the `artifact_*` keys for the authorization bundle before the
+  signed-artifact gate is satisfiable at all.
+- `deployment-policy.toml` binds `artifact-sets.toml` by digest
+  (`artifact_set_sha256`), so any artifact-set edit requires recomputing that
+  digest in the same change.
 
 ## 5. RSA/ES256 signing change
 
@@ -354,11 +373,11 @@ The reason the consumer cannot simply pin versions is visible in that file:
 
 | Crate | Version | Workspace | Publishable |
 |---|---|---|---|
-| `leptos-wasi-authz` | `0.1.0-rc.2` | `wasi-auth` | no |
-| `wasi-authz-cedar` | `0.1.0-rc.2` | `wasi-auth` | no |
-| `wasi-authz-client` | `0.1.0-rc.2` | `wasi-auth` | no |
-| `wasi-authz-contract` | `0.1.0-rc.2` | `wasi-auth` | no |
-| `wasi-authz-spicedb` | `0.1.0-rc.2` | `wasi-auth` | no |
+| `leptos-wasi-authz` | `0.1.0-rc.3` | `wasi-auth` | no |
+| `wasi-authz-cedar` | `0.1.0-rc.3` | `wasi-auth` | no |
+| `wasi-authz-client` | `0.1.0-rc.3` | `wasi-auth` | no |
+| `wasi-authz-contract` | `0.1.0-rc.3` | `wasi-auth` | no |
+| `wasi-authz-spicedb` | `0.1.0-rc.3` | `wasi-auth` | no |
 | `wasi-http-authn` | `0.2.0-alpha.3` | `wasi-http-middleware` | yes |
 
 Five are `publish = false` and can never come from a registry, so a repository
@@ -406,27 +425,25 @@ graph, so a new intermediate crate cannot appear unrecorded.
 - Whether to wait for a stable release instead of tracking an RC is a
   release-management decision and not addressed here.
 
-## 8. Why `rc.2` and not `rc.1` or `rc.3`
+## 8. Why `rc.3`
 
 `0.1.0-rc.1` and `0.1.0-rc.2` were both published to crates.io on 2026-07-13.
 Their `.cargo_vcs_info.json` records the trees they came from: `8374cf2` for
 rc.1, `3b31527` for rc.2. Only rc.1's commit was on `main`; rc.2's sat on an
 unmerged branch until it was landed deliberately, so that the registry and the
-mainline history agree.
+mainline history agree. `rc.1` is therefore superseded.
 
-`rc.1` is therefore superseded, and this assessment targets `rc.2`.
-
-`rc.3` was considered and rejected for this purpose. The metadata defect
-described in section 3 never reached the registry, and the consumer pins this
-repository by revision rather than consuming the published crate — so
-"`rc.2` at revision `2e8a1b9`" is a precise, verifiable pin, and burning a
-version number to correct metadata that was never published would buy nothing.
-
-One defect in the published `rc.2` is real and is not fixed by any of this.
-Confirmed by downloading the published archive rather than by reading the
-repository: `Cargo.lock` **is** included, and it resolves
-`event-listener 5.4.1` (RUSTSEC-2026-0221) and yanked `spin 0.9.8`. The
-repository's own lockfile is clean at `5.4.2` and `0.9.9`.
+An earlier revision of this assessment targeted `rc.2` and rejected cutting
+`rc.3`, on the grounds that the rc.2-era metadata defect never reached the
+registry and a revision pin would serve the consumer. That reasoning held for
+the consumer but not for the registry: one defect in the published `rc.2` is
+real and cannot be fixed in place. Confirmed by downloading the published
+archive rather than by reading the repository: `Cargo.lock` **is** included,
+and it resolves `event-listener 5.4.1` (RUSTSEC-2026-0221) and yanked
+`spin 0.9.8`. The repository's own lockfile is clean at `5.4.2` and `0.9.9`.
+`rc.3` exists to republish with the clean lockfile — and to be the first
+release cut through the tag-gated publish workflow rather than by hand. The
+consumer moves once, straight to `rc.3`.
 
 Who this reaches, verified rather than assumed:
 
@@ -448,13 +465,12 @@ repository has no publish automation at all — one workflow, no `cargo publish`
 no registry token — so `rc.1` and `rc.2` were both hand-published, and nothing
 structurally prevented a release from a commit that never passed CI.
 
-`scripts/audit-packaged-lock.sh` now closes the half of this that a gate can
-close: it audits the lockfile inside the archive, denying advisories and yanked
-crates alike. It was verified in both directions — clean against the archive
-`main` builds today, and failing against the archive `rc.2` actually shipped,
-reporting exactly those two crates. The other half, publishing only from a
-verified commit, is a process rule rather than a check, and is recorded in
-[`RELEASE.md`](RELEASE.md).
-
-Whether to spend `rc.3` on the one affected install path is a release decision
-rather than a compatibility one; it does not block the consumer.
+Both halves of that root cause are now closed structurally.
+`scripts/audit-packaged-lock.sh` audits the lockfile inside the archive,
+denying advisories and yanked crates alike — verified clean against the `rc.3`
+archive and failing against the archive `rc.2` actually shipped, reporting
+exactly those two crates. And publishing itself now happens only through
+[`release.yml`](../.github/workflows/release.yml), which refuses any tag whose
+commit is not on `main` or whose name does not match the prepared version, so
+a release from an unverified commit is no longer possible, rather than merely
+discouraged.

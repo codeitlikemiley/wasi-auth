@@ -12,7 +12,7 @@ homepage.workspace = true
 
 [dependencies]
 thiserror.workspace = true
-wasi-authz-client = { path = "../wasi-authz-client", version = "=0.1.0-rc.2" }
+wasi-authz-client = { path = "../wasi-authz-client", version = "=0.1.0-rc.3" }
 wasi-authz-contract.workspace = true
 
 [lints]

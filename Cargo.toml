@@ -22,7 +22,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.1.0-rc.2"
+version = "0.1.0-rc.3"
 authors = ["Uriah Galang <codeitlikemiley@gmail.com>"]
 edition = "2024"
 rust-version = "1.93.0"
@@ -44,8 +44,8 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 server_fn = { version = "0.8.12", default-features = false, features = ["axum-no-default"] }
 thiserror = "2.0.17"
-wasi-authz-contract = { path = "crates/wasi-authz-contract", version = "=0.1.0-rc.2" }
-wasi-authz-client = { path = "crates/wasi-authz-client", version = "=0.1.0-rc.2" }
+wasi-authz-contract = { path = "crates/wasi-authz-contract", version = "=0.1.0-rc.3" }
+wasi-authz-client = { path = "crates/wasi-authz-client", version = "=0.1.0-rc.3" }
 wasi-http-metadata = { path = "legacy/wasi-http-middleware/crates/metadata", version = "=0.2.0-alpha.3" }
 wasi-http-policy-core = { path = "legacy/wasi-http-middleware/crates/policy-core", version = "=0.2.0-alpha.3" }
 wasi-http-middleware-component-support = { path = "legacy/wasi-http-middleware/crates/component-support", version = "=0.2.0-alpha.3" }

@@ -1,6 +1,6 @@
 # Compatibility
 
-| Surface | Status in `0.1.0-rc.2` |
+| Surface | Status in `0.1.0-rc.3` |
 |---|---|
 | Rust | Library MSRV 1.93; async final-WASI component builds require Rust 1.94+ |
 | AuthZEN Authorization API | Final 1.0 bounded access-evaluation profile |

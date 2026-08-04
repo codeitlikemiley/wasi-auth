@@ -3,7 +3,7 @@
   "components": [
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.2",
+      "bom-ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.3",
       "description": "Transport-neutral AuthZEN client with additive WASIp2 and WASIp3 transports",
       "externalReferences": [
         {
@@ -21,14 +21,14 @@
         }
       ],
       "name": "wasi-authz-client",
-      "purl": "pkg:cargo/wasi-authz-client@0.1.0-rc.2",
+      "purl": "pkg:cargo/wasi-authz-client@0.1.0-rc.3",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.2"
+      "version": "0.1.0-rc.3"
     },
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.2",
+      "bom-ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.3",
       "description": "Bounded AuthZEN 1.0 authorization request and decision types",
       "externalReferences": [
         {
@@ -46,14 +46,14 @@
         }
       ],
       "name": "wasi-authz-contract",
-      "purl": "pkg:cargo/wasi-authz-contract@0.1.0-rc.2",
+      "purl": "pkg:cargo/wasi-authz-contract@0.1.0-rc.3",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.2"
+      "version": "0.1.0-rc.3"
     },
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-authz-http@0.1.0-rc.2",
+      "bom-ref": "pkg:cargo/wasi-authz-http@0.1.0-rc.3",
       "description": "Coarse HTTP policy enforcement helpers for wasi-authz",
       "externalReferences": [
         {
@@ -71,10 +71,10 @@
         }
       ],
       "name": "wasi-authz-http",
-      "purl": "pkg:cargo/wasi-authz-http@0.1.0-rc.2",
+      "purl": "pkg:cargo/wasi-authz-http@0.1.0-rc.3",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.2"
+      "version": "0.1.0-rc.3"
     },
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
@@ -7422,12 +7422,12 @@
         "registry+https://github.com/rust-lang/crates.io-index#leptos@0.8.20",
         "registry+https://github.com/rust-lang/crates.io-index#server_fn@0.8.13",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
-        "pkg:cargo/wasi-authz-client@0.1.0-rc.2",
-        "pkg:cargo/wasi-authz-contract@0.1.0-rc.2",
-        "pkg:cargo/wasi-authz-http@0.1.0-rc.2",
+        "pkg:cargo/wasi-authz-client@0.1.0-rc.3",
+        "pkg:cargo/wasi-authz-contract@0.1.0-rc.3",
+        "pkg:cargo/wasi-authz-http@0.1.0-rc.3",
         "pkg:cargo/wasi-http-metadata@0.2.0-alpha.3"
       ],
-      "ref": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.2"
+      "ref": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.3"
     },
     {
       "dependsOn": [
@@ -7436,10 +7436,10 @@
         "registry+https://github.com/rust-lang/crates.io-index#http@1.4.2",
         "registry+https://github.com/rust-lang/crates.io-index#http-body-util@0.1.3",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
-        "pkg:cargo/wasi-authz-contract@0.1.0-rc.2",
+        "pkg:cargo/wasi-authz-contract@0.1.0-rc.3",
         "registry+https://github.com/rust-lang/crates.io-index#wasip3@0.7.0+wasi-0.3.0"
       ],
-      "ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.2"
+      "ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.3"
     },
     {
       "dependsOn": [
@@ -7447,17 +7447,17 @@
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18"
       ],
-      "ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.2"
+      "ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.3"
     },
     {
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#http@1.4.2",
-        "pkg:cargo/wasi-authz-client@0.1.0-rc.2",
-        "pkg:cargo/wasi-authz-contract@0.1.0-rc.2",
+        "pkg:cargo/wasi-authz-client@0.1.0-rc.3",
+        "pkg:cargo/wasi-authz-contract@0.1.0-rc.3",
         "pkg:cargo/wasi-http-metadata@0.2.0-alpha.3",
         "pkg:cargo/wasi-http-policy-core@0.2.0-alpha.3"
       ],
-      "ref": "pkg:cargo/wasi-authz-http@0.1.0-rc.2"
+      "ref": "pkg:cargo/wasi-authz-http@0.1.0-rc.3"
     },
     {
       "dependsOn": [
@@ -9262,14 +9262,14 @@
     ],
     "component": {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.2",
+      "bom-ref": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.3",
       "components": [
         {
-          "bom-ref": "path+file://./crates/leptos-wasi-authz#0.1.0-rc.2 bin-target-0",
+          "bom-ref": "path+file://./crates/leptos-wasi-authz#0.1.0-rc.3 bin-target-0",
           "name": "leptos_wasi_authz",
-          "purl": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.2?download_url=file://.#src/lib.rs",
+          "purl": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.3?download_url=file://.#src/lib.rs",
           "type": "library",
-          "version": "0.1.0-rc.2"
+          "version": "0.1.0-rc.3"
         }
       ],
       "description": "Typed Leptos context and server-function authorization layers for wasi-authz",
@@ -9289,10 +9289,10 @@
         }
       ],
       "name": "leptos-wasi-authz",
-      "purl": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.2",
+      "purl": "pkg:cargo/leptos-wasi-authz@0.1.0-rc.3",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.2"
+      "version": "0.1.0-rc.3"
     },
     "properties": [
       {
@@ -9308,7 +9308,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:4e9fd1fd-45cb-54d5-a93e-8d4f805369d2",
+  "serialNumber": "urn:uuid:a1da4dfa-44f1-529c-8608-5af2fe0355ef",
   "specVersion": "1.5",
   "version": 1
 }
