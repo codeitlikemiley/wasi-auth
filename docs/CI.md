@@ -17,10 +17,21 @@ Blocking lanes cover:
   service, including transactional invalidation notification;
 - a real SpiceDB/zed live test;
 - exact final-WIT imports, exports, and capability denial;
-- dependency/advisory policy;
+- dependency/advisory policy, denying yanked crates as well as advisories;
 - parser fuzz smoke tests;
-- the single public, Cargo-verified `wasi-auth` package archive; and
+- the single public, Cargo-verified `wasi-auth` package archive, including an
+  audit of the lockfile inside that archive;
+- the built SpiceDB PDP component executed under pinned Wasmtime against a
+  live loopback SpiceDB (`spicedb-pdp-wasmtime`, reusing the `component` job's
+  uploaded artifact); and
 - local OCI, SBOM, provenance, and cosign verification.
+
+Releases are published by a separate tag-triggered workflow,
+[`release.yml`](../.github/workflows/release.yml), which re-verifies the
+tagged tree (the tag must be on `main` and match the prepared version),
+re-runs the artifact and package gates, publishes to crates.io via Trusted
+Publishing, and uploads the attested bundle as GitHub release assets. See
+[Release-candidate process](RELEASE.md).
 
 Cross-repository promotion CI also starts a direct guest baseline, native
 trusted ingress, and the private Spin backend, then runs the generated

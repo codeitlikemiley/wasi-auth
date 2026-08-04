@@ -136,7 +136,7 @@ jobs:
           workspaces: wasi-auth
       - run: cargo install cargo-audit --locked --version 0.22.1
       - run: cargo install cargo-deny --locked --version 0.20.2
-      - run: cargo audit --deny warnings
+      - run: cargo audit --deny warnings --deny yanked
       - run: cargo deny check
 
   authzen-providers:
@@ -301,6 +301,44 @@ jobs:
       - run: bash scripts/generate-companion-manifest.sh
       - name: Verify tracked companion surface manifest
         run: git diff --exit-code -- companion.toml
+
+  spicedb-pdp-wasmtime:
+    name: SpiceDB PDP component under Wasmtime
+    needs: component
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: wasi-auth
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          path: wasi-auth
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: wasi-auth-final-wasi-artifacts
+          path: wasi-auth
+      - name: Install checksum-verified SpiceDB and zed tools
+        run: bash scripts/install-provider-tools.sh
+        env:
+          PROVIDER_TOOL_DIR: ${{ runner.temp }}/provider-tools
+      - name: Install pinned Wasmtime
+        run: |
+          source scripts/common.sh
+          version="$(compat_value wasmtime)"
+          archive="wasmtime-v${version}-x86_64-linux"
+          curl -sSfL --retry 4 \
+            "https://github.com/bytecodealliance/wasmtime/releases/download/v${version}/${archive}.tar.xz" \
+            -o "${RUNNER_TEMP}/wasmtime.tar.xz"
+          mkdir -p "${RUNNER_TEMP}/wasmtime"
+          tar -xJf "${RUNNER_TEMP}/wasmtime.tar.xz" \
+            -C "${RUNNER_TEMP}/wasmtime" --strip-components=1
+          echo "WASMTIME_BIN=${RUNNER_TEMP}/wasmtime/wasmtime" >>"${GITHUB_ENV}"
+      - name: Exercise the SpiceDB PDP component end to end
+        run: bash scripts/test-spicedb-pdp-wasmtime.sh
+        env:
+          SPICEDB_BIN: ${{ runner.temp }}/provider-tools/spicedb
+          ZED_BIN: ${{ runner.temp }}/provider-tools/zed
 
   supply-chain:
     name: Local OCI, provenance, and signature dry run
