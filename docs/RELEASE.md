@@ -51,11 +51,13 @@ nothing else; no registry token exists in this repository. The flow:
    Settings → Trusted Publishing: repository owner and name, workflow file
    `release.yml`). Publishing authenticates via short-lived OIDC tokens; there
    is no API token to create, store, or leak.
-3. Push the tag `v<version>` at the release commit. Pushing the tag is the
-   release approval — nothing publishes without it.
+3. Push the tag at the release commit — either `v<version>` or
+   `wasi-auth-v<version>`; both are accepted, and `wasi-auth-v0.1.0-rc.1` is
+   the form this repository already used. Pushing the tag is the release
+   approval — nothing publishes without it.
 
 The workflow then refuses to proceed unless the tagged commit is on `main` and
-the tag matches the version prepared in `compatibility.toml`; rebuilds the
+the tag names the version prepared in `compatibility.toml`; rebuilds the
 components at the canonical lane and requires the tracked digests to
 reproduce; re-runs the package gates including the shipped-lockfile audit;
 cuts the attested bundle; publishes `wasi-auth` with `cargo publish --locked`;
