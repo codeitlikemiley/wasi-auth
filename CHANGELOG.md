@@ -2,6 +2,20 @@
 
 ## Unreleased (post-0.1.0-rc.2)
 
+- Added `.github/workflows/release.yml`: releases are now published only from a
+  `v*` tag whose commit is on `main` and matches the prepared version, after
+  re-verifying the tracked artifact digests and package gates against the
+  tagged tree. Publishing authenticates with crates.io Trusted Publishing —
+  no registry token exists in the repository — and the attested bundle is
+  uploaded as GitHub release assets so recorded evidence is publicly
+  fetchable. Hand publishing, which produced the `rc.2` defect, is retired.
+- The dependency-policy CI lane now denies yanked crates
+  (`cargo audit --deny warnings --deny yanked`), which would have caught the
+  yanked `spin 0.9.8` at the commit `rc.2` was published from.
+- Added the `spicedb-pdp-wasmtime` CI job: the built SpiceDB PDP component now
+  runs in CI under pinned Wasmtime against a live loopback SpiceDB, reusing
+  the component job's uploaded artifact. Previously
+  `scripts/test-spicedb-pdp-wasmtime.sh` existed but no lane executed it.
 - Added `scripts/audit-packaged-lock.sh` and a CI gate that audits the lockfile
   inside the published archive, denying both advisories and yanked crates. The
   workspace lockfile and the packaged lockfile are different files, and only

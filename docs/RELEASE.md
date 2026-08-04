@@ -37,7 +37,35 @@ Release from a commit on `main` that has passed these gates. `0.1.0-rc.2` was
 published from a commit that only ever existed on an unmerged branch, so no
 gate ran against it, and it reached crates.io with a lockfile carrying
 RUSTSEC-2026-0221 and a yanked `spin 0.9.8`. Publishing from an unverified
-commit is what the packaged-lock gate above cannot catch on its own.
+commit is what the packaged-lock gate above cannot catch on its own — so the
+publish path itself now enforces it.
+
+## Publishing
+
+Publishing is done by [`release.yml`](../.github/workflows/release.yml) and
+nothing else; no registry token exists in this repository. The flow:
+
+1. Land the version bump on `main` with all gates green.
+2. One-time setup: a crate owner registers this repository under the crate's
+   Trusted Publishing settings on crates.io (crates.io → `wasi-auth` →
+   Settings → Trusted Publishing: repository owner and name, workflow file
+   `release.yml`). Publishing authenticates via short-lived OIDC tokens; there
+   is no API token to create, store, or leak.
+3. Push the tag `v<version>` at the release commit. Pushing the tag is the
+   release approval — nothing publishes without it.
+
+The workflow then refuses to proceed unless the tagged commit is on `main` and
+the tag matches the version prepared in `compatibility.toml`; rebuilds the
+components at the canonical lane and requires the tracked digests to
+reproduce; re-runs the package gates including the shipped-lockfile audit;
+cuts the attested bundle; publishes `wasi-auth` with `cargo publish --locked`;
+and uploads the full bundle — checksums, provenance, OCI manifest, signatures,
+signing key, components, native PDP, SBOMs, and WIT reports — as assets on the
+GitHub release for the tag, so the evidence a consumer records is publicly
+fetchable rather than a one-machine artifact.
+
+A hand-run `cargo publish` from a workstation is how `rc.1` and `rc.2`
+shipped, and how `rc.2` shipped its defect. Do not do it again.
 
 There is no prior public `wasi-auth` release, so this RC becomes the first
 SemVer baseline. `scripts/check-alpha-api-inventory.sh` remains a private
@@ -99,12 +127,13 @@ or artifact paths this repository no longer produces.
 
 The generated fullstack consumer must additionally pass its protected-path
 paired benchmark, five-sample absolute benchmark, and soak against the exact
-candidate artifacts:
+candidate artifacts. These three scripts live in the generated DDD fullstack
+consumer, not in this repository — run them from that consumer's checkout:
 
 ```bash
-bash scripts/benchmark_ingress_overhead.sh
-bash scripts/benchmark_fullstack.sh
-INGRESS_PID=<pid> SPIN_PID=<pid> bash scripts/soak_fullstack.sh
+bash scripts/benchmark_ingress_overhead.sh   # in the generated DDD consumer
+bash scripts/benchmark_fullstack.sh          # in the generated DDD consumer
+INGRESS_PID=<pid> SPIN_PID=<pid> bash scripts/soak_fullstack.sh  # ditto
 ```
 
 Every command writes machine-readable JSON and exits nonzero for status,

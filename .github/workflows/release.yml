@@ -1,0 +1,181 @@
+name: Release
+
+# Publishes `wasi-auth` to crates.io and uploads the attested release bundle,
+# from a tag and nothing else. The 0.1.0-rc.2 release was hand-published from a
+# commit that only ever existed on an unmerged branch, so no gate ran against
+# it and its archive shipped a lockfile carrying a known advisory and a yanked
+# crate. This workflow makes that failure mode structurally impossible: the
+# tagged commit must be on `main`, the tag must match the prepared version, and
+# every artifact and package gate re-runs against the exact tree being
+# published before the publish job can start.
+#
+# Publishing uses crates.io Trusted Publishing (OIDC): no long-lived registry
+# token exists anywhere in this repository. The crate owner must register this
+# repository and workflow file under the crate's Trusted Publishing settings on
+# crates.io before the first tag; until then the publish job fails closed.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  verify:
+    name: Verify the tagged tree
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GOBIN: ${{ github.workspace }}/go-bin
+    defaults:
+      run:
+        working-directory: wasi-auth
+    steps:
+      # The `path: wasi-auth` checkout matches ci.yml on purpose: the component
+      # build embeds absolute source paths, so tracked digests reproduce only
+      # at this exact layout.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          path: wasi-auth
+      - name: Require a released version tag on main
+        run: |
+          source scripts/common.sh
+          version="$(compat_value version)"
+          if [[ "${GITHUB_REF_NAME}" != "v${version}" ]]; then
+            echo "error: tag ${GITHUB_REF_NAME} does not match the prepared" \
+              "version v${version} in compatibility.toml" >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "error: the tagged commit is not on main; releases are cut" \
+              "only from verified mainline history" >&2
+            exit 1
+          fi
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
+        with:
+          toolchain: 1.93.0
+          targets: wasm32-wasip2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with:
+          workspaces: wasi-auth
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
+        with:
+          go-version: "1.26.2"
+      - run: bash scripts/check-sibling-source.sh
+      - run: cargo install wasm-tools --locked --version 1.253.0
+      - run: cargo install cargo-cyclonedx --locked --version 0.5.9
+      - run: cargo install cargo-audit --locked --version 0.22.1
+      - run: go install github.com/sigstore/cosign/v3/cmd/cosign@v3.1.1
+      - run: go install oras.land/oras/cmd/oras@v1.3.2
+      - name: Rebuild components and verify tracked digests
+        run: |
+          bash scripts/build-components.sh
+          bash scripts/build-native-pdp.sh
+          bash scripts/check-component-contracts.sh
+          bash scripts/generate-checksums.sh
+          bash scripts/generate-native-checksums.sh
+          bash scripts/generate-sbom.sh
+          git diff --exit-code -- artifacts/SHA256SUMS artifacts/sbom reports/wit
+        env:
+          NATIVE_TARGET: x86_64-unknown-linux-gnu
+      - name: Package gates, including the shipped-lockfile audit
+        run: |
+          bash scripts/check-packages.sh
+          bash scripts/audit-packaged-lock.sh
+          bash scripts/generate-companion-manifest.sh
+          git diff --exit-code -- companion.toml
+      - name: Cut the attested release bundle
+        run: bash scripts/dry-run-supply-chain.sh
+        env:
+          COSIGN_BIN: ${{ github.workspace }}/go-bin/cosign
+          ORAS_BIN: ${{ github.workspace }}/go-bin/oras
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wasi-auth-release-bundle
+          path: |
+            wasi-auth/artifacts/
+            wasi-auth/reports/wit/
+            wasi-auth/reports/supply-chain/
+          if-no-files-found: error
+
+  publish:
+    name: Publish wasi-auth to crates.io
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: wasi-auth
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          path: wasi-auth
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
+        with:
+          toolchain: 1.93.0
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with:
+          workspaces: wasi-auth
+      - uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+        id: auth
+      - run: cargo publish --locked -p wasi-auth
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+  release-assets:
+    name: Upload the release bundle as assets
+    needs: [verify, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: wasi-auth
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          path: wasi-auth
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: wasi-auth-release-bundle
+          path: wasi-auth
+      - name: Create the release and upload the bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release create "${GITHUB_REF_NAME}" \
+              --verify-tag \
+              --title "wasi-auth ${GITHUB_REF_NAME}" \
+              --notes "See CHANGELOG.md for this release. Assets are the attested bundle produced by the verify job of this run: checksums, provenance, OCI manifest, cosign signatures and key, components, native PDP, SBOMs, and WIT reports."
+          fi
+          # The native checksum file shares its basename with the component
+          # checksum manifest; renamed on upload so the assets stay distinct.
+          cp artifacts/native/SHA256SUMS native-SHA256SUMS
+          gh release upload "${GITHUB_REF_NAME}" --clobber \
+            artifacts/RELEASE-SHA256SUMS \
+            artifacts/SHA256SUMS \
+            artifacts/provenance.intoto.json \
+            artifacts/components/authz-http-pep.wasm \
+            artifacts/components/cedar-pdp.wasm \
+            artifacts/components/spicedb-pdp.wasm \
+            artifacts/native/cedar-pdp-x86_64-unknown-linux-gnu \
+            native-SHA256SUMS \
+            artifacts/sbom/*.cdx.json \
+            reports/wit/http-pep.wit \
+            reports/wit/cedar-pdp.wit \
+            reports/wit/spicedb-pdp.wit \
+            reports/supply-chain/manifest.json \
+            reports/supply-chain/provenance.intoto.json.sigstore.json \
+            reports/supply-chain/manifest.json.sigstore.json \
+            reports/supply-chain/cosign.pub
