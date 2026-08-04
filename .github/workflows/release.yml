@@ -161,10 +161,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          source scripts/common.sh
+          version="$(compat_value version)"
+          # `gh release create` defaults to a full release, so 0.1.0-rc.3
+          # published as one and displaced 0.1.0-rc.1 as "Latest" on the
+          # repository page — a release candidate presented as the version to
+          # use. SemVer already answers this: a version core followed by a
+          # hyphen is a pre-release. Read it from compatibility.toml, the same
+          # value the verify job asserted this tag against, rather than from the
+          # tag, whose own `wasi-auth-` prefix carries a hyphen that would make
+          # every release look like a candidate. A `1.0.0` tag still ships as a
+          # full release, and marking that `--latest` explicitly keeps the
+          # promotion a decision this workflow makes rather than a gh default.
+          if [[ "${version}" == *-* ]]; then
+            maturity=(--prerelease)
+          else
+            maturity=(--latest)
+          fi
           if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release create "${GITHUB_REF_NAME}" \
               --verify-tag \
-              --title "wasi-auth ${GITHUB_REF_NAME}" \
+              "${maturity[@]}" \
+              --title "wasi-auth ${version}" \
               --notes "See CHANGELOG.md for this release. Assets are the attested bundle produced by the verify job of this run: checksums, provenance, OCI manifest, cosign signatures and key, components, native PDP, SBOMs, and WIT reports."
           fi
           # The native checksum file shares its basename with the component
