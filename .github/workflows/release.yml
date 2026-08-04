@@ -16,7 +16,11 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    # Both prefixes are accepted. `wasi-auth-v*` is the convention this
+    # repository already used for its one real release tag
+    # (`wasi-auth-v0.1.0-rc.1`), and a glob of `v*` alone would silently not
+    # fire for it — a release that no-ops with nothing to notice.
+    tags: ["v*", "wasi-auth-v*"]
 
 permissions:
   contents: read
@@ -47,9 +51,13 @@ jobs:
         run: |
           source scripts/common.sh
           version="$(compat_value version)"
-          if [[ "${GITHUB_REF_NAME}" != "v${version}" ]]; then
+          # The tag must name the prepared version exactly; which of the two
+          # accepted prefixes it uses does not matter.
+          if [[ "${GITHUB_REF_NAME}" != "v${version}" \
+            && "${GITHUB_REF_NAME}" != "wasi-auth-v${version}" ]]; then
             echo "error: tag ${GITHUB_REF_NAME} does not match the prepared" \
-              "version v${version} in compatibility.toml" >&2
+              "version ${version} in compatibility.toml; expected" \
+              "v${version} or wasi-auth-v${version}" >&2
             exit 1
           fi
           if ! git merge-base --is-ancestor HEAD origin/main; then
