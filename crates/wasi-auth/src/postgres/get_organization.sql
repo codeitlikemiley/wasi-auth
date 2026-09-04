@@ -17,6 +17,7 @@ membership AS (
 )
 SELECT organizations.organization_id::text AS organization_id,
        organizations.name,
+       organizations.slug,
        organizations.status,
        organizations.created_at_ms,
        membership.role_id,
@@ -32,5 +33,5 @@ JOIN auth_organizations AS organizations
 LEFT JOIN auth_role_permissions AS role_permissions
   ON role_permissions.organization_id = organizations.organization_id
  AND role_permissions.role_id = membership.role_id
-GROUP BY organizations.organization_id, organizations.name, organizations.status,
-         organizations.created_at_ms, membership.role_id
+GROUP BY organizations.organization_id, organizations.name, organizations.slug,
+         organizations.status, organizations.created_at_ms, membership.role_id

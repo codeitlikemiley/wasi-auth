@@ -66,7 +66,7 @@ accepted_membership AS (
     RETURNING organization_id, user_id, role_id
 ),
 revision_result AS (
-    SELECT organizations.organization_id, organizations.name,
+    SELECT organizations.organization_id, organizations.name, organizations.slug,
            organizations.status, organizations.created_at_ms
     FROM accepted_membership
     JOIN auth_organizations AS organizations
@@ -99,14 +99,14 @@ new_audit AS (
     RETURNING audit_id
 ),
 result AS (
-    SELECT revision_result.organization_id, revision_result.name, revision_result.status,
-           revision_result.created_at_ms, accepted_membership.role_id
+    SELECT revision_result.organization_id, revision_result.name, revision_result.slug,
+           revision_result.status, revision_result.created_at_ms, accepted_membership.role_id
     FROM revision_result
     JOIN accepted_membership ON TRUE
     JOIN new_audit ON TRUE
 )
 SELECT result.organization_id::text AS organization_id,
-       result.name, result.status, result.created_at_ms,
+       result.name, result.slug, result.status, result.created_at_ms,
        result.role_id,
        COALESCE(
            jsonb_agg(role_permissions.permission ORDER BY role_permissions.permission)
@@ -117,5 +117,5 @@ FROM result
 LEFT JOIN auth_role_permissions AS role_permissions
   ON role_permissions.organization_id = result.organization_id
  AND role_permissions.role_id = result.role_id
-GROUP BY result.organization_id, result.name, result.status,
+GROUP BY result.organization_id, result.name, result.slug, result.status,
          result.created_at_ms, result.role_id

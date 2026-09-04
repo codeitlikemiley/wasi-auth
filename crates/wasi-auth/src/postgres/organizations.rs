@@ -26,6 +26,8 @@ pub struct OrganizationRecord {
     pub organization_id: String,
     /// Display name.
     pub name: String,
+    /// Unique URL key for `/org/{slug}/…`.
+    pub slug: String,
     /// Lifecycle status.
     pub status: String,
     /// Current user's assigned role.
@@ -45,6 +47,8 @@ pub struct CreateOrganizationRequest {
     pub session_id: SessionId,
     /// Organization display name.
     pub name: String,
+    /// Unique URL slug (`acme`).
+    pub slug: String,
     /// Request correlation identifier.
     pub request_id: RequestId,
 }
@@ -92,9 +96,19 @@ where
         request: CreateOrganizationRequest,
     ) -> Result<OrganizationRecord, OrganizationError<T::Error>> {
         let name = request.name.trim();
+        let slug = request.slug.trim().to_ascii_lowercase();
         if name.is_empty()
             || name.len() > 120
             || name.chars().any(char::is_control)
+            || slug.len() < 2
+            || slug.len() > 48
+            || !slug.chars().next().is_some_and(|c| c.is_ascii_lowercase())
+            || !slug
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+            || slug.starts_with('-')
+            || slug.ends_with('-')
+            || slug.contains("--")
             || request.idempotency_key.is_empty()
             || request.idempotency_key.len() > 256
         {
@@ -105,7 +119,7 @@ where
             .map_err(|_| OrganizationError::RandomnessUnavailable)?;
         let audit_id = uuid_v7(now_ms, &self.randomness)
             .map_err(|_| OrganizationError::RandomnessUnavailable)?;
-        let request_hash = create_request_hash(request.session_id.as_str(), name);
+        let request_hash = create_request_hash(request.session_id.as_str(), name, &slug);
         let rows = self
             .store
             .transport()
@@ -122,6 +136,7 @@ where
                     PgValue::Text(request.request_id.as_str().to_owned()),
                     PgValue::I64(u64_to_i64(now_ms)),
                     PgValue::I64(u64_to_i64(now_ms.saturating_add(IDEMPOTENCY_TTL_MS))),
+                    PgValue::Text(slug),
                 ],
             )
             .await
@@ -130,6 +145,7 @@ where
         match row.required_text("outcome")? {
             "created" | "replayed" => decode_organization(row),
             "idempotency_conflict" => Err(OrganizationError::IdempotencyConflict),
+            "slug_conflict" => Err(OrganizationError::SlugConflict),
             "unauthorized" => Err(OrganizationError::Unauthenticated),
             _ => Err(OrganizationError::UnexpectedOutcome),
         }
@@ -159,10 +175,14 @@ where
 
     /// Selects one active organization for a session and audits the change.
     ///
+    /// Requires an active membership on the target organization. Does **not**
+    /// require AAL2 — switching tenant context is allowed at AAL1 so password
+    /// sessions can restore a default workspace after login. Elevated admin
+    /// mutations keep their own assurance gates.
+    ///
     /// # Errors
     ///
-    /// Fails closed for missing membership, stale session, or insufficient
-    /// assurance for owner/administrator roles.
+    /// Fails closed for missing membership or a stale/revoked session.
     pub async fn select(
         &self,
         session_id: &SessionId,
@@ -219,6 +239,7 @@ where
     Ok(OrganizationRecord {
         organization_id: row.required_text("organization_id")?.to_owned(),
         name: row.required_text("name")?.to_owned(),
+        slug: row.required_text("slug")?.to_owned(),
         status: row.required_text("status")?.to_owned(),
         role_id: row.required_text("role_id")?.to_owned(),
         permissions,
@@ -227,13 +248,15 @@ where
     })
 }
 
-fn create_request_hash(session_id: &str, name: &str) -> [u8; 32] {
+fn create_request_hash(session_id: &str, name: &str, slug: &str) -> [u8; 32] {
     let mut digest = Sha256::new();
-    digest.update(b"wasi-auth:create-organization:v1\0");
+    digest.update(b"wasi-auth:create-organization:v2\0");
     digest.update((session_id.len() as u64).to_be_bytes());
     digest.update(session_id.as_bytes());
     digest.update((name.len() as u64).to_be_bytes());
     digest.update(name.as_bytes());
+    digest.update((slug.len() as u64).to_be_bytes());
+    digest.update(slug.as_bytes());
     digest.finalize().into()
 }
 
@@ -270,6 +293,9 @@ pub enum OrganizationError<E: StdError + Send + Sync + 'static> {
     /// Idempotency key was reused for a different request.
     #[error("organization idempotency key conflicts with an earlier request")]
     IdempotencyConflict,
+    /// The requested organization slug is already assigned.
+    #[error("organization slug is already in use")]
+    SlugConflict,
     /// Host cryptographic randomness was unavailable.
     #[error("cryptographic randomness is unavailable")]
     RandomnessUnavailable,

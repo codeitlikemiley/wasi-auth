@@ -2,7 +2,7 @@
 
 use std::process::ExitCode;
 
-use wasi_auth_migrate::{MigrationCommand, run};
+use wasi_auth_migrate::{MigrationCommand, backfill_organization_slugs, run};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {
@@ -24,9 +24,15 @@ async fn execute() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", usage());
         return Ok(());
     }
-    let command = parse_command(&command)?;
+    let backfill = command == "backfill-organization-slugs";
+    let command = if backfill {
+        None
+    } else {
+        Some(parse_command(&command)?)
+    };
     let mut database_url_environment = "DATABASE_URL".to_owned();
     let mut json = false;
+    let mut batch_size = 500_u32;
     while let Some(argument) = arguments.next() {
         match argument.as_str() {
             "--database-url-env" => {
@@ -35,13 +41,30 @@ async fn execute() -> Result<(), Box<dyn std::error::Error>> {
                     .ok_or("--database-url-env requires a variable name")?;
             }
             "--json" => json = true,
+            "--batch-size" if backfill => {
+                batch_size = arguments
+                    .next()
+                    .ok_or("--batch-size requires an integer")?
+                    .parse()
+                    .map_err(|_| "--batch-size requires an integer")?;
+            }
             _ => return Err(format!("unknown argument {argument}").into()),
         }
     }
     let database_url = std::env::var(&database_url_environment).map_err(|_| {
         format!("required database URL environment variable {database_url_environment} is unset")
     })?;
-    let report = run(&database_url, command).await?;
+    if backfill {
+        let report = backfill_organization_slugs(&database_url, batch_size).await?;
+        if json {
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        } else {
+            println!("updated: {}", report.updated);
+            println!("remaining: {}", report.remaining);
+        }
+        return Ok(());
+    }
+    let report = run(&database_url, command.ok_or("missing migration command")?).await?;
     if json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
@@ -72,5 +95,5 @@ fn display_versions(versions: &[String]) -> String {
 }
 
 fn usage() -> &'static str {
-    "Usage: wasi-auth-migrate <plan|apply|verify|verify-database|status> [--database-url-env NAME] [--json]\n\nThe database URL is read from DATABASE_URL by default and is never accepted on the command line."
+    "Usage: wasi-auth-migrate <plan|apply|verify|verify-database|status|backfill-organization-slugs> [--database-url-env NAME] [--batch-size 500] [--json]\n\nThe database URL is read from DATABASE_URL by default and is never accepted on the command line."
 }

@@ -10,6 +10,16 @@ idempotency_conflict AS (
        OR actor_key <> $2
        OR request_hash <> $3
 ),
+slug_lock AS MATERIALIZED (
+    SELECT pg_advisory_xact_lock(hashtextextended($11, 0))
+),
+slug_conflict AS (
+    SELECT 1
+    FROM auth_organizations AS organizations
+    CROSS JOIN slug_lock
+    WHERE organizations.slug = $11
+      AND NOT EXISTS (SELECT 1 FROM existing_idempotency)
+),
 eligible AS (
     SELECT sessions.session_id, sessions.user_id
     FROM auth_sessions AS sessions
@@ -21,16 +31,17 @@ eligible AS (
       AND users.status = 'active'
       AND NOT EXISTS (SELECT 1 FROM existing_idempotency)
       AND NOT EXISTS (SELECT 1 FROM idempotency_conflict)
+      AND NOT EXISTS (SELECT 1 FROM slug_conflict)
     FOR UPDATE OF sessions, users
 ),
 new_organization AS (
     INSERT INTO auth_organizations (
-        organization_id, name, status, authorization_revision,
+        organization_id, name, slug, status, authorization_revision,
         created_by, created_at_ms, updated_at_ms
     )
-    SELECT $4::text::uuid, $5, 'active', 1, eligible.user_id, $9, $9
+    SELECT $4::text::uuid, $5, $11, 'active', 1, eligible.user_id, $9, $9
     FROM eligible
-    RETURNING organization_id, name, status, created_by, created_at_ms
+    RETURNING organization_id, name, slug, status, created_by, created_at_ms
 ),
 new_roles AS (
     INSERT INTO auth_roles (
@@ -62,7 +73,18 @@ new_permissions AS (
         ('owner', 'counter.view'),
         ('owner', 'counter.change'),
         ('owner', 'counter.reset'),
+        ('owner', 'dashboard.view'),
+        ('owner', 'dashboard.manage'),
+        ('owner', 'resource.view'),
+        ('owner', 'resource.manage'),
+        ('owner', 'query.view'),
+        ('owner', 'query.manage'),
+        ('owner', 'query.execute'),
+        ('owner', 'query.execute_mutation'),
         ('owner', 'ownership.transfer'),
+        ('owner', 'vault.view'),
+        ('owner', 'vault.manage'),
+        ('owner', 'vault.reveal'),
         ('admin', 'organization.view'),
         ('admin', 'organization.update'),
         ('admin', 'member.view'),
@@ -74,15 +96,30 @@ new_permissions AS (
         ('admin', 'counter.view'),
         ('admin', 'counter.change'),
         ('admin', 'counter.reset'),
+        ('admin', 'dashboard.view'),
+        ('admin', 'dashboard.manage'),
+        ('admin', 'resource.view'),
+        ('admin', 'resource.manage'),
+        ('admin', 'query.view'),
+        ('admin', 'query.manage'),
+        ('admin', 'query.execute'),
+        ('admin', 'query.execute_mutation'),
+        ('admin', 'vault.view'),
+        ('admin', 'vault.manage'),
+        ('admin', 'vault.reveal'),
         ('member', 'organization.view'),
         ('member', 'member.view'),
         ('member', 'role.view'),
         ('member', 'counter.view'),
         ('member', 'counter.change'),
+        ('member', 'dashboard.view'),
+        ('member', 'query.view'),
+        ('member', 'query.execute'),
         ('viewer', 'organization.view'),
         ('viewer', 'member.view'),
         ('viewer', 'role.view'),
-        ('viewer', 'counter.view')
+        ('viewer', 'counter.view'),
+        ('viewer', 'dashboard.view')
     ) AS permissions(role_id, permission)
       ON permissions.role_id = new_roles.role_id
     RETURNING organization_id, role_id, permission
@@ -140,6 +177,7 @@ created AS (
         'created'::text AS outcome,
         new_organization.organization_id,
         new_organization.name,
+        new_organization.slug,
         new_organization.status,
         new_organization.created_at_ms
     FROM new_organization
@@ -150,6 +188,7 @@ replayed AS (
         'replayed'::text AS outcome,
         organizations.organization_id,
         organizations.name,
+        organizations.slug,
         organizations.status,
         organizations.created_at_ms
     FROM existing_idempotency
@@ -168,6 +207,7 @@ created_output AS (
         created.outcome,
         created.organization_id::text AS organization_id,
         created.name,
+        created.slug,
         created.status,
         created.created_at_ms,
         'owner'::text AS role_id,
@@ -176,7 +216,7 @@ created_output AS (
     JOIN new_permissions
       ON new_permissions.organization_id = created.organization_id
      AND new_permissions.role_id = 'owner'
-    GROUP BY created.outcome, created.organization_id, created.name,
+    GROUP BY created.outcome, created.organization_id, created.name, created.slug,
              created.status, created.created_at_ms
 ),
 replayed_output AS (
@@ -184,6 +224,7 @@ replayed_output AS (
         replayed.outcome,
         replayed.organization_id::text AS organization_id,
         replayed.name,
+        replayed.slug,
         replayed.status,
         replayed.created_at_ms,
         'owner'::text AS role_id,
@@ -196,7 +237,7 @@ replayed_output AS (
     LEFT JOIN auth_role_permissions AS role_permissions
       ON role_permissions.organization_id = replayed.organization_id
      AND role_permissions.role_id = 'owner'
-    GROUP BY replayed.outcome, replayed.organization_id, replayed.name,
+    GROUP BY replayed.outcome, replayed.organization_id, replayed.name, replayed.slug,
              replayed.status, replayed.created_at_ms
 ),
 result AS (
@@ -209,8 +250,9 @@ UNION ALL
 SELECT
     CASE
         WHEN EXISTS (SELECT 1 FROM idempotency_conflict) THEN 'idempotency_conflict'
+        WHEN EXISTS (SELECT 1 FROM slug_conflict) THEN 'slug_conflict'
         ELSE 'unauthorized'
     END,
-    NULL, NULL, NULL, NULL, NULL, '[]'::jsonb
+    NULL, NULL, NULL, NULL, NULL, NULL, '[]'::jsonb
 WHERE NOT EXISTS (SELECT 1 FROM result)
 LIMIT 1

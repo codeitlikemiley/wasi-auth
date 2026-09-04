@@ -6,7 +6,9 @@ use serde::Serialize;
 use thiserror::Error;
 use tokio_postgres::{Client, NoTls};
 
-use super::{AppliedSchemaMigration, SchemaPlanError, plan_schema};
+use super::{
+    AppliedSchemaMigration, SchemaMigration, SchemaMigrationMode, SchemaPlanError, plan_schema,
+};
 
 const MIGRATION_ADVISORY_LOCK: i64 = 0x7761_7369_6175_7468;
 
@@ -67,6 +69,15 @@ pub struct MigrationReport {
     pub database_verified: bool,
 }
 
+/// Result of one bounded organization-slug backfill batch.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+pub struct OrganizationSlugBackfillReport {
+    /// Rows updated by this invocation.
+    pub updated: u64,
+    /// Rows that still require a slug after this invocation.
+    pub remaining: u64,
+}
+
 /// Lock-protected PostgreSQL migration runner.
 #[derive(Debug, Default)]
 pub struct MigrationRunner;
@@ -104,6 +115,67 @@ impl MigrationRunner {
             MigrationAction::VerifyDatabase => report(&client, true).await,
         }
     }
+
+    /// Backfills at most `batch_size` organization slugs using row skipping.
+    ///
+    /// Invoke repeatedly until [`OrganizationSlugBackfillReport::remaining`]
+    /// reaches zero. Parallel invocations do not wait on rows already locked by
+    /// another backfill worker.
+    ///
+    /// # Errors
+    ///
+    /// Returns validation, connection, or PostgreSQL failures. Migration 0011
+    /// must already be applied.
+    pub async fn backfill_organization_slugs(
+        database_url: &str,
+        batch_size: u32,
+    ) -> Result<OrganizationSlugBackfillReport, MigrationRunnerError> {
+        if database_url.is_empty()
+            || database_url.len() > 4_096
+            || database_url.chars().any(char::is_control)
+        {
+            return Err(MigrationRunnerError::InvalidDatabaseUrl);
+        }
+        if batch_size == 0 || batch_size > 5_000 {
+            return Err(MigrationRunnerError::InvalidBatchSize);
+        }
+        let (mut client, connection) = tokio_postgres::connect(database_url, NoTls).await?;
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let transaction = client.transaction().await?;
+        let rows = transaction
+            .query(
+                "WITH batch AS (\
+                     SELECT organization_id, name \
+                     FROM auth_organizations \
+                     WHERE slug IS NULL OR btrim(slug) = '' \
+                     ORDER BY created_at_ms, organization_id \
+                     FOR UPDATE SKIP LOCKED \
+                     LIMIT $1\
+                 ) \
+                 UPDATE auth_organizations AS organizations \
+                 SET slug = auth_default_organization_slug(batch.name, batch.organization_id), \
+                     updated_at_ms = (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint \
+                 FROM batch \
+                 WHERE organizations.organization_id = batch.organization_id \
+                 RETURNING organizations.organization_id",
+                &[&i64::from(batch_size)],
+            )
+            .await?;
+        transaction.commit().await?;
+        let remaining: i64 = client
+            .query_one(
+                "SELECT count(*) FROM auth_organizations WHERE slug IS NULL OR btrim(slug) = ''",
+                &[],
+            )
+            .await?
+            .get(0);
+        Ok(OrganizationSlugBackfillReport {
+            updated: rows.len() as u64,
+            remaining: u64::try_from(remaining).unwrap_or(u64::MAX),
+        })
+    }
 }
 
 async fn apply(client: &mut Client) -> Result<MigrationReport, MigrationRunnerError> {
@@ -125,18 +197,93 @@ async fn apply_locked(client: &mut Client) -> Result<MigrationReport, MigrationR
     let applied = load_applied(client).await?;
     let pending = plan_schema(&applied)?;
     for migration in pending {
-        let transaction = client.transaction().await?;
-        transaction.batch_execute(migration.sql()).await?;
-        transaction
-            .execute(
-                "INSERT INTO auth_schema_migrations (version, checksum, applied_at_ms) \
-                 VALUES ($1, $2, (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint)",
-                &[&migration.version(), &migration.checksum_hex()],
-            )
-            .await?;
-        transaction.commit().await?;
+        match migration.mode() {
+            SchemaMigrationMode::Transactional => apply_transactional(client, migration).await?,
+            SchemaMigrationMode::Autocommit => apply_autocommit(client, migration).await?,
+        }
     }
     report(client, true).await
+}
+
+async fn apply_transactional(
+    client: &mut Client,
+    migration: SchemaMigration,
+) -> Result<(), MigrationRunnerError> {
+    let transaction = client.transaction().await?;
+    transaction.batch_execute(migration.sql()).await?;
+    record_migration(&transaction, migration).await?;
+    transaction.commit().await?;
+    Ok(())
+}
+
+async fn apply_autocommit(
+    client: &mut Client,
+    migration: SchemaMigration,
+) -> Result<(), MigrationRunnerError> {
+    client.batch_execute(migration.sql()).await?;
+    verify_autocommit_postcondition(client, migration).await?;
+    let transaction = client.transaction().await?;
+    record_migration(&transaction, migration).await?;
+    transaction.commit().await?;
+    Ok(())
+}
+
+async fn record_migration(
+    transaction: &tokio_postgres::Transaction<'_>,
+    migration: SchemaMigration,
+) -> Result<(), tokio_postgres::Error> {
+    transaction
+        .execute(
+            "INSERT INTO auth_schema_migrations (version, checksum, applied_at_ms) \
+             VALUES ($1, $2, (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint)",
+            &[&migration.version(), &migration.checksum_hex()],
+        )
+        .await?;
+    Ok(())
+}
+
+async fn verify_autocommit_postcondition(
+    client: &Client,
+    migration: SchemaMigration,
+) -> Result<(), MigrationRunnerError> {
+    if migration.version() != "0012_organization_slug_unique_index" {
+        return Err(MigrationRunnerError::UnsupportedAutocommitMigration(
+            migration.version().to_owned(),
+        ));
+    }
+    let row = client
+        .query_opt(
+            "SELECT indexes.indisvalid, indexes.indisready, indexes.indisunique, \
+                    pg_get_indexdef(classes.oid), \
+                    pg_get_expr(indexes.indpred, indexes.indrelid) \
+             FROM pg_class AS classes \
+             JOIN pg_namespace AS namespaces ON namespaces.oid = classes.relnamespace \
+             JOIN pg_index AS indexes ON indexes.indexrelid = classes.oid \
+             WHERE namespaces.nspname = 'public' \
+               AND classes.relname = 'auth_organizations_slug_uidx'",
+            &[],
+        )
+        .await?
+        .ok_or_else(|| {
+            MigrationRunnerError::InvalidMigrationPostcondition(migration.version().to_owned())
+        })?;
+    let valid: bool = row.get(0);
+    let ready: bool = row.get(1);
+    let unique: bool = row.get(2);
+    let definition: String = row.get(3);
+    let predicate: Option<String> = row.get(4);
+    let expected_definition = "CREATE UNIQUE INDEX auth_organizations_slug_uidx ON public.auth_organizations USING btree (slug) WHERE (slug IS NOT NULL)";
+    if !valid
+        || !ready
+        || !unique
+        || definition != expected_definition
+        || predicate.as_deref() != Some("(slug IS NOT NULL)")
+    {
+        return Err(MigrationRunnerError::InvalidMigrationPostcondition(
+            migration.version().to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 async fn report(
@@ -226,6 +373,9 @@ pub enum MigrationRunnerError {
     /// Database URL failed bounded validation.
     #[error("PostgreSQL migration URL is invalid")]
     InvalidDatabaseUrl,
+    /// A bounded maintenance command received an invalid batch size.
+    #[error("migration batch size must be between 1 and 5000")]
+    InvalidBatchSize,
     /// PostgreSQL operation failed.
     #[error("PostgreSQL migration operation failed: {0}")]
     Postgres(#[from] tokio_postgres::Error),
@@ -235,6 +385,12 @@ pub enum MigrationRunnerError {
     /// Database verification was requested before all migrations were applied.
     #[error("database has pending migrations")]
     PendingMigrations,
+    /// An autocommit migration lacks a fail-closed verifier.
+    #[error("unsupported autocommit migration {0}")]
+    UnsupportedAutocommitMigration(String),
+    /// An autocommit migration did not create the exact expected object.
+    #[error("migration postcondition failed for {0}")]
+    InvalidMigrationPostcondition(String),
     /// Required relational-kernel tables are absent.
     #[error("database is missing required tables: {0}")]
     MissingTables(String),

@@ -80,6 +80,173 @@ pub enum MailMessageError {
     InvalidBody,
 }
 
+/// Invalid transactional-mail product or public URL configuration.
+#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
+pub enum TransactionalMailConfigError {
+    /// Product name was empty, oversized, or contained control characters.
+    #[error("transactional mail product name is invalid")]
+    InvalidProductName,
+    /// Action URL or public base URL violated the HTTPS/loopback contract.
+    #[error("transactional mail action URL is invalid")]
+    InvalidActionUrl,
+    /// An action token violated the bounded URL contract.
+    #[error("transactional mail action token is invalid")]
+    InvalidActionToken,
+}
+
+/// Validated product name used when rendering transactional mail.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MailProductName(String);
+
+impl MailProductName {
+    /// Creates a bounded, printable product name.
+    ///
+    /// # Errors
+    ///
+    /// Rejects empty, surrounding-whitespace, oversized, or control content.
+    pub fn new(value: impl Into<String>) -> Result<Self, TransactionalMailConfigError> {
+        let value = value.into();
+        if value.is_empty()
+            || value.len() > 80
+            || value.trim() != value
+            || value.chars().any(char::is_control)
+        {
+            return Err(TransactionalMailConfigError::InvalidProductName);
+        }
+        Ok(Self(value))
+    }
+
+    /// Returns the validated display name.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Validated absolute URL containing a one-time mail action.
+#[derive(Clone, Eq, PartialEq)]
+pub struct MailActionUrl(String);
+
+impl MailActionUrl {
+    /// Creates an HTTPS URL or loopback HTTP URL without credentials/fragments.
+    ///
+    /// # Errors
+    ///
+    /// Rejects malformed, insecure, credential-bearing, fragmented, or
+    /// oversized URLs.
+    pub fn new(value: impl Into<String>) -> Result<Self, TransactionalMailConfigError> {
+        let value = value.into();
+        if value.is_empty()
+            || value.len() > 2_048
+            || value.chars().any(char::is_whitespace)
+            || value.contains('#')
+        {
+            return Err(TransactionalMailConfigError::InvalidActionUrl);
+        }
+        let (secure, remainder) = if let Some(remainder) = value.strip_prefix("https://") {
+            (true, remainder)
+        } else if let Some(remainder) = value.strip_prefix("http://") {
+            (false, remainder)
+        } else {
+            return Err(TransactionalMailConfigError::InvalidActionUrl);
+        };
+        let authority = remainder
+            .split(['/', '?'])
+            .next()
+            .ok_or(TransactionalMailConfigError::InvalidActionUrl)?;
+        if authority.is_empty() || authority.contains('@') {
+            return Err(TransactionalMailConfigError::InvalidActionUrl);
+        }
+        if !secure {
+            let host = authority
+                .strip_prefix('[')
+                .and_then(|value| value.split_once(']').map(|(host, _)| host))
+                .unwrap_or_else(|| authority.split(':').next().unwrap_or_default());
+            if !matches!(host, "localhost" | "127.0.0.1" | "::1") {
+                return Err(TransactionalMailConfigError::InvalidActionUrl);
+            }
+        }
+        Ok(Self(value))
+    }
+
+    /// Returns the validated absolute action URL.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for MailActionUrl {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("MailActionUrl([REDACTED])")
+    }
+}
+
+/// Startup-validated product and public-origin mail configuration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TransactionalMailConfig {
+    product_name: MailProductName,
+    public_base_url: String,
+}
+
+impl TransactionalMailConfig {
+    /// Validates the product name and an HTTPS or loopback HTTP origin.
+    ///
+    /// # Errors
+    ///
+    /// Rejects public origins containing paths, queries, fragments, or
+    /// credentials.
+    pub fn new(
+        product_name: MailProductName,
+        public_base_url: impl Into<String>,
+    ) -> Result<Self, TransactionalMailConfigError> {
+        let public_base_url = public_base_url.into();
+        let trimmed = public_base_url.trim_end_matches('/');
+        MailActionUrl::new(format!("{trimmed}/"))?;
+        let scheme_end = trimmed
+            .find("://")
+            .ok_or(TransactionalMailConfigError::InvalidActionUrl)?
+            + 3;
+        if trimmed[scheme_end..].contains(['/', '?', '#']) {
+            return Err(TransactionalMailConfigError::InvalidActionUrl);
+        }
+        Ok(Self {
+            product_name,
+            public_base_url: trimmed.to_owned(),
+        })
+    }
+
+    /// Renders one immutable action message for durable enqueue.
+    ///
+    /// # Errors
+    ///
+    /// Rejects an empty, oversized, or control-character-containing token.
+    pub fn render(
+        &self,
+        kind: EmailKind,
+        token: &str,
+    ) -> Result<(MailActionUrl, RenderedTransactionalMail), TransactionalMailConfigError> {
+        if token.is_empty()
+            || token.len() > 1_024
+            || token.chars().any(char::is_control)
+            || token.contains(['&', '#'])
+        {
+            return Err(TransactionalMailConfigError::InvalidActionToken);
+        }
+        let path = match kind {
+            EmailKind::Verification => "/verify-email",
+            EmailKind::PasswordReset => "/reset-password",
+            EmailKind::Invitation => "/invitations/accept",
+            EmailKind::SecurityNotification => "/account/security",
+        };
+        let action_url =
+            MailActionUrl::new(format!("{}{path}?token={token}", self.public_base_url))?;
+        let rendered =
+            render_transactional_mail(kind, action_url.as_str(), self.product_name.as_str());
+        Ok((action_url, rendered))
+    }
+}
+
 /// Sensitive transactional email ready for a concrete delivery adapter.
 ///
 /// Debug output is intentionally redacted because verification, reset, and
@@ -90,6 +257,8 @@ pub struct EmailMessage {
     recipient: Recipient,
     subject: String,
     text_body: String,
+    html_body: Option<String>,
+    action_url: Option<MailActionUrl>,
     correlation_id: String,
 }
 
@@ -119,8 +288,34 @@ impl EmailMessage {
             recipient,
             subject,
             text_body,
+            html_body: None,
+            action_url: None,
             correlation_id: correlation_id.into(),
         })
+    }
+
+    /// Attaches an HTML body for multipart delivery.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MailMessageError::InvalidBody`] when the HTML is empty or oversized.
+    pub fn with_html_body(
+        mut self,
+        html_body: impl Into<String>,
+    ) -> Result<Self, MailMessageError> {
+        let html_body = html_body.into();
+        if html_body.is_empty() || html_body.len() > 128 * 1024 {
+            return Err(MailMessageError::InvalidBody);
+        }
+        self.html_body = Some(html_body);
+        Ok(self)
+    }
+
+    /// Attaches the validated one-time action URL for capture and auditing.
+    #[must_use]
+    pub fn with_action_url(mut self, action_url: MailActionUrl) -> Self {
+        self.action_url = Some(action_url);
+        self
     }
 
     /// Returns the message category.
@@ -147,10 +342,25 @@ impl EmailMessage {
         &self.text_body
     }
 
+    /// Returns the optional HTML body for multipart delivery.
+    #[must_use]
+    pub fn html_body(&self) -> Option<&str> {
+        self.html_body.as_deref()
+    }
+
     /// Returns the non-secret correlation identifier.
     #[must_use]
     pub fn correlation_id(&self) -> &str {
         &self.correlation_id
+    }
+
+    /// First absolute `http(s)` URL found in the text body (for capture/dev tools).
+    #[must_use]
+    pub fn action_url(&self) -> Option<&str> {
+        self.action_url
+            .as_ref()
+            .map(MailActionUrl::as_str)
+            .or_else(|| first_http_url(self.text_body.as_str()))
     }
 }
 
@@ -162,9 +372,216 @@ impl fmt::Debug for EmailMessage {
             .field("recipient", &"[REDACTED]")
             .field("subject", &self.subject)
             .field("text_body", &"[REDACTED]")
+            .field("html_body", &self.html_body.as_ref().map(|_| "[REDACTED]"))
+            .field(
+                "action_url",
+                &self.action_url.as_ref().map(|_| "[REDACTED]"),
+            )
             .field("correlation_id", &self.correlation_id)
             .finish()
     }
+}
+
+/// Productized subject + multipart bodies for a one-time action link.
+#[derive(Clone, Eq, PartialEq)]
+pub struct RenderedTransactionalMail {
+    /// Message subject line.
+    pub subject: String,
+    /// Plain-text body (always present).
+    pub text_body: String,
+    /// HTML body with a primary CTA button.
+    pub html_body: String,
+}
+
+impl fmt::Debug for RenderedTransactionalMail {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RenderedTransactionalMail")
+            .field("subject", &self.subject)
+            .field("text_body", &"[REDACTED]")
+            .field("html_body", &"[REDACTED]")
+            .finish()
+    }
+}
+
+/// Renders verification, password-reset, or invitation copy for `action_url`.
+///
+/// `product_name` appears in the subject and body (for example `Goldcoders`).
+/// The plain-text body is intentionally multi-paragraph so clients never show
+/// only a bare URL. HTML is a simple table layout for broad client support.
+#[must_use]
+pub fn render_transactional_mail(
+    kind: EmailKind,
+    action_url: &str,
+    product_name: &str,
+) -> RenderedTransactionalMail {
+    let product = if product_name.trim().is_empty() {
+        "Goldcoders"
+    } else {
+        product_name.trim()
+    };
+    let (subject, heading, intro, cta, ignore) = match kind {
+        EmailKind::Verification => (
+            format!("Verify your email for {product}"),
+            "Verify your email".to_owned(),
+            format!(
+                "Thanks for signing up for {product}. Confirm this email address so we can finish creating your account and keep it secure."
+            ),
+            "Verify email address",
+            "If you did not create an account, you can ignore this message. No account will be activated without verification.",
+        ),
+        EmailKind::PasswordReset => (
+            format!("Reset your {product} password"),
+            "Reset your password".to_owned(),
+            format!(
+                "We received a request to reset the password for your {product} account. Use the button below within the next hour to choose a new password."
+            ),
+            "Reset password",
+            "If you did not request a password reset, you can ignore this message. Your password will stay the same.",
+        ),
+        EmailKind::Invitation => (
+            format!("You are invited to join a {product} organization"),
+            "Organization invitation".to_owned(),
+            format!(
+                "You have been invited to join an organization on {product}. Open the link below, sign in with this email address, then accept the invitation."
+            ),
+            "Accept invitation",
+            "If you were not expecting this invitation, you can ignore this message.",
+        ),
+        EmailKind::SecurityNotification => (
+            format!("Security notice from {product}"),
+            "Security notice".to_owned(),
+            format!(
+                "A security-sensitive change was made on your {product} account. Review your account if this was not you."
+            ),
+            "Review account",
+            "If you do not recognize this activity, change your password and review active sessions immediately.",
+        ),
+    };
+
+    // Multi-line plain text first so every client (including text-only previews)
+    // shows human copy around the one-time link — never a bare URL alone.
+    let text_body = format!(
+        "Hi,\n\n\
+         {intro}\n\n\
+         {cta}:\n\
+         {action_url}\n\n\
+         If the button or link above does not work, copy and paste the full URL into your browser.\n\n\
+         {ignore}\n\n\
+         —\n\
+         {product}\n\
+         This is an automated message; replies are not monitored.\n"
+    );
+
+    let safe_url = html_escape(action_url);
+    let safe_product = html_escape(product);
+    let safe_intro = html_escape(&intro);
+    let safe_heading = html_escape(&heading);
+    let safe_cta = html_escape(cta);
+    let safe_ignore = html_escape(ignore);
+    let safe_subject = html_escape(&subject);
+    let html_body = format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>{safe_subject}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#18181b;-webkit-font-smoothing:antialiased;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+    {safe_intro}
+  </div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f4f4f5;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:560px;background:#ffffff;border:1px solid #e4e4e7;border-radius:12px;">
+        <tr><td style="padding:28px 28px 8px;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#71717a;">{safe_product}</td></tr>
+        <tr><td style="padding:8px 28px 0;font-size:22px;font-weight:600;letter-spacing:-0.02em;line-height:1.25;color:#18181b;">{safe_heading}</td></tr>
+        <tr><td style="padding:14px 28px 0;font-size:15px;line-height:1.65;color:#52525b;">{safe_intro}</td></tr>
+        <tr><td style="padding:28px 28px 0;" align="left">
+          <a href="{safe_url}" style="display:inline-block;background:#18181b;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;line-height:1;padding:14px 20px;border-radius:8px;">{safe_cta}</a>
+        </td></tr>
+        <tr><td style="padding:24px 28px 0;font-size:13px;line-height:1.55;color:#71717a;">Button not working? Copy and paste this link into your browser:</td></tr>
+        <tr><td style="padding:8px 28px 0;font-size:13px;line-height:1.5;word-break:break-all;"><a href="{safe_url}" style="color:#18181b;text-decoration:underline;">{safe_url}</a></td></tr>
+        <tr><td style="padding:28px;border-top:1px solid #e4e4e7;font-size:12px;line-height:1.55;color:#a1a1aa;">{safe_ignore}<br><br>This is an automated message from {safe_product}.</td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"#
+    );
+
+    RenderedTransactionalMail {
+        subject,
+        text_body,
+        html_body,
+    }
+}
+
+#[derive(Serialize)]
+struct DurableMailPayloadV2<'a> {
+    version: u8,
+    kind: &'a str,
+    recipient: &'a str,
+    subject: &'a str,
+    text_body: &'a str,
+    html_body: &'a str,
+    action_url: &'a str,
+}
+
+pub(crate) fn durable_transactional_mail_payload(
+    config: &TransactionalMailConfig,
+    kind: EmailKind,
+    recipient: &str,
+    token: &str,
+) -> Result<Vec<u8>, ()> {
+    let (action_url, rendered) = config.render(kind, token).map_err(|_| ())?;
+    let kind = match kind {
+        EmailKind::Verification => "email_verification",
+        EmailKind::PasswordReset => "password_reset",
+        EmailKind::Invitation => "invitation",
+        EmailKind::SecurityNotification => "security_notification",
+    };
+    serde_json::to_vec(&DurableMailPayloadV2 {
+        version: 2,
+        kind,
+        recipient,
+        subject: &rendered.subject,
+        text_body: &rendered.text_body,
+        html_body: &rendered.html_body,
+        action_url: action_url.as_str(),
+    })
+    .map_err(|_| ())
+}
+
+fn first_http_url(text: &str) -> Option<&str> {
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if let Some(url) = trimmed
+            .split_whitespace()
+            .find(|part| part.starts_with("http://") || part.starts_with("https://"))
+        {
+            return Some(url);
+        }
+    }
+    None
+}
+
+fn html_escape(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#39;"),
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 /// Successful provider delivery identifier.
@@ -456,6 +873,8 @@ struct HttpWebhookRequest<'a> {
     to: &'a str,
     subject: &'a str,
     text: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    html: Option<&'a str>,
     correlation_id: &'a str,
 }
 
@@ -473,6 +892,7 @@ impl<'a> From<&'a EmailMessage> for HttpWebhookRequest<'a> {
             to: message.recipient().as_str(),
             subject: message.subject(),
             text: message.text_body(),
+            html: message.html_body(),
             correlation_id: message.correlation_id(),
         }
     }
@@ -619,6 +1039,7 @@ where
             to: [message.recipient().as_str()],
             subject: message.subject(),
             text: message.text_body(),
+            html: message.html_body(),
         })
         .map_err(|_| ResendMailError::InvalidRequest)?;
         let request = Request::builder()
@@ -661,6 +1082,8 @@ struct ResendRequest<'a> {
     to: [&'a str; 1],
     subject: &'a str,
     text: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    html: Option<&'a str>,
 }
 
 #[cfg(feature = "mail-resend")]
@@ -748,11 +1171,51 @@ mod tests {
             "https://example.test/reset?token=secret",
             "request-one",
         )
-        .expect("valid fixture");
+        .expect("valid fixture")
+        .with_html_body("<a href=\"https://example.test/reset?token=secret\">Reset</a>")
+        .expect("html");
 
         let debug = format!("{message:?}");
 
         assert!(!debug.contains("token=secret"));
+        assert_eq!(
+            message.action_url(),
+            Some("https://example.test/reset?token=secret")
+        );
+    }
+
+    #[test]
+    fn transactional_templates_include_copy_cta_and_fallback_url() {
+        let action = "http://127.0.0.1:3008/reset-password?token=abc";
+        let rendered = render_transactional_mail(EmailKind::PasswordReset, action, "Goldcoders");
+        assert!(rendered.subject.contains("password"));
+        assert!(rendered.subject.contains("Goldcoders"));
+        assert!(rendered.text_body.contains(action));
+        assert!(rendered.text_body.contains("Hi,"));
+        assert!(rendered.text_body.contains("If you did not request"));
+        assert!(rendered.text_body.lines().count() > 5);
+        assert_ne!(rendered.text_body.trim(), action);
+        assert!(rendered.html_body.contains("Reset password"));
+        assert!(rendered.html_body.contains(action));
+        assert!(
+            rendered
+                .html_body
+                .to_ascii_lowercase()
+                .contains("copy and paste")
+        );
+        assert!(rendered.html_body.contains("<a href="));
+    }
+
+    #[test]
+    fn verification_template_is_never_bare_url() {
+        let action = "http://127.0.0.1:3008/verify-email?token=rZvuvY4qECzorVq9GlDYsz";
+        let rendered = render_transactional_mail(EmailKind::Verification, action, "Goldcoders");
+        assert!(rendered.subject.starts_with("Verify your email"));
+        assert!(rendered.text_body.contains("Thanks for signing up"));
+        assert!(rendered.text_body.contains(action));
+        assert!(rendered.html_body.contains("Verify email address"));
+        assert!(rendered.html_body.contains("Thanks for signing up"));
+        assert_ne!(rendered.text_body.trim(), action);
     }
 
     #[test]

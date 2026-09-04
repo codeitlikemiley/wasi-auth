@@ -10,6 +10,7 @@ use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
 
+pub mod access_model;
 #[cfg(any(feature = "oauth", feature = "passkeys"))]
 pub mod flows;
 pub mod management;

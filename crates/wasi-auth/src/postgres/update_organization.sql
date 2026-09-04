@@ -30,7 +30,7 @@ updated AS (
     SET name = $3, updated_at_ms = $4
     FROM locked_organization
     WHERE organizations.organization_id = locked_organization.organization_id
-    RETURNING organizations.organization_id, organizations.name,
+    RETURNING organizations.organization_id, organizations.name, organizations.slug,
               organizations.status, organizations.created_at_ms
 ),
 new_audit AS (
@@ -46,7 +46,7 @@ new_audit AS (
     RETURNING audit_id
 )
 SELECT updated.organization_id::text AS organization_id,
-       updated.name, updated.status, updated.created_at_ms,
+       updated.name, updated.slug, updated.status, updated.created_at_ms,
        actor.role_id,
        COALESCE(
            jsonb_agg(role_permissions.permission ORDER BY role_permissions.permission)
@@ -59,5 +59,5 @@ JOIN new_audit ON TRUE
 LEFT JOIN auth_role_permissions AS role_permissions
   ON role_permissions.organization_id = updated.organization_id
  AND role_permissions.role_id = actor.role_id
-GROUP BY updated.organization_id, updated.name, updated.status,
+GROUP BY updated.organization_id, updated.name, updated.slug, updated.status,
          updated.created_at_ms, actor.role_id

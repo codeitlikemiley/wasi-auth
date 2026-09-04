@@ -68,6 +68,28 @@ pub mod permissions {
     pub const COUNTER_CHANGE: &str = "counter.change";
     /// Reset the example counter.
     pub const COUNTER_RESET: &str = "counter.reset";
+    /// View rendered dashboards.
+    pub const DASHBOARD_VIEW: &str = "dashboard.view";
+    /// Manage dashboard layout and published bindings.
+    pub const DASHBOARD_MANAGE: &str = "dashboard.manage";
+    /// View connection metadata.
+    pub const RESOURCE_VIEW: &str = "resource.view";
+    /// Create, update, or delete connections.
+    pub const RESOURCE_MANAGE: &str = "resource.manage";
+    /// View approved query definitions.
+    pub const QUERY_VIEW: &str = "query.view";
+    /// Create, approve, update, or delete queries.
+    pub const QUERY_MANAGE: &str = "query.manage";
+    /// Execute an approved read query.
+    pub const QUERY_EXECUTE: &str = "query.execute";
+    /// Execute a server-classified mutating query.
+    pub const QUERY_EXECUTE_MUTATION: &str = "query.execute_mutation";
+    /// View vault secret metadata.
+    pub const VAULT_VIEW: &str = "vault.view";
+    /// Create, bind, rotate, or delete vault secrets.
+    pub const VAULT_MANAGE: &str = "vault.manage";
+    /// Reveal vault secret material.
+    pub const VAULT_REVEAL: &str = "vault.reveal";
     /// Transfer tenant ownership. Custom roles cannot receive this permission.
     pub const OWNERSHIP_TRANSFER: &str = "ownership.transfer";
     /// Manage global users. Tenant roles cannot receive this permission.
@@ -190,6 +212,17 @@ impl Role {
                 permissions::COUNTER_VIEW,
                 permissions::COUNTER_CHANGE,
                 permissions::COUNTER_RESET,
+                permissions::DASHBOARD_VIEW,
+                permissions::DASHBOARD_MANAGE,
+                permissions::RESOURCE_VIEW,
+                permissions::RESOURCE_MANAGE,
+                permissions::QUERY_VIEW,
+                permissions::QUERY_MANAGE,
+                permissions::QUERY_EXECUTE,
+                permissions::QUERY_EXECUTE_MUTATION,
+                permissions::VAULT_VIEW,
+                permissions::VAULT_MANAGE,
+                permissions::VAULT_REVEAL,
                 permissions::OWNERSHIP_TRANSFER,
             ],
             BuiltInRole::Admin => &[
@@ -204,6 +237,17 @@ impl Role {
                 permissions::COUNTER_VIEW,
                 permissions::COUNTER_CHANGE,
                 permissions::COUNTER_RESET,
+                permissions::DASHBOARD_VIEW,
+                permissions::DASHBOARD_MANAGE,
+                permissions::RESOURCE_VIEW,
+                permissions::RESOURCE_MANAGE,
+                permissions::QUERY_VIEW,
+                permissions::QUERY_MANAGE,
+                permissions::QUERY_EXECUTE,
+                permissions::QUERY_EXECUTE_MUTATION,
+                permissions::VAULT_VIEW,
+                permissions::VAULT_MANAGE,
+                permissions::VAULT_REVEAL,
             ],
             BuiltInRole::Member => &[
                 permissions::ORGANIZATION_VIEW,
@@ -211,12 +255,16 @@ impl Role {
                 permissions::ROLE_VIEW,
                 permissions::COUNTER_VIEW,
                 permissions::COUNTER_CHANGE,
+                permissions::DASHBOARD_VIEW,
+                permissions::QUERY_VIEW,
+                permissions::QUERY_EXECUTE,
             ],
             BuiltInRole::Viewer => &[
                 permissions::ORGANIZATION_VIEW,
                 permissions::MEMBER_VIEW,
                 permissions::ROLE_VIEW,
                 permissions::COUNTER_VIEW,
+                permissions::DASHBOARD_VIEW,
             ],
         };
         let permissions = names

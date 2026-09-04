@@ -13,6 +13,16 @@ pub mod native;
 pub struct SchemaMigration {
     version: &'static str,
     sql: &'static str,
+    mode: SchemaMigrationMode,
+}
+
+/// Database execution mode required by an immutable migration.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SchemaMigrationMode {
+    /// Run SQL and migration-history insertion in one transaction.
+    Transactional,
+    /// Run SQL outside a transaction, verify its postcondition, then record it.
+    Autocommit,
 }
 
 impl SchemaMigration {
@@ -26,6 +36,12 @@ impl SchemaMigration {
     #[must_use]
     pub const fn sql(self) -> &'static str {
         self.sql
+    }
+
+    /// Returns the required database execution mode.
+    #[must_use]
+    pub const fn mode(self) -> SchemaMigrationMode {
+        self.mode
     }
 
     /// Returns the lowercase SHA-256 source checksum.
@@ -51,60 +67,91 @@ pub struct AppliedSchemaMigration {
 pub const POSTGRES_RELATIONAL_0001: SchemaMigration = SchemaMigration {
     version: "0001_relational_kernel",
     sql: include_str!("../migrations/postgres/0001_relational_kernel.sql"),
+    mode: SchemaMigrationMode::Transactional,
 };
 
 /// Relational-kernel outbox delivery receipt extension.
 pub const POSTGRES_OUTBOX_0002: SchemaMigration = SchemaMigration {
     version: "0002_outbox_delivery_id",
     sql: include_str!("../migrations/postgres/0002_outbox_delivery_id.sql"),
+    mode: SchemaMigrationMode::Transactional,
 };
 
 /// Organization-management integrity and stable audit cursor extension.
 pub const POSTGRES_MANAGEMENT_0003: SchemaMigration = SchemaMigration {
     version: "0003_management_integrity",
     sql: include_str!("../migrations/postgres/0003_management_integrity.sql"),
+    mode: SchemaMigrationMode::Transactional,
 };
 
 /// Database-enforced active-organization owner invariant.
 pub const POSTGRES_OWNER_INVARIANT_0004: SchemaMigration = SchemaMigration {
     version: "0004_owner_invariant",
     sql: include_str!("../migrations/postgres/0004_owner_invariant.sql"),
+    mode: SchemaMigrationMode::Transactional,
 };
 
 /// Owner-trigger authorization-revision integration and existing-data guard.
 pub const POSTGRES_OWNER_TRIGGER_0005: SchemaMigration = SchemaMigration {
     version: "0005_owner_trigger_revision",
     sql: include_str!("../migrations/postgres/0005_owner_trigger_revision.sql"),
+    mode: SchemaMigrationMode::Transactional,
 };
 
 /// OAuth provider defaults and exact application redirect allowlist.
 pub const POSTGRES_OAUTH_DEFAULTS_0006: SchemaMigration = SchemaMigration {
     version: "0006_oauth_provider_defaults",
     sql: include_str!("../migrations/postgres/0006_oauth_provider_defaults.sql"),
+    mode: SchemaMigrationMode::Transactional,
 };
 
 /// Signing-key lifecycle metadata backed by external secret references.
 pub const POSTGRES_SIGNING_KEYS_0007: SchemaMigration = SchemaMigration {
     version: "0007_signing_key_references",
     sql: include_str!("../migrations/postgres/0007_signing_key_references.sql"),
+    mode: SchemaMigrationMode::Transactional,
 };
 
 /// Canonical fullstack account and dashboard redirect paths.
 pub const POSTGRES_FULLSTACK_REDIRECTS_0008: SchemaMigration = SchemaMigration {
     version: "0008_fullstack_redirects",
     sql: include_str!("../migrations/postgres/0008_fullstack_redirects.sql"),
+    mode: SchemaMigrationMode::Transactional,
 };
 
 /// Transactional PostgreSQL notifications for native-ingress cache safety.
 pub const POSTGRES_CONTEXT_INVALIDATION_0009: SchemaMigration = SchemaMigration {
     version: "0009_context_invalidation",
     sql: include_str!("../migrations/postgres/0009_context_invalidation.sql"),
+    mode: SchemaMigrationMode::Transactional,
 };
 
 /// Typed, resource-scoped relationship intents and bootstrap reconciliation.
 pub const POSTGRES_TYPED_RELATIONSHIP_OUTBOX_0010: SchemaMigration = SchemaMigration {
     version: "0010_typed_relationship_outbox",
     sql: include_str!("../migrations/postgres/0010_typed_relationship_outbox.sql"),
+    mode: SchemaMigrationMode::Transactional,
+};
+
+/// Rolling-compatible organization slug expansion.
+pub const POSTGRES_ORGANIZATION_SLUG_EXPAND_0011: SchemaMigration = SchemaMigration {
+    version: "0011_organization_slug_expand",
+    sql: include_str!("../migrations/postgres/0011_organization_slug_expand.sql"),
+    mode: SchemaMigrationMode::Transactional,
+};
+
+/// Concurrent partial unique index for populated organization slugs.
+pub const POSTGRES_ORGANIZATION_SLUG_UNIQUE_INDEX_0012: SchemaMigration = SchemaMigration {
+    version: "0012_organization_slug_unique_index",
+    sql: include_str!("../migrations/postgres/0012_organization_slug_unique_index.sql"),
+    mode: SchemaMigrationMode::Autocommit,
+};
+
+/// Fullstack permission catalog and strict built-in role grants.
+pub const POSTGRES_FULLSTACK_PERMISSIONS_0013: SchemaMigration = SchemaMigration {
+    version: "0013_fullstack_permissions",
+    sql: include_str!("../migrations/postgres/0013_fullstack_permissions.sql"),
+    mode: SchemaMigrationMode::Transactional,
 };
 
 /// Returns the complete ordered relational-kernel migration catalog.
@@ -121,6 +168,9 @@ pub const fn schema_migrations() -> &'static [SchemaMigration] {
         POSTGRES_FULLSTACK_REDIRECTS_0008,
         POSTGRES_CONTEXT_INVALIDATION_0009,
         POSTGRES_TYPED_RELATIONSHIP_OUTBOX_0010,
+        POSTGRES_ORGANIZATION_SLUG_EXPAND_0011,
+        POSTGRES_ORGANIZATION_SLUG_UNIQUE_INDEX_0012,
+        POSTGRES_FULLSTACK_PERMISSIONS_0013,
     ]
 }
 
@@ -193,6 +243,9 @@ mod tests {
                 POSTGRES_FULLSTACK_REDIRECTS_0008,
                 POSTGRES_CONTEXT_INVALIDATION_0009,
                 POSTGRES_TYPED_RELATIONSHIP_OUTBOX_0010,
+                POSTGRES_ORGANIZATION_SLUG_EXPAND_0011,
+                POSTGRES_ORGANIZATION_SLUG_UNIQUE_INDEX_0012,
+                POSTGRES_FULLSTACK_PERMISSIONS_0013,
             ])
         );
     }
@@ -239,6 +292,20 @@ mod tests {
             AppliedSchemaMigration {
                 version: POSTGRES_TYPED_RELATIONSHIP_OUTBOX_0010.version().to_owned(),
                 checksum: POSTGRES_TYPED_RELATIONSHIP_OUTBOX_0010.checksum_hex(),
+            },
+            AppliedSchemaMigration {
+                version: POSTGRES_ORGANIZATION_SLUG_EXPAND_0011.version().to_owned(),
+                checksum: POSTGRES_ORGANIZATION_SLUG_EXPAND_0011.checksum_hex(),
+            },
+            AppliedSchemaMigration {
+                version: POSTGRES_ORGANIZATION_SLUG_UNIQUE_INDEX_0012
+                    .version()
+                    .to_owned(),
+                checksum: POSTGRES_ORGANIZATION_SLUG_UNIQUE_INDEX_0012.checksum_hex(),
+            },
+            AppliedSchemaMigration {
+                version: POSTGRES_FULLSTACK_PERMISSIONS_0013.version().to_owned(),
+                checksum: POSTGRES_FULLSTACK_PERMISSIONS_0013.checksum_hex(),
             },
         ];
 

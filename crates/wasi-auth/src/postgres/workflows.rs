@@ -21,6 +21,7 @@ use super::{
 use crate::{
     authentication::{Clock, RandomSource},
     context::{RequestId, SessionId, UserId},
+    mail::{EmailKind, TransactionalMailConfig, durable_transactional_mail_payload},
 };
 
 const PASSWORD_HASH_BYTES: usize = 32;
@@ -592,6 +593,7 @@ pub struct PasswordRegistrationService<T, C, R> {
     randomness: R,
     argon2: Argon2Policy,
     outbox_key: OutboxSealingKey,
+    transactional_mail_config: Option<TransactionalMailConfig>,
 }
 
 impl<T, C, R> PasswordRegistrationService<T, C, R> {
@@ -610,7 +612,15 @@ impl<T, C, R> PasswordRegistrationService<T, C, R> {
             randomness,
             argon2,
             outbox_key,
+            transactional_mail_config: None,
         }
+    }
+
+    /// Enables enqueue-time rendering with startup-validated mail settings.
+    #[must_use]
+    pub fn with_transactional_mail_config(mut self, config: TransactionalMailConfig) -> Self {
+        self.transactional_mail_config = Some(config);
+        self
     }
 
     /// Returns the underlying relational store.
@@ -651,14 +661,24 @@ where
             .map_err(|_| PasswordRegistrationError::Crypto)?;
         let verification_token_text = URL_SAFE_NO_PAD.encode(verification_token);
         let verification_token_hash = Sha256::digest(verification_token_text.as_bytes()).into();
-        let mail_payload = serde_json::to_vec(&json!({
-            "version": 1,
-            "kind": "email_verification",
-            "recipient": normalized_email,
-            "token": verification_token_text,
-            "redirect_uri": request.redirect_uri,
-        }))
-        .map_err(|_| PasswordRegistrationError::Crypto)?;
+        let mail_payload = if let Some(config) = &self.transactional_mail_config {
+            durable_transactional_mail_payload(
+                config,
+                EmailKind::Verification,
+                &normalized_email,
+                &verification_token_text,
+            )
+            .map_err(|_| PasswordRegistrationError::InvalidConfiguration)?
+        } else {
+            serde_json::to_vec(&json!({
+                "version": 1,
+                "kind": "email_verification",
+                "recipient": normalized_email,
+                "token": verification_token_text,
+                "redirect_uri": request.redirect_uri,
+            }))
+            .map_err(|_| PasswordRegistrationError::Crypto)?
+        };
         let outbox_payload = self
             .outbox_key
             .seal(outbox_nonce, &mail_payload)
@@ -722,14 +742,24 @@ where
         fill(&self.randomness, &mut nonce)?;
         let token_text = URL_SAFE_NO_PAD.encode(token);
         let token_hash: [u8; 32] = Sha256::digest(token_text.as_bytes()).into();
-        let mail_payload = serde_json::to_vec(&json!({
-            "version": 1,
-            "kind": "email_verification",
-            "recipient": normalized_email,
-            "token": token_text,
-            "redirect_uri": request.redirect_uri,
-        }))
-        .map_err(|_| PasswordRegistrationError::Crypto)?;
+        let mail_payload = if let Some(config) = &self.transactional_mail_config {
+            durable_transactional_mail_payload(
+                config,
+                EmailKind::Verification,
+                &normalized_email,
+                &token_text,
+            )
+            .map_err(|_| PasswordRegistrationError::InvalidConfiguration)?
+        } else {
+            serde_json::to_vec(&json!({
+                "version": 1,
+                "kind": "email_verification",
+                "recipient": normalized_email,
+                "token": token_text,
+                "redirect_uri": request.redirect_uri,
+            }))
+            .map_err(|_| PasswordRegistrationError::Crypto)?
+        };
         let outbox_payload = self
             .outbox_key
             .seal(nonce, &mail_payload)
@@ -889,7 +919,7 @@ where
         })
     }
 
-    /// Changes a password after current-password and AAL2 session validation,
+    /// Changes a password after current-password re-auth (AAL1+ session),
     /// rotates the account security revision, and revokes every other session.
     ///
     /// # Errors
@@ -1165,6 +1195,7 @@ pub struct PasswordResetService<T, C, R> {
     randomness: R,
     argon2: Argon2Policy,
     outbox_key: OutboxSealingKey,
+    transactional_mail_config: Option<TransactionalMailConfig>,
     session_ttl_ms: u64,
 }
 
@@ -1184,8 +1215,16 @@ impl<T, C, R> PasswordResetService<T, C, R> {
             randomness,
             argon2,
             outbox_key,
+            transactional_mail_config: None,
             session_ttl_ms: DEFAULT_SESSION_TTL_MS,
         }
+    }
+
+    /// Enables enqueue-time rendering with startup-validated mail settings.
+    #[must_use]
+    pub fn with_transactional_mail_config(mut self, config: TransactionalMailConfig) -> Self {
+        self.transactional_mail_config = Some(config);
+        self
     }
 
     /// Overrides the post-reset session lifetime after bounded validation.
@@ -1247,14 +1286,24 @@ where
             .map_err(|_| PasswordResetError::RandomnessUnavailable)?;
         let audit_id = uuid_v7(now_ms, &self.randomness)
             .map_err(|_| PasswordResetError::RandomnessUnavailable)?;
-        let payload = serde_json::to_vec(&json!({
-            "version": 1,
-            "kind": "password_reset",
-            "recipient": normalized_email,
-            "token": token,
-            "redirect_uri": request.redirect_uri,
-        }))
-        .map_err(|_| PasswordResetError::Crypto)?;
+        let payload = if let Some(config) = &self.transactional_mail_config {
+            durable_transactional_mail_payload(
+                config,
+                EmailKind::PasswordReset,
+                &normalized_email,
+                &token,
+            )
+            .map_err(|_| PasswordResetError::InvalidConfiguration)?
+        } else {
+            serde_json::to_vec(&json!({
+                "version": 1,
+                "kind": "password_reset",
+                "recipient": normalized_email,
+                "token": token,
+                "redirect_uri": request.redirect_uri,
+            }))
+            .map_err(|_| PasswordResetError::Crypto)?
+        };
         let sealed = self
             .outbox_key
             .seal(outbox_nonce, &payload)
