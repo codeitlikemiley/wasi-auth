@@ -17,7 +17,7 @@ crate-type = ["cdylib"]
 http.workspace = true
 wasi-authz-client = { workspace = true, features = ["wasip3"] }
 wasi-authz-contract.workspace = true
-wasi-authz-http = { path = "../../crates/wasi-authz-http", version = "=0.1.0-rc.3" }
+wasi-authz-http = { path = "../../crates/wasi-authz-http", version = "=0.1.0-rc.4" }
 wasi-http-metadata.workspace = true
 wasi-http-middleware-component-support.workspace = true
 wasi-http-policy-core.workspace = true

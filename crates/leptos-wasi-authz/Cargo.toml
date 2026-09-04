@@ -20,12 +20,12 @@ server_fn.workspace = true
 thiserror.workspace = true
 wasi-authz-client.workspace = true
 wasi-authz-contract.workspace = true
-wasi-authz-http = { path = "../wasi-authz-http", version = "=0.1.0-rc.3" }
+wasi-authz-http = { path = "../wasi-authz-http", version = "=0.1.0-rc.4" }
 wasi-http-metadata.workspace = true
 
 [dev-dependencies]
 http-body-util.workspace = true
-wasi-authz-testkit = { path = "../wasi-authz-testkit", version = "=0.1.0-rc.3" }
+wasi-authz-testkit = { path = "../wasi-authz-testkit", version = "=0.1.0-rc.4" }
 
 [lints]
 workspace = true

@@ -10,7 +10,7 @@ description = "Native PostgreSQL schema administration for wasi-auth"
 [dependencies]
 serde_json.workspace = true
 tokio = { version = "1.52.0", features = ["macros", "rt"] }
-wasi-auth = { path = "../../crates/wasi-auth", version = "=0.1.0-rc.3", features = ["postgres-native"] }
+wasi-auth = { path = "../../crates/wasi-auth", version = "=0.1.0-rc.4", features = ["postgres-native"] }
 
 [dev-dependencies]
 

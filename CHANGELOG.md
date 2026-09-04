@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.1.0-rc.4
+
+This release lands the organization management and transactional mail surface
+that the `ddd-cqrs-es` fullstack preset already calls. That work was written on
+`codex/fullstack-verification-flow` and never merged, so every published
+version through `0.1.0-rc.3` is missing it and no consumer outside the author's
+machine can build against the preset. The branch is merged here unchanged; it
+touches only files `main` has not modified since the fork point.
+
+- `mail`: added `TransactionalMailConfig` and `MailProductName`, so
+  transactional mail renders HTML bodies with a product name and a public base
+  URL instead of text-only messages.
+- `postgres::management`: added `transfer_ownership`, `leave_organization`,
+  `archive_organization`, `delete_role`, and invitation `revoke`/`resend`. All
+  of them run as one-statement SQL under AAL2 and the matching organization
+  permission, and keep invitation token rotation and one-time-token
+  invalidation inside the statement.
+- `postgres::access_model`: added `OrganizationAccessModel` as the product
+  source of truth for permission labels, groups, risk, catalogs, and dependency
+  edges. Custom-role upsert expands transitive dependencies and then rejects
+  unknown and non-eligible permissions, including `ownership.transfer`.
+- `postgres::organizations`: added `OrganizationError::SlugConflict` and the
+  expanded organization slug schema behind it.
+- Added migrations `0011_organization_slug_expand`,
+  `0012_organization_slug_unique_index`, and `0013_fullstack_permissions`.
+
 ## 0.1.0-rc.3
 
 This release exists to republish with a clean archived lockfile. The published

@@ -20,7 +20,7 @@ wasi-authz-client.workspace = true
 wasi-authz-contract.workspace = true
 
 [dev-dependencies]
-wasi-authz-testkit = { path = "../wasi-authz-testkit", version = "=0.1.0-rc.3" }
+wasi-authz-testkit = { path = "../wasi-authz-testkit", version = "=0.1.0-rc.4" }
 
 [lints]
 workspace = true

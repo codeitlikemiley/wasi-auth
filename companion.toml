@@ -21,11 +21,11 @@ schema = 1
 
 [release]
 name = "wasi-auth"
-version = "0.1.0-rc.3"
+version = "0.1.0-rc.4"
 
 [artifact]
 name = "wasi-authz"
-version = "0.1.0-rc.3"
+version = "0.1.0-rc.4"
 components = ["authz-http-pep", "cedar-pdp", "spicedb-pdp"]
 checksum_manifest = "artifacts/RELEASE-SHA256SUMS"
 provenance = "artifacts/provenance.intoto.json"
@@ -37,7 +37,7 @@ signing_key = "reports/supply-chain/cosign.pub"
 [[crate]]
 package = "leptos-wasi-authz"
 path = "crates/leptos-wasi-authz"
-version = "0.1.0-rc.3"
+version = "0.1.0-rc.4"
 workspace = "wasi-auth"
 publish = false
 direct = true
@@ -45,7 +45,7 @@ direct = true
 [[crate]]
 package = "wasi-authz-cedar"
 path = "crates/wasi-authz-cedar"
-version = "0.1.0-rc.3"
+version = "0.1.0-rc.4"
 workspace = "wasi-auth"
 publish = false
 direct = true
@@ -53,7 +53,7 @@ direct = true
 [[crate]]
 package = "wasi-authz-client"
 path = "crates/wasi-authz-client"
-version = "0.1.0-rc.3"
+version = "0.1.0-rc.4"
 workspace = "wasi-auth"
 publish = false
 direct = true
@@ -61,7 +61,7 @@ direct = true
 [[crate]]
 package = "wasi-authz-contract"
 path = "crates/wasi-authz-contract"
-version = "0.1.0-rc.3"
+version = "0.1.0-rc.4"
 workspace = "wasi-auth"
 publish = false
 direct = true
@@ -69,7 +69,7 @@ direct = true
 [[crate]]
 package = "wasi-authz-spicedb"
 path = "crates/wasi-authz-spicedb"
-version = "0.1.0-rc.3"
+version = "0.1.0-rc.4"
 workspace = "wasi-auth"
 publish = false
 direct = true
@@ -85,7 +85,7 @@ direct = true
 [[crate]]
 package = "wasi-authz-http"
 path = "crates/wasi-authz-http"
-version = "0.1.0-rc.3"
+version = "0.1.0-rc.4"
 workspace = "wasi-auth"
 publish = false
 direct = false
@@ -93,7 +93,7 @@ direct = false
 [[crate]]
 package = "wasi-authz-testkit"
 path = "crates/wasi-authz-testkit"
-version = "0.1.0-rc.3"
+version = "0.1.0-rc.4"
 workspace = "wasi-auth"
 publish = false
 direct = false
