@@ -66,6 +66,14 @@ signing key, components, native PDP, SBOMs, and WIT reports — as assets on the
 GitHub release for the tag, so the evidence a consumer records is publicly
 fetchable rather than a one-machine artifact.
 
+The release is marked from the prepared version, not the tag: a version
+carrying a pre-release suffix is published `--prerelease`, and only a plain
+`MAJOR.MINOR.PATCH` is promoted `--latest`. A candidate therefore never becomes
+the release the repository page offers as the one to use. The version is read
+from `compatibility.toml` rather than parsed out of the tag because the
+`wasi-auth-v` prefix carries a hyphen of its own, which would read every
+release as a candidate.
+
 A hand-run `cargo publish` from a workstation is how `rc.1` and `rc.2`
 shipped, and how `rc.2` shipped its defect. Do not do it again.
 
