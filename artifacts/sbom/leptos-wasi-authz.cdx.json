@@ -1938,7 +1938,7 @@
     },
     {
       "author": "Carl Lerche <me@carllerche.com>, Sean McArthur <sean@seanmonstar.com>",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#h2@0.4.15",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#h2@0.4.16",
       "description": "An HTTP/2 client and server",
       "externalReferences": [
         {
@@ -1953,7 +1953,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "6cb093c84e8bd9b188d4c4a8cb6579fc016968d14c99882163cd3ff402a4f155"
+          "content": "a9f37a958b41b3b19ee2707c06439c0e9e547e847223eb791ecb0cb821c65e27"
         }
       ],
       "licenses": [
@@ -1962,10 +1962,10 @@
         }
       ],
       "name": "h2",
-      "purl": "pkg:cargo/h2@0.4.15",
+      "purl": "pkg:cargo/h2@0.4.16",
       "scope": "required",
       "type": "library",
-      "version": "0.4.15"
+      "version": "0.4.16"
     },
     {
       "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.17.1",
@@ -6795,6 +6795,33 @@
       "version": "0.2.1"
     },
     {
+      "author": "Microsoft",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#windows-sys@0.52.0",
+      "description": "Rust for Windows",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/windows-rs"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "windows-sys",
+      "purl": "pkg:cargo/windows-sys@0.52.0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.52.0"
+    },
+    {
       "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#windows-sys@0.61.2",
       "description": "Rust for Windows",
       "externalReferences": [
@@ -6819,6 +6846,249 @@
       "scope": "required",
       "type": "library",
       "version": "0.61.2"
+    },
+    {
+      "author": "Microsoft",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#windows-targets@0.52.6",
+      "description": "Import libs for Windows",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/windows-rs"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9b724f72796e036ab90c1021d4780d4d3d648aca59e491e6b98e725b84e99973"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "windows-targets",
+      "purl": "pkg:cargo/windows-targets@0.52.6",
+      "scope": "required",
+      "type": "library",
+      "version": "0.52.6"
+    },
+    {
+      "author": "Microsoft",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#windows_aarch64_gnullvm@0.52.6",
+      "description": "Import lib for Windows",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/windows-rs"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "windows_aarch64_gnullvm",
+      "purl": "pkg:cargo/windows_aarch64_gnullvm@0.52.6",
+      "scope": "required",
+      "type": "library",
+      "version": "0.52.6"
+    },
+    {
+      "author": "Microsoft",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#windows_aarch64_msvc@0.52.6",
+      "description": "Import lib for Windows",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/windows-rs"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "windows_aarch64_msvc",
+      "purl": "pkg:cargo/windows_aarch64_msvc@0.52.6",
+      "scope": "required",
+      "type": "library",
+      "version": "0.52.6"
+    },
+    {
+      "author": "Microsoft",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#windows_i686_gnu@0.52.6",
+      "description": "Import lib for Windows",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/windows-rs"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8e9b5ad5ab802e97eb8e295ac6720e509ee4c243f69d781394014ebfe8bbfa0b"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "windows_i686_gnu",
+      "purl": "pkg:cargo/windows_i686_gnu@0.52.6",
+      "scope": "required",
+      "type": "library",
+      "version": "0.52.6"
+    },
+    {
+      "author": "Microsoft",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#windows_i686_gnullvm@0.52.6",
+      "description": "Import lib for Windows",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/windows-rs"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0eee52d38c090b3caa76c563b86c3a4bd71ef1a819287c19d586d7334ae8ed66"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "windows_i686_gnullvm",
+      "purl": "pkg:cargo/windows_i686_gnullvm@0.52.6",
+      "scope": "required",
+      "type": "library",
+      "version": "0.52.6"
+    },
+    {
+      "author": "Microsoft",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#windows_i686_msvc@0.52.6",
+      "description": "Import lib for Windows",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/windows-rs"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "windows_i686_msvc",
+      "purl": "pkg:cargo/windows_i686_msvc@0.52.6",
+      "scope": "required",
+      "type": "library",
+      "version": "0.52.6"
+    },
+    {
+      "author": "Microsoft",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#windows_x86_64_gnu@0.52.6",
+      "description": "Import lib for Windows",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/windows-rs"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "windows_x86_64_gnu",
+      "purl": "pkg:cargo/windows_x86_64_gnu@0.52.6",
+      "scope": "required",
+      "type": "library",
+      "version": "0.52.6"
+    },
+    {
+      "author": "Microsoft",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#windows_x86_64_gnullvm@0.52.6",
+      "description": "Import lib for Windows",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/windows-rs"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "windows_x86_64_gnullvm",
+      "purl": "pkg:cargo/windows_x86_64_gnullvm@0.52.6",
+      "scope": "required",
+      "type": "library",
+      "version": "0.52.6"
+    },
+    {
+      "author": "Microsoft",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#windows_x86_64_msvc@0.52.6",
+      "description": "Import lib for Windows",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/windows-rs"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "windows_x86_64_msvc",
+      "purl": "pkg:cargo/windows_x86_64_msvc@0.52.6",
+      "scope": "required",
+      "type": "library",
+      "version": "0.52.6"
     },
     {
       "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#winnow@1.0.3",
@@ -7746,7 +8016,7 @@
     {
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186",
-        "registry+https://github.com/rust-lang/crates.io-index#windows-sys@0.61.2"
+        "registry+https://github.com/rust-lang/crates.io-index#windows-sys@0.52.0"
       ],
       "ref": "registry+https://github.com/rust-lang/crates.io-index#errno@0.3.14"
     },
@@ -7907,7 +8177,7 @@
         "registry+https://github.com/rust-lang/crates.io-index#tokio-util@0.7.18",
         "registry+https://github.com/rust-lang/crates.io-index#tracing@0.1.44"
       ],
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#h2@0.4.15"
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#h2@0.4.16"
     },
     {
       "dependsOn": [
@@ -7986,7 +8256,7 @@
         "registry+https://github.com/rust-lang/crates.io-index#bytes@1.12.1",
         "registry+https://github.com/rust-lang/crates.io-index#futures-channel@0.3.32",
         "registry+https://github.com/rust-lang/crates.io-index#futures-core@0.3.32",
-        "registry+https://github.com/rust-lang/crates.io-index#h2@0.4.15",
+        "registry+https://github.com/rust-lang/crates.io-index#h2@0.4.16",
         "registry+https://github.com/rust-lang/crates.io-index#http@1.4.2",
         "registry+https://github.com/rust-lang/crates.io-index#http-body@1.0.1",
         "registry+https://github.com/rust-lang/crates.io-index#httparse@1.10.1",
@@ -9077,7 +9347,7 @@
     },
     {
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#windows-sys@0.61.2"
+        "registry+https://github.com/rust-lang/crates.io-index#windows-sys@0.52.0"
       ],
       "ref": "registry+https://github.com/rust-lang/crates.io-index#winapi-util@0.1.11"
     },
@@ -9086,9 +9356,52 @@
     },
     {
       "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#windows-targets@0.52.6"
+      ],
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#windows-sys@0.52.0"
+    },
+    {
+      "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#windows-link@0.2.1"
       ],
       "ref": "registry+https://github.com/rust-lang/crates.io-index#windows-sys@0.61.2"
+    },
+    {
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#windows_aarch64_gnullvm@0.52.6",
+        "registry+https://github.com/rust-lang/crates.io-index#windows_aarch64_msvc@0.52.6",
+        "registry+https://github.com/rust-lang/crates.io-index#windows_i686_gnu@0.52.6",
+        "registry+https://github.com/rust-lang/crates.io-index#windows_i686_gnullvm@0.52.6",
+        "registry+https://github.com/rust-lang/crates.io-index#windows_i686_msvc@0.52.6",
+        "registry+https://github.com/rust-lang/crates.io-index#windows_x86_64_gnu@0.52.6",
+        "registry+https://github.com/rust-lang/crates.io-index#windows_x86_64_gnullvm@0.52.6",
+        "registry+https://github.com/rust-lang/crates.io-index#windows_x86_64_msvc@0.52.6"
+      ],
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#windows-targets@0.52.6"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#windows_aarch64_gnullvm@0.52.6"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#windows_aarch64_msvc@0.52.6"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#windows_i686_gnu@0.52.6"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#windows_i686_gnullvm@0.52.6"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#windows_i686_msvc@0.52.6"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#windows_x86_64_gnu@0.52.6"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#windows_x86_64_gnullvm@0.52.6"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#windows_x86_64_msvc@0.52.6"
     },
     {
       "dependsOn": [
