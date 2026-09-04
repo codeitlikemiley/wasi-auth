@@ -3,7 +3,7 @@
   "components": [
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.3",
+      "bom-ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.4",
       "description": "Transport-neutral AuthZEN client with additive WASIp2 and WASIp3 transports",
       "externalReferences": [
         {
@@ -21,14 +21,14 @@
         }
       ],
       "name": "wasi-authz-client",
-      "purl": "pkg:cargo/wasi-authz-client@0.1.0-rc.3",
+      "purl": "pkg:cargo/wasi-authz-client@0.1.0-rc.4",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.3"
+      "version": "0.1.0-rc.4"
     },
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.3",
+      "bom-ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.4",
       "description": "Bounded AuthZEN 1.0 authorization request and decision types",
       "externalReferences": [
         {
@@ -46,10 +46,10 @@
         }
       ],
       "name": "wasi-authz-contract",
-      "purl": "pkg:cargo/wasi-authz-contract@0.1.0-rc.3",
+      "purl": "pkg:cargo/wasi-authz-contract@0.1.0-rc.4",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.3"
+      "version": "0.1.0-rc.4"
     },
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
@@ -1733,10 +1733,10 @@
         "registry+https://github.com/rust-lang/crates.io-index#http@1.4.2",
         "registry+https://github.com/rust-lang/crates.io-index#http-body-util@0.1.3",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
-        "pkg:cargo/wasi-authz-contract@0.1.0-rc.3",
+        "pkg:cargo/wasi-authz-contract@0.1.0-rc.4",
         "registry+https://github.com/rust-lang/crates.io-index#wasip3@0.7.0+wasi-0.3.0"
       ],
-      "ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.3"
+      "ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.4"
     },
     {
       "dependsOn": [
@@ -1744,17 +1744,17 @@
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18"
       ],
-      "ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.3"
+      "ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.4"
     },
     {
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#http@1.4.2",
-        "pkg:cargo/wasi-authz-client@0.1.0-rc.3",
-        "pkg:cargo/wasi-authz-contract@0.1.0-rc.3",
+        "pkg:cargo/wasi-authz-client@0.1.0-rc.4",
+        "pkg:cargo/wasi-authz-contract@0.1.0-rc.4",
         "pkg:cargo/wasi-http-metadata@0.2.0-alpha.3",
         "pkg:cargo/wasi-http-policy-core@0.2.0-alpha.3"
       ],
-      "ref": "pkg:cargo/wasi-authz-http@0.1.0-rc.3"
+      "ref": "pkg:cargo/wasi-authz-http@0.1.0-rc.4"
     },
     {
       "dependsOn": [
@@ -2130,14 +2130,14 @@
     ],
     "component": {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-authz-http@0.1.0-rc.3",
+      "bom-ref": "pkg:cargo/wasi-authz-http@0.1.0-rc.4",
       "components": [
         {
-          "bom-ref": "path+file://./crates/wasi-authz-http#0.1.0-rc.3 bin-target-0",
+          "bom-ref": "path+file://./crates/wasi-authz-http#0.1.0-rc.4 bin-target-0",
           "name": "wasi_authz_http",
-          "purl": "pkg:cargo/wasi-authz-http@0.1.0-rc.3?download_url=file://.#src/lib.rs",
+          "purl": "pkg:cargo/wasi-authz-http@0.1.0-rc.4?download_url=file://.#src/lib.rs",
           "type": "library",
-          "version": "0.1.0-rc.3"
+          "version": "0.1.0-rc.4"
         }
       ],
       "description": "Coarse HTTP policy enforcement helpers for wasi-authz",
@@ -2157,10 +2157,10 @@
         }
       ],
       "name": "wasi-authz-http",
-      "purl": "pkg:cargo/wasi-authz-http@0.1.0-rc.3",
+      "purl": "pkg:cargo/wasi-authz-http@0.1.0-rc.4",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.3"
+      "version": "0.1.0-rc.4"
     },
     "properties": [
       {
@@ -2176,7 +2176,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:5f0bb8c8-a263-5597-9f8c-d5cd0eed2738",
+  "serialNumber": "urn:uuid:47217751-b946-569b-b134-13525969d525",
   "specVersion": "1.5",
   "version": 1
 }

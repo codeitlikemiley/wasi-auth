@@ -3,7 +3,7 @@
   "components": [
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-auth@0.1.0-rc.3",
+      "bom-ref": "pkg:cargo/wasi-auth@0.1.0-rc.4",
       "description": "Production authentication, authorization, and trusted ingress for WASI applications",
       "externalReferences": [
         {
@@ -21,10 +21,10 @@
         }
       ],
       "name": "wasi-auth",
-      "purl": "pkg:cargo/wasi-auth@0.1.0-rc.3",
+      "purl": "pkg:cargo/wasi-auth@0.1.0-rc.4",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.3"
+      "version": "0.1.0-rc.4"
     },
     {
       "author": "RustCrypto Developers",
@@ -9404,15 +9404,15 @@
         "registry+https://github.com/rust-lang/crates.io-index#uuid@1.23.4",
         "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.9.0"
       ],
-      "ref": "pkg:cargo/wasi-auth@0.1.0-rc.3"
+      "ref": "pkg:cargo/wasi-auth@0.1.0-rc.4"
     },
     {
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
         "registry+https://github.com/rust-lang/crates.io-index#tokio@1.52.3",
-        "pkg:cargo/wasi-auth@0.1.0-rc.3"
+        "pkg:cargo/wasi-auth@0.1.0-rc.4"
       ],
-      "ref": "pkg:cargo/wasi-auth-migrate@0.1.0-rc.3"
+      "ref": "pkg:cargo/wasi-auth-migrate@0.1.0-rc.4"
     },
     {
       "dependsOn": [
@@ -11476,21 +11476,21 @@
   ],
   "metadata": {
     "component": {
-      "bom-ref": "pkg:cargo/wasi-auth-migrate@0.1.0-rc.3",
+      "bom-ref": "pkg:cargo/wasi-auth-migrate@0.1.0-rc.4",
       "components": [
         {
-          "bom-ref": "path+file://./tools/wasi-auth-migrate#0.1.0-rc.3 bin-target-0",
+          "bom-ref": "path+file://./tools/wasi-auth-migrate#0.1.0-rc.4 bin-target-0",
           "name": "wasi_auth_migrate",
-          "purl": "pkg:cargo/wasi-auth-migrate@0.1.0-rc.3?download_url=file://.#src/lib.rs",
+          "purl": "pkg:cargo/wasi-auth-migrate@0.1.0-rc.4?download_url=file://.#src/lib.rs",
           "type": "library",
-          "version": "0.1.0-rc.3"
+          "version": "0.1.0-rc.4"
         },
         {
-          "bom-ref": "path+file://./tools/wasi-auth-migrate#0.1.0-rc.3 bin-target-1",
+          "bom-ref": "path+file://./tools/wasi-auth-migrate#0.1.0-rc.4 bin-target-1",
           "name": "wasi-auth-migrate",
-          "purl": "pkg:cargo/wasi-auth-migrate@0.1.0-rc.3?download_url=file://.#src/main.rs",
+          "purl": "pkg:cargo/wasi-auth-migrate@0.1.0-rc.4?download_url=file://.#src/main.rs",
           "type": "application",
-          "version": "0.1.0-rc.3"
+          "version": "0.1.0-rc.4"
         }
       ],
       "description": "Native PostgreSQL schema administration for wasi-auth",
@@ -11500,10 +11500,10 @@
         }
       ],
       "name": "wasi-auth-migrate",
-      "purl": "pkg:cargo/wasi-auth-migrate@0.1.0-rc.3",
+      "purl": "pkg:cargo/wasi-auth-migrate@0.1.0-rc.4",
       "scope": "required",
       "type": "application",
-      "version": "0.1.0-rc.3"
+      "version": "0.1.0-rc.4"
     },
     "properties": [
       {
@@ -11519,7 +11519,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:8e32de59-32ce-59db-9699-f5db64bce9e5",
+  "serialNumber": "urn:uuid:fa090e72-8dad-5a81-8d94-ce2160287c6f",
   "specVersion": "1.5",
   "version": 1
 }

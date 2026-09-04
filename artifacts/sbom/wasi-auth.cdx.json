@@ -9379,7 +9379,7 @@
         "registry+https://github.com/rust-lang/crates.io-index#uuid@1.23.4",
         "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.9.0"
       ],
-      "ref": "pkg:cargo/wasi-auth@0.1.0-rc.3"
+      "ref": "pkg:cargo/wasi-auth@0.1.0-rc.4"
     },
     {
       "dependsOn": [
@@ -11450,21 +11450,21 @@
     ],
     "component": {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-auth@0.1.0-rc.3",
+      "bom-ref": "pkg:cargo/wasi-auth@0.1.0-rc.4",
       "components": [
         {
-          "bom-ref": "path+file://./crates/wasi-auth#0.1.0-rc.3 bin-target-0",
+          "bom-ref": "path+file://./crates/wasi-auth#0.1.0-rc.4 bin-target-0",
           "name": "wasi_auth",
-          "purl": "pkg:cargo/wasi-auth@0.1.0-rc.3?download_url=file://.#src/lib.rs",
+          "purl": "pkg:cargo/wasi-auth@0.1.0-rc.4?download_url=file://.#src/lib.rs",
           "type": "library",
-          "version": "0.1.0-rc.3"
+          "version": "0.1.0-rc.4"
         },
         {
-          "bom-ref": "path+file://./crates/wasi-auth#0.1.0-rc.3 bin-target-1",
+          "bom-ref": "path+file://./crates/wasi-auth#0.1.0-rc.4 bin-target-1",
           "name": "wasi-auth-outbox-worker",
-          "purl": "pkg:cargo/wasi-auth@0.1.0-rc.3?download_url=file://.#src/bin/wasi-auth-outbox-worker.rs",
+          "purl": "pkg:cargo/wasi-auth@0.1.0-rc.4?download_url=file://.#src/bin/wasi-auth-outbox-worker.rs",
           "type": "application",
-          "version": "0.1.0-rc.3"
+          "version": "0.1.0-rc.4"
         }
       ],
       "description": "Production authentication, authorization, and trusted ingress for WASI applications",
@@ -11484,10 +11484,10 @@
         }
       ],
       "name": "wasi-auth",
-      "purl": "pkg:cargo/wasi-auth@0.1.0-rc.3",
+      "purl": "pkg:cargo/wasi-auth@0.1.0-rc.4",
       "scope": "required",
       "type": "application",
-      "version": "0.1.0-rc.3"
+      "version": "0.1.0-rc.4"
     },
     "properties": [
       {
@@ -11503,7 +11503,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:9a43544b-fe77-5bf8-8aee-84ab57c972a2",
+  "serialNumber": "urn:uuid:f375a170-fd32-5cfa-a201-845cfd360039",
   "specVersion": "1.5",
   "version": 1
 }
