@@ -1492,13 +1492,35 @@ fn live_postgres_mfa_enrollment_and_recovery_contract() -> Result<(), Box<dyn Er
                     &[&session_uuid],
                 )
                 .await?;
+            let secret = decode_base32(&enrollment.secret_base32)?;
+            let step_up_code = totp_test_code(&secret, 1_700_000_030, 6);
             service
                 .verify_step_up(
                     &session_id,
-                    &code,
+                    &step_up_code,
                     &RequestId::new(format!("mfa-totp-step-up-{unique}"))?,
                 )
                 .await?;
+            assert!(
+                service
+                    .verify_step_up(
+                        &session_id,
+                        &code,
+                        &RequestId::new(format!("mfa-totp-replay-confirm-{unique}"))?,
+                    )
+                    .await
+                    .is_err()
+            );
+            assert!(
+                service
+                    .verify_step_up(
+                        &session_id,
+                        &step_up_code,
+                        &RequestId::new(format!("mfa-totp-replay-step-up-{unique}"))?,
+                    )
+                    .await
+                    .is_err()
+            );
             transport
                 .client()
                 .execute(

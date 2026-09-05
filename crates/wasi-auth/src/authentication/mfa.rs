@@ -264,6 +264,8 @@ pub fn provisioning_uri(
 
 /// Verifies a TOTP code in constant time over the bounded skew window.
 ///
+/// Returns the matched RFC 6238 time step when the code is valid.
+///
 /// # Errors
 ///
 /// Returns [`MfaError`] for malformed codes or short secret material.
@@ -272,7 +274,7 @@ pub fn verify_totp(
     code: &str,
     unix_seconds: u64,
     config: TotpConfig,
-) -> Result<bool, MfaError> {
+) -> Result<Option<u64>, MfaError> {
     if secret.len() < 16 {
         return Err(MfaError::InvalidSecret);
     }
@@ -280,19 +282,26 @@ pub fn verify_totp(
         return Err(MfaError::InvalidCode);
     }
     let step = unix_seconds / config.period_seconds();
-    let mut accepted = 0_u8;
     let skew = u64::from(config.allowed_skew_steps());
+    let mut matched_step = None::<u64>;
     for offset in 0..=skew {
         if let Some(candidate_step) = step.checked_sub(offset) {
-            accepted |= verify_totp_step(secret, code.as_bytes(), candidate_step, config.digits());
+            if verify_totp_step(secret, code.as_bytes(), candidate_step, config.digits()) == 1 {
+                matched_step = Some(matched_step.map_or(candidate_step, |current| {
+                    current.max(candidate_step)
+                }));
+            }
         }
         if offset != 0
             && let Some(candidate_step) = step.checked_add(offset)
+            && verify_totp_step(secret, code.as_bytes(), candidate_step, config.digits()) == 1
         {
-            accepted |= verify_totp_step(secret, code.as_bytes(), candidate_step, config.digits());
+            matched_step = Some(matched_step.map_or(candidate_step, |current| {
+                current.max(candidate_step)
+            }));
         }
     }
-    Ok(accepted.ct_eq(&1).into())
+    Ok(matched_step)
 }
 
 /// Hashes a normalized recovery code with an application pepper.
@@ -408,8 +417,14 @@ mod tests {
     #[test]
     fn matches_rfc_6238_sha1_vector() {
         let config = TotpConfig::new(30, 8, 0).unwrap();
-        assert!(verify_totp(b"12345678901234567890", "94287082", 59, config).unwrap());
-        assert!(!verify_totp(b"12345678901234567890", "94287081", 59, config).unwrap());
+        assert_eq!(
+            verify_totp(b"12345678901234567890", "94287082", 59, config).unwrap(),
+            Some(1)
+        );
+        assert_eq!(
+            verify_totp(b"12345678901234567890", "94287081", 59, config).unwrap(),
+            None
+        );
     }
 
     #[test]
@@ -417,9 +432,16 @@ mod tests {
         let secret = b"12345678901234567890";
         let exact = TotpConfig::new(30, 8, 0).unwrap();
         let skewed = TotpConfig::new(30, 8, 1).unwrap();
-        assert!(!verify_totp(secret, "94287082", 89, exact).unwrap());
-        assert!(verify_totp(secret, "94287082", 89, skewed).unwrap());
-        assert!(!verify_totp(secret, "94287082", 119, skewed).unwrap());
+        assert_eq!(verify_totp(secret, "94287082", 89, exact).unwrap(), None);
+        assert_eq!(verify_totp(secret, "94287082", 89, skewed).unwrap(), Some(1));
+        assert_eq!(verify_totp(secret, "94287082", 119, skewed).unwrap(), None);
+    }
+
+    #[test]
+    fn returns_the_highest_matching_step_in_the_skew_window() {
+        let secret = b"12345678901234567890";
+        let config = TotpConfig::new(30, 8, 1).unwrap();
+        assert_eq!(verify_totp(secret, "94287082", 89, config).unwrap(), Some(1));
     }
 
     #[test]

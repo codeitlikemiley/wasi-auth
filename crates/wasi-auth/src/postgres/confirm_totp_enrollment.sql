@@ -11,7 +11,9 @@ WITH actor AS (
 ),
 enabled_factor AS (
     UPDATE auth_totp_factors AS factors
-    SET enabled_at_ms = $3, updated_at_ms = $3
+    SET enabled_at_ms = $3,
+        updated_at_ms = $3,
+        last_consumed_step = $7
     FROM actor
     WHERE factors.user_id = actor.user_id
       AND factors.secret_ciphertext = $2
