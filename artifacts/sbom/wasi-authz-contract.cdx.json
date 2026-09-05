@@ -533,7 +533,7 @@
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18"
       ],
-      "ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.4"
+      "ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.5"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#equivalent@1.0.2"
@@ -644,14 +644,14 @@
     ],
     "component": {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.4",
+      "bom-ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.5",
       "components": [
         {
-          "bom-ref": "path+file://./crates/wasi-authz-contract#0.1.0-rc.4 bin-target-0",
+          "bom-ref": "path+file://./crates/wasi-authz-contract#0.1.0-rc.5 bin-target-0",
           "name": "wasi_authz_contract",
-          "purl": "pkg:cargo/wasi-authz-contract@0.1.0-rc.4?download_url=file://.#src/lib.rs",
+          "purl": "pkg:cargo/wasi-authz-contract@0.1.0-rc.5?download_url=file://.#src/lib.rs",
           "type": "library",
-          "version": "0.1.0-rc.4"
+          "version": "0.1.0-rc.5"
         }
       ],
       "description": "Bounded AuthZEN 1.0 authorization request and decision types",
@@ -671,10 +671,10 @@
         }
       ],
       "name": "wasi-authz-contract",
-      "purl": "pkg:cargo/wasi-authz-contract@0.1.0-rc.4",
+      "purl": "pkg:cargo/wasi-authz-contract@0.1.0-rc.5",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.4"
+      "version": "0.1.0-rc.5"
     },
     "properties": [
       {
@@ -690,7 +690,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:27a8c766-0d86-591e-b46f-c9ca444d0018",
+  "serialNumber": "urn:uuid:9bcd2961-af29-5155-b4b1-d8c9d9eb58a4",
   "specVersion": "1.5",
   "version": 1
 }

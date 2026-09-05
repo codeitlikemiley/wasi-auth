@@ -3,7 +3,7 @@
   "components": [
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-auth@0.1.0-rc.4",
+      "bom-ref": "pkg:cargo/wasi-auth@0.1.0-rc.5",
       "description": "Production authentication, authorization, and trusted ingress for WASI applications",
       "externalReferences": [
         {
@@ -21,10 +21,10 @@
         }
       ],
       "name": "wasi-auth",
-      "purl": "pkg:cargo/wasi-auth@0.1.0-rc.4",
+      "purl": "pkg:cargo/wasi-auth@0.1.0-rc.5",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.4"
+      "version": "0.1.0-rc.5"
     },
     {
       "author": "RustCrypto Developers",
@@ -10467,7 +10467,7 @@
         "registry+https://github.com/rust-lang/crates.io-index#uuid@1.23.4",
         "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.9.0"
       ],
-      "ref": "pkg:cargo/wasi-auth@0.1.0-rc.4"
+      "ref": "pkg:cargo/wasi-auth@0.1.0-rc.5"
     },
     {
       "dependsOn": [
@@ -10484,9 +10484,9 @@
         "registry+https://github.com/rust-lang/crates.io-index#tracing@0.1.44",
         "registry+https://github.com/rust-lang/crates.io-index#tracing-subscriber@0.3.23",
         "registry+https://github.com/rust-lang/crates.io-index#uuid@1.23.4",
-        "pkg:cargo/wasi-auth@0.1.0-rc.4"
+        "pkg:cargo/wasi-auth@0.1.0-rc.5"
       ],
-      "ref": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.4"
+      "ref": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.5"
     },
     {
       "dependsOn": [
@@ -12832,14 +12832,14 @@
   ],
   "metadata": {
     "component": {
-      "bom-ref": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.4",
+      "bom-ref": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.5",
       "components": [
         {
-          "bom-ref": "path+file://./services/trusted-ingress#wasi-auth-ingress@0.1.0-rc.4 bin-target-0",
+          "bom-ref": "path+file://./services/trusted-ingress#wasi-auth-ingress@0.1.0-rc.5 bin-target-0",
           "name": "wasi-auth-ingress",
-          "purl": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.4?download_url=file://.#src/main.rs",
+          "purl": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.5?download_url=file://.#src/main.rs",
           "type": "application",
-          "version": "0.1.0-rc.4"
+          "version": "0.1.0-rc.5"
         }
       ],
       "description": "Native trusted ingress for wasi-auth Spin applications",
@@ -12849,10 +12849,10 @@
         }
       ],
       "name": "wasi-auth-ingress",
-      "purl": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.4",
+      "purl": "pkg:cargo/wasi-auth-ingress@0.1.0-rc.5",
       "scope": "required",
       "type": "application",
-      "version": "0.1.0-rc.4"
+      "version": "0.1.0-rc.5"
     },
     "properties": [
       {
@@ -12868,7 +12868,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:ef79f422-a49b-5662-b576-ae2f4aca434f",
+  "serialNumber": "urn:uuid:eead8732-447f-5651-a522-01a9f660615b",
   "specVersion": "1.5",
   "version": 1
 }

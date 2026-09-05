@@ -3,7 +3,7 @@
   "components": [
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.4",
+      "bom-ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.5",
       "description": "Transport-neutral AuthZEN client with additive WASIp2 and WASIp3 transports",
       "externalReferences": [
         {
@@ -21,14 +21,14 @@
         }
       ],
       "name": "wasi-authz-client",
-      "purl": "pkg:cargo/wasi-authz-client@0.1.0-rc.4",
+      "purl": "pkg:cargo/wasi-authz-client@0.1.0-rc.5",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.4"
+      "version": "0.1.0-rc.5"
     },
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.4",
+      "bom-ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.5",
       "description": "Bounded AuthZEN 1.0 authorization request and decision types",
       "externalReferences": [
         {
@@ -46,14 +46,14 @@
         }
       ],
       "name": "wasi-authz-contract",
-      "purl": "pkg:cargo/wasi-authz-contract@0.1.0-rc.4",
+      "purl": "pkg:cargo/wasi-authz-contract@0.1.0-rc.5",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.4"
+      "version": "0.1.0-rc.5"
     },
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-authz-spicedb@0.1.0-rc.4",
+      "bom-ref": "pkg:cargo/wasi-authz-spicedb@0.1.0-rc.5",
       "description": "SpiceDB CheckPermission decision provider for wasi-authz",
       "externalReferences": [
         {
@@ -71,10 +71,10 @@
         }
       ],
       "name": "wasi-authz-spicedb",
-      "purl": "pkg:cargo/wasi-authz-spicedb@0.1.0-rc.4",
+      "purl": "pkg:cargo/wasi-authz-spicedb@0.1.0-rc.5",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.4"
+      "version": "0.1.0-rc.5"
     },
     {
       "author": "David Tolnay <dtolnay@gmail.com>",
@@ -1714,12 +1714,12 @@
         "registry+https://github.com/rust-lang/crates.io-index#bytes@1.12.1",
         "registry+https://github.com/rust-lang/crates.io-index#http@1.4.2",
         "registry+https://github.com/rust-lang/crates.io-index#http-body-util@0.1.3",
-        "pkg:cargo/wasi-authz-client@0.1.0-rc.4",
-        "pkg:cargo/wasi-authz-contract@0.1.0-rc.4",
-        "pkg:cargo/wasi-authz-spicedb@0.1.0-rc.4",
+        "pkg:cargo/wasi-authz-client@0.1.0-rc.5",
+        "pkg:cargo/wasi-authz-contract@0.1.0-rc.5",
+        "pkg:cargo/wasi-authz-spicedb@0.1.0-rc.5",
         "registry+https://github.com/rust-lang/crates.io-index#wasip3@0.7.0+wasi-0.3.0"
       ],
-      "ref": "pkg:cargo/wasi-authz-spicedb-pdp-component@0.1.0-rc.4"
+      "ref": "pkg:cargo/wasi-authz-spicedb-pdp-component@0.1.0-rc.5"
     },
     {
       "dependsOn": [
@@ -1728,10 +1728,10 @@
         "registry+https://github.com/rust-lang/crates.io-index#http@1.4.2",
         "registry+https://github.com/rust-lang/crates.io-index#http-body-util@0.1.3",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
-        "pkg:cargo/wasi-authz-contract@0.1.0-rc.4",
+        "pkg:cargo/wasi-authz-contract@0.1.0-rc.5",
         "registry+https://github.com/rust-lang/crates.io-index#wasip3@0.7.0+wasi-0.3.0"
       ],
-      "ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.4"
+      "ref": "pkg:cargo/wasi-authz-client@0.1.0-rc.5"
     },
     {
       "dependsOn": [
@@ -1739,7 +1739,7 @@
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18"
       ],
-      "ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.4"
+      "ref": "pkg:cargo/wasi-authz-contract@0.1.0-rc.5"
     },
     {
       "dependsOn": [
@@ -1748,10 +1748,10 @@
         "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
-        "pkg:cargo/wasi-authz-client@0.1.0-rc.4",
-        "pkg:cargo/wasi-authz-contract@0.1.0-rc.4"
+        "pkg:cargo/wasi-authz-client@0.1.0-rc.5",
+        "pkg:cargo/wasi-authz-contract@0.1.0-rc.5"
       ],
-      "ref": "pkg:cargo/wasi-authz-spicedb@0.1.0-rc.4"
+      "ref": "pkg:cargo/wasi-authz-spicedb@0.1.0-rc.5"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.103"
@@ -2107,14 +2107,14 @@
     ],
     "component": {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "pkg:cargo/wasi-authz-spicedb-pdp-component@0.1.0-rc.4",
+      "bom-ref": "pkg:cargo/wasi-authz-spicedb-pdp-component@0.1.0-rc.5",
       "components": [
         {
-          "bom-ref": "path+file://./components/spicedb-pdp#wasi-authz-spicedb-pdp-component@0.1.0-rc.4 bin-target-0",
+          "bom-ref": "path+file://./components/spicedb-pdp#wasi-authz-spicedb-pdp-component@0.1.0-rc.5 bin-target-0",
           "name": "wasi_authz_spicedb_pdp_component",
-          "purl": "pkg:cargo/wasi-authz-spicedb-pdp-component@0.1.0-rc.4?download_url=file://.#src/lib.rs",
+          "purl": "pkg:cargo/wasi-authz-spicedb-pdp-component@0.1.0-rc.5?download_url=file://.#src/lib.rs",
           "type": "library",
-          "version": "0.1.0-rc.4"
+          "version": "0.1.0-rc.5"
         }
       ],
       "description": "Final-WASIp3 AuthZEN service backed by SpiceDB",
@@ -2134,10 +2134,10 @@
         }
       ],
       "name": "wasi-authz-spicedb-pdp-component",
-      "purl": "pkg:cargo/wasi-authz-spicedb-pdp-component@0.1.0-rc.4",
+      "purl": "pkg:cargo/wasi-authz-spicedb-pdp-component@0.1.0-rc.5",
       "scope": "required",
       "type": "library",
-      "version": "0.1.0-rc.4"
+      "version": "0.1.0-rc.5"
     },
     "properties": [
       {
@@ -2153,7 +2153,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:f568b9a2-8bd1-5ea7-84a8-a2df821b5739",
+  "serialNumber": "urn:uuid:da05898b-87cf-5bbf-85eb-86e7b72704a8",
   "specVersion": "1.5",
   "version": 1
 }

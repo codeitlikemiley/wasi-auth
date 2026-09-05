@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-rc.5
+
+This release closes the TOTP replay window that remained open while the same
+RFC 6238 step could be accepted more than once within the configured skew.
+
+- `postgres::mfa`: persist `last_consumed_step` on each accepted TOTP code and
+  reject a step that was already consumed, including across enrollment confirm
+  and step-up verification.
+- Added migration `0014_totp_last_consumed_step`.
+
 ## 0.1.0-rc.4
 
 This release lands the organization management and transactional mail surface

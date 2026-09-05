@@ -17,7 +17,7 @@ crate-type = ["cdylib"]
 bytes.workspace = true
 http.workspace = true
 http-body-util.workspace = true
-wasi-authz-cedar-pdp = { path = "../../services/cedar-pdp", version = "=0.1.0-rc.4" }
+wasi-authz-cedar-pdp = { path = "../../services/cedar-pdp", version = "=0.1.0-rc.5" }
 wasi-authz-client.workspace = true
 wasi-authz-contract.workspace = true
 wasip3.workspace = true
