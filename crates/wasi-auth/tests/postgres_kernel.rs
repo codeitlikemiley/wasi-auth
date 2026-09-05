@@ -62,7 +62,7 @@ use wasi_auth::{
 };
 #[cfg(feature = "password")]
 use wasi_auth::{
-    mail::CaptureMailer,
+    mail::{CaptureMailer, MailProductName, TransactionalMailConfig},
     postgres::{
         management::{
             InvitationService, ManagementError, OrganizationManagementService, UpsertRoleRequest,
@@ -91,6 +91,14 @@ fn live_database_url() -> Result<String, Box<dyn Error>> {
         )
         .into()
     })
+}
+
+#[cfg(feature = "password")]
+fn test_transactional_mail_config() -> Result<TransactionalMailConfig, Box<dyn Error>> {
+    Ok(TransactionalMailConfig::new(
+        MailProductName::new("wasi-auth")?,
+        "http://127.0.0.1:3008",
+    )?)
 }
 
 #[test]
@@ -560,7 +568,8 @@ fn live_postgres_verification_replay_and_password_login() -> Result<(), Box<dyn 
                 TestRandom::new(),
                 Argon2Policy::default(),
                 OutboxSealingKey::new("reset-contract-v1", reset_key)?,
-            );
+            )
+            .with_transactional_mail_config(test_transactional_mail_config()?);
             let reset_start = reset_service
                 .start(PasswordResetStartRequest::new(
                     format!("{unique}@example.com"),
@@ -733,7 +742,8 @@ fn live_postgres_registration_mail_outbox_contract() -> Result<(), Box<dyn Error
                 TestRandom::new(),
                 Argon2Policy::default(),
                 OutboxSealingKey::new("outbox-contract-v1", key)?,
-            );
+            )
+            .with_transactional_mail_config(test_transactional_mail_config()?);
             let receipt = registration
                 .register(PasswordRegistrationRequest::new(
                     format!("registration-mail-{unique}"),
