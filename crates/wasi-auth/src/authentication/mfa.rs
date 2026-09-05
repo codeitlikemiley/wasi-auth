@@ -285,20 +285,18 @@ pub fn verify_totp(
     let skew = u64::from(config.allowed_skew_steps());
     let mut matched_step = None::<u64>;
     for offset in 0..=skew {
-        if let Some(candidate_step) = step.checked_sub(offset) {
-            if verify_totp_step(secret, code.as_bytes(), candidate_step, config.digits()) == 1 {
-                matched_step = Some(matched_step.map_or(candidate_step, |current| {
-                    current.max(candidate_step)
-                }));
-            }
+        if let Some(candidate_step) = step.checked_sub(offset)
+            && verify_totp_step(secret, code.as_bytes(), candidate_step, config.digits()) == 1
+        {
+            matched_step =
+                Some(matched_step.map_or(candidate_step, |current| current.max(candidate_step)));
         }
         if offset != 0
             && let Some(candidate_step) = step.checked_add(offset)
             && verify_totp_step(secret, code.as_bytes(), candidate_step, config.digits()) == 1
         {
-            matched_step = Some(matched_step.map_or(candidate_step, |current| {
-                current.max(candidate_step)
-            }));
+            matched_step =
+                Some(matched_step.map_or(candidate_step, |current| current.max(candidate_step)));
         }
     }
     Ok(matched_step)
@@ -433,7 +431,10 @@ mod tests {
         let exact = TotpConfig::new(30, 8, 0).unwrap();
         let skewed = TotpConfig::new(30, 8, 1).unwrap();
         assert_eq!(verify_totp(secret, "94287082", 89, exact).unwrap(), None);
-        assert_eq!(verify_totp(secret, "94287082", 89, skewed).unwrap(), Some(1));
+        assert_eq!(
+            verify_totp(secret, "94287082", 89, skewed).unwrap(),
+            Some(1)
+        );
         assert_eq!(verify_totp(secret, "94287082", 119, skewed).unwrap(), None);
     }
 
@@ -441,7 +442,10 @@ mod tests {
     fn returns_the_highest_matching_step_in_the_skew_window() {
         let secret = b"12345678901234567890";
         let config = TotpConfig::new(30, 8, 1).unwrap();
-        assert_eq!(verify_totp(secret, "94287082", 89, config).unwrap(), Some(1));
+        assert_eq!(
+            verify_totp(secret, "94287082", 89, config).unwrap(),
+            Some(1)
+        );
     }
 
     #[test]
