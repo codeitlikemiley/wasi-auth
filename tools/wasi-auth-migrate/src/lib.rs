@@ -63,6 +63,7 @@ mod tests {
                 "0011_organization_slug_expand",
                 "0012_organization_slug_unique_index",
                 "0013_fullstack_permissions",
+                "0014_totp_last_consumed_step",
             ]
         );
     }

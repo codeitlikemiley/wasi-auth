@@ -367,7 +367,9 @@ where
         if factor.enabled {
             return Err(MfaServiceError::AlreadyEnrolled);
         }
-        self.verify_factor(&factor, code)?;
+        let consumed_step = self
+            .matched_totp_step(&factor, code)?
+            .ok_or(MfaServiceError::InvalidCode)?;
         let mut raw_codes = Vec::with_capacity(RECOVERY_CODE_COUNT);
         let mut hashes = Vec::with_capacity(RECOVERY_CODE_COUNT);
         for _ in 0..RECOVERY_CODE_COUNT {
@@ -392,6 +394,7 @@ where
                     )),
                     text(audit_id),
                     text(request_id.as_str()),
+                    i64_value(consumed_step),
                 ],
             )
             .await?;
@@ -423,7 +426,9 @@ where
         if !factor.enabled {
             return Err(MfaServiceError::InvalidFactor);
         }
-        self.verify_factor(&factor, code)?;
+        let consumed_step = self
+            .matched_totp_step(&factor, code)?
+            .ok_or(MfaServiceError::InvalidCode)?;
         let now_ms = self.clock.now_unix_seconds().saturating_mul(1_000);
         let audit_id = self.uuid(now_ms)?;
         let rows = self
@@ -435,6 +440,7 @@ where
                     i64_value(now_ms),
                     text(audit_id),
                     text(request_id.as_str()),
+                    i64_value(consumed_step),
                 ],
             )
             .await?;
@@ -490,23 +496,19 @@ where
         })
     }
 
-    fn verify_factor(
+    fn matched_totp_step(
         &self,
         factor: &TotpFactor,
         code: &str,
-    ) -> Result<(), MfaServiceError<T::Error>> {
+    ) -> Result<Option<u64>, MfaServiceError<T::Error>> {
         let mut secret = self
             .keys
             .decrypt(factor)
             .map_err(|_| MfaServiceError::Crypto)?;
-        let valid = verify_totp(&secret, code, self.clock.now_unix_seconds(), self.config)
+        let matched = verify_totp(&secret, code, self.clock.now_unix_seconds(), self.config)
             .map_err(|_| MfaServiceError::InvalidCode)?;
         secret.zeroize();
-        if valid {
-            Ok(())
-        } else {
-            Err(MfaServiceError::InvalidCode)
-        }
+        Ok(matched)
     }
 
     async fn query(

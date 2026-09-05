@@ -154,6 +154,13 @@ pub const POSTGRES_FULLSTACK_PERMISSIONS_0013: SchemaMigration = SchemaMigration
     mode: SchemaMigrationMode::Transactional,
 };
 
+/// Tracks the last accepted RFC 6238 step per TOTP factor for replay rejection.
+pub const POSTGRES_TOTP_LAST_CONSUMED_STEP_0014: SchemaMigration = SchemaMigration {
+    version: "0014_totp_last_consumed_step",
+    sql: include_str!("../migrations/postgres/0014_totp_last_consumed_step.sql"),
+    mode: SchemaMigrationMode::Transactional,
+};
+
 /// Returns the complete ordered relational-kernel migration catalog.
 #[must_use]
 pub const fn schema_migrations() -> &'static [SchemaMigration] {
@@ -171,6 +178,7 @@ pub const fn schema_migrations() -> &'static [SchemaMigration] {
         POSTGRES_ORGANIZATION_SLUG_EXPAND_0011,
         POSTGRES_ORGANIZATION_SLUG_UNIQUE_INDEX_0012,
         POSTGRES_FULLSTACK_PERMISSIONS_0013,
+        POSTGRES_TOTP_LAST_CONSUMED_STEP_0014,
     ]
 }
 
@@ -246,6 +254,7 @@ mod tests {
                 POSTGRES_ORGANIZATION_SLUG_EXPAND_0011,
                 POSTGRES_ORGANIZATION_SLUG_UNIQUE_INDEX_0012,
                 POSTGRES_FULLSTACK_PERMISSIONS_0013,
+                POSTGRES_TOTP_LAST_CONSUMED_STEP_0014,
             ])
         );
     }
@@ -306,6 +315,10 @@ mod tests {
             AppliedSchemaMigration {
                 version: POSTGRES_FULLSTACK_PERMISSIONS_0013.version().to_owned(),
                 checksum: POSTGRES_FULLSTACK_PERMISSIONS_0013.checksum_hex(),
+            },
+            AppliedSchemaMigration {
+                version: POSTGRES_TOTP_LAST_CONSUMED_STEP_0014.version().to_owned(),
+                checksum: POSTGRES_TOTP_LAST_CONSUMED_STEP_0014.checksum_hex(),
             },
         ];
 

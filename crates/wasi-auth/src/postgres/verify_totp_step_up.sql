@@ -11,7 +11,17 @@ WITH actor AS (
       AND sessions.expires_at_ms > $3::bigint
       AND sessions.user_security_revision = users.security_revision
       AND users.status = 'active'
-    FOR UPDATE OF sessions
+    FOR UPDATE OF sessions, factors
+),
+consumed AS (
+    UPDATE auth_totp_factors AS factors
+    SET last_consumed_step = $6,
+        updated_at_ms = $3
+    FROM actor
+    WHERE factors.user_id = actor.user_id
+      AND factors.secret_ciphertext = $2
+      AND (factors.last_consumed_step IS NULL OR factors.last_consumed_step < $6)
+    RETURNING factors.user_id
 ),
 elevated AS (
     UPDATE auth_sessions AS sessions
@@ -19,6 +29,7 @@ elevated AS (
         session_revision = sessions.session_revision + 1,
         updated_at_ms = $3
     FROM actor
+    JOIN consumed ON consumed.user_id = actor.user_id
     WHERE sessions.session_id = actor.session_id
     RETURNING sessions.session_id, sessions.user_id
 ),

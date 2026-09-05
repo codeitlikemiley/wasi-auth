@@ -1098,7 +1098,6 @@ where
     }
 }
 
-
 fn map_transport_error<T>(error: T::Error) -> ManagementError<T::Error>
 where
     T: PostgresTransport,
@@ -1401,10 +1400,9 @@ mod tests {
             parse_uuid::<std::convert::Infallible>("not-a-uuid"),
             Err(ManagementError::InvalidRequest)
         ));
-        assert!(parse_uuid::<std::convert::Infallible>(
-            "0190f0c2-6f3a-7b6e-9c1d-2e4f5a6b7c8d"
-        )
-        .is_ok());
+        assert!(
+            parse_uuid::<std::convert::Infallible>("0190f0c2-6f3a-7b6e-9c1d-2e4f5a6b7c8d").is_ok()
+        );
     }
 
     #[cfg(feature = "password")]
@@ -1443,10 +1441,9 @@ mod tests {
             parse_uuid::<std::convert::Infallible>("not-an-org"),
             Err(ManagementError::InvalidRequest)
         ));
-        assert!(parse_uuid::<std::convert::Infallible>(
-            "0190f0c2-6f3a-7b6e-9c1d-2e4f5a6b7c8d"
-        )
-        .is_ok());
+        assert!(
+            parse_uuid::<std::convert::Infallible>("0190f0c2-6f3a-7b6e-9c1d-2e4f5a6b7c8d").is_ok()
+        );
     }
 
     #[test]
