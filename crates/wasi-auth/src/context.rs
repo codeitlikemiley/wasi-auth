@@ -196,7 +196,7 @@ impl Principal {
 /// The type has no public constructor. Runtime adapters validate credentials,
 /// deployment identity, audience, lifetime, and tenant selection before
 /// installing it. Tests use [`crate::testkit::VerifiedAuthContextBuilder`].
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct VerifiedAuthContext {
     principal: Principal,
     organization_id: Option<OrganizationId>,
@@ -323,6 +323,23 @@ impl VerifiedRequestContext {
     #[must_use]
     pub fn into_parts(self) -> (VerifiedAuthContext, AuthorizationSnapshot) {
         (self.auth, self.authorization)
+    }
+}
+
+impl std::fmt::Debug for VerifiedAuthContext {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("VerifiedAuthContext")
+            .field("principal", &self.principal)
+            .field("organization_id", &self.organization_id)
+            .field("session_id", &"[REDACTED]")
+            .field("request_id", &self.request_id)
+            .field("assurance", &self.assurance)
+            .field("issued_at_unix_seconds", &self.issued_at_unix_seconds)
+            .field("expires_at_unix_seconds", &self.expires_at_unix_seconds)
+            .field("decision_id", &self.decision_id)
+            .field("policy_revision", &self.policy_revision)
+            .finish()
     }
 }
 

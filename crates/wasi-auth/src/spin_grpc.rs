@@ -351,6 +351,10 @@ pub fn is_grpc_request<B>(request: &Request<B>, service_prefixes: &[&str]) -> bo
 
 /// Returns the verified context inserted by native ingress.
 ///
+/// Install it with [`crate::http::accept_signed_trusted_context`]. A portable
+/// middleware `x-wasi-auth-context` value is not this extension and must not
+/// be copied into it.
+///
 /// # Errors
 ///
 /// Returns [`GrpcBoundaryError::MissingContext`] when dispatch bypassed ingress.
@@ -404,6 +408,14 @@ mod tests {
     use http::HeaderMap;
     use http_body_util::{BodyExt, StreamBody};
     use std::convert::Infallible;
+
+    #[test]
+    fn stream_byte_budget_matches_the_message_bounds() {
+        assert_eq!(
+            DEFAULT_MAX_GRPC_MESSAGE_BYTES * DEFAULT_MAX_INBOUND_STREAM_MESSAGES,
+            crate::http::DEFAULT_MAX_STREAM_BODY_BYTES
+        );
+    }
 
     #[test]
     fn service_path_is_classified_as_grpc() {

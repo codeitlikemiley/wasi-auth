@@ -21,9 +21,13 @@ closed.
 
 Authenticated requests receive an HMAC-SHA-256 context envelope bound to the
 deployment audience, HTTP method, path, request ID, and a five-second replay
-window. Spin must listen only on loopback or an equivalent private pod network;
-production guest configuration rejects credential-bearing requests without a
-valid envelope.
+window. The ingress removes `Authorization`, proxy authorization, and session
+cookies before forwarding that envelope, and marks the envelope sensitive.
+The guest must accept it with `accept_signed_trusted_context`. The unsigned
+portable middleware context is a different encoding of the same header name
+and is rejected. Spin must listen only on loopback or an equivalent private
+pod network; credential-bearing requests that reach the guest without a valid
+envelope fail closed.
 
 The direct Hyper terminal streams bodies and trailers without buffering,
 preserving gRPC

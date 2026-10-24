@@ -4365,7 +4365,10 @@ version = "0.1.0-rc.5"
 dependencies = [
  "axum",
  "base64",
+ "bytes",
  "http",
+ "http-body",
+ "http-body-util",
  "hyper",
  "hyper-util",
  "serde",

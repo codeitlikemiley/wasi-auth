@@ -19,6 +19,35 @@ mutation. UI hiding and coarse HTTP admission never replace this check.
 
 ## Trust boundaries
 
+- Only [`crates/wasi-auth/src/http.rs`](crates/wasi-auth/src/http.rs)'s HMAC
+  envelope may become a `VerifiedAuthContext`. The portable
+  `wasi-http-middleware` context uses the same `x-wasi-auth-context` header
+  name and an unsigned base64url JSON encoding. Those bytes are not
+  interchangeable: the signed opener rejects the portable encoding, and this
+  crate does not parse the portable encoding as authority.
+- Native ingress strips every `x-wasi-auth-*` header and the legacy
+  `x-auth-session` / `x-auth-admin-token` headers before authentication, then
+  installs one sensitive HMAC envelope. Authorization and session cookies are
+  removed before the loopback guest sees the request. The guest acceptor
+  fails closed when those credentials are still present, when a verified
+  context is already installed, or when the envelope is missing, duplicated,
+  tampered, rebound to another method, path, or request ID, expired, or sealed
+  more than one second in the future.
+- The same binding may be presented again until the configured maximum age
+  (default five seconds, maximum thirty). That window is the replay bound.
+  There is no second shared nonce store between ingress and the guest.
+  Query strings and bodies are not part of the HMAC binding.
+- CORS and browser security headers are single-owner. `CorsConfig::apply` and
+  `apply_response_security` leave a response unchanged when another policy,
+  including portable middleware's `strict-origin-when-cross-origin` referrer
+  policy, is already present. A response with two values for one of those
+  headers is conflicting and must be discarded.
+- The coarse HTTP PEP and `wasi-http-authn::accept_trusted_ingress` belong to
+  the unsigned portable chain. Do not place them on the native HMAC path.
+  They will fail closed on a signed envelope, which is the safe outcome, but
+  it is not a supported composition. Shared policy extraction was not done:
+  the portable parser's guarantees and the HMAC binding are different
+  contracts.
 - The external HTTP PEP may send method and a normalized query-free path, but
   never body-derived ownership information.
 - Attribute names and values are bounded and carry provenance. Callers remain
