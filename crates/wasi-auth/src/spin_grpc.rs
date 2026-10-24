@@ -244,7 +244,7 @@ where
         let (trailers_writer, trailers_reader) = wasip3::wit_future::new(|| Ok(None));
         let (response, _transmission) =
             wasip3::http::types::Response::new(headers, None, trailers_reader);
-        wasip3::wit_bindgen::spawn(async move {
+        wasip3::wit_bindgen::spawn_local(async move {
             _ = trailers_writer.write(Ok(Some(trailers))).await;
         });
         response

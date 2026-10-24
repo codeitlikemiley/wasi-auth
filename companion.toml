@@ -12,11 +12,10 @@
 # repository-relative and do resolve.
 #
 # `direct = true` marks a crate a consumer is supported in naming in its own
-# manifest. `direct = false` marks a path-local crate reached only through
-# one of those — never named by a consumer, but required in the checkout for
-# a `--locked` build, and in at least one case re-exporting types through a
-# direct crate's public API. The indirect set is derived from the resolved
-# dependency graph, so a new intermediate crate cannot slip in unrecorded.
+# manifest. `direct = false` marks a crate reached only through one of those.
+# Path entries must exist in this checkout. Middleware entries name a git
+# repository and revision; they are not files in this checkout. The indirect
+# path set is derived from the resolved dependency graph.
 schema = 1
 
 [release]
@@ -76,11 +75,30 @@ direct = true
 
 [[crate]]
 package = "wasi-http-authn"
-path = "legacy/wasi-http-middleware/crates/authn"
+repository = "https://github.com/codeitlikemiley/wasi-http-middleware"
+rev = "896f8f5426b1bdc6d208367d0ac8dbf44146dfda"
 version = "0.2.0-alpha.3"
 workspace = "wasi-http-middleware"
 publish = true
 direct = true
+
+[[crate]]
+package = "wasi-http-metadata"
+repository = "https://github.com/codeitlikemiley/wasi-http-middleware"
+rev = "896f8f5426b1bdc6d208367d0ac8dbf44146dfda"
+version = "0.2.0-alpha.3"
+workspace = "wasi-http-middleware"
+publish = true
+direct = false
+
+[[crate]]
+package = "wasi-http-policy-core"
+repository = "https://github.com/codeitlikemiley/wasi-http-middleware"
+rev = "896f8f5426b1bdc6d208367d0ac8dbf44146dfda"
+version = "0.2.0-alpha.3"
+workspace = "wasi-http-middleware"
+publish = true
+direct = false
 
 [[crate]]
 package = "wasi-authz-http"
@@ -96,22 +114,6 @@ path = "crates/wasi-authz-testkit"
 version = "0.1.0-rc.5"
 workspace = "wasi-auth"
 publish = false
-direct = false
-
-[[crate]]
-package = "wasi-http-metadata"
-path = "legacy/wasi-http-middleware/crates/metadata"
-version = "0.2.0-alpha.3"
-workspace = "wasi-http-middleware"
-publish = true
-direct = false
-
-[[crate]]
-package = "wasi-http-policy-core"
-path = "legacy/wasi-http-middleware/crates/policy-core"
-version = "0.2.0-alpha.3"
-workspace = "wasi-http-middleware"
-publish = true
 direct = false
 
 [[component]]

@@ -7,11 +7,11 @@ the complete default-profile matrix.
 | Surface | RC status | Release evidence |
 |---|---|---|
 | Bounded AuthZEN 1.0 contract | Supported | Golden, negative, property, and fuzz tests |
-| Native Rust PEP/client | Supported | Rust 1.93 MSRV and current-stable lanes |
+| Native Rust PEP/client | Supported | Rust 1.99.0 MSRV and current-stable lanes |
 | WASIp2 decision client | Contract-supported; runtime promotion pending | Additive feature compile/test lane; injected pollable waiter is mandatory |
-| WASIp3 decision client | Supported | `wasip3` 0.7.0/final `wasi:http@0.3.0` compile lane plus Wasmtime 46.0.1 lifecycle and recovery checks |
+| WASIp3 decision client | Supported | `wasip3` 0.9.0+wasi-0.3.0 / `wit-bindgen` 0.62.0 compile lane. Wasmtime reference pin is 50.0.0. Lifecycle evidence on this page was recorded with Wasmtime 46.0.1 |
 | WASIp3 coarse HTTP PEP | Contract-qualified; promotion pending | Exact WIT/capability allowlist passes; cross-repository E2E is required |
-| Wasmtime | Reference version 46.0.1 | Final-WASI correctness, lifecycle, and recovery contract; no production latency claim |
+| Wasmtime | Reference pin 50.0.0 | Final-WASI correctness, lifecycle, and recovery contract; no production latency claim. The numbers below are the 46.0.1 canary |
 | Spin 4.0.2 ordinary WASIp3 | Blocked upstream | Tagged host cannot link this final-WASI chain |
 | Maintained Spin final-WASI fork | RC production profile | `4.1.0-pre0` revision `c34c584...` passes final HTTP, browser, all four gRPC modes, performance, and soak gates |
 | Spin/Tonic gRPC over HTTP | RC supported on maintained fork | Unary plus server-, client-, and bidirectional-streaming tests pass through the exact native HTTP/2 terminal |
@@ -35,10 +35,10 @@ all four gRPC modes, five paired protected-path samples, five absolute samples,
 and the ten-minute concurrency-100 soak. It can be replaced by an upstream tag
 only after that tag passes the identical matrix.
 
-The publishable library and pinned Spin SDK retain Rust 1.93 MSRV. The
-maintained native Spin host truthfully declares Rust 1.94 because Wasmtime 46
-and Cranelift 0.133 require it; release binaries may be built with a newer
-stable compiler after the 1.94 floor lane passes.
+The publishable library and pinned Spin SDK use Rust 1.99.0. The pinned SDK
+is 7.0.0 at `3cf30012b50a1afb750dac3d28aa6da4a32c3468`. Official upstream Spin
+v4.2.5 linux-amd64 is the E2E host for `wasi:http/handler@0.3.0`. That host
+run is separate from the maintained-fork RC evidence in this matrix.
 
 Library stability and runtime deployment promotion are separate. A stable
 contract/provider release does not imply that the blocked Spin profile or the

@@ -2,7 +2,7 @@
 
 | Surface | Status in `0.1.0-rc.3` |
 |---|---|
-| Rust | Library MSRV 1.93; async final-WASI component builds require Rust 1.94+ |
+| Rust | Library MSRV 1.99.0 |
 | AuthZEN Authorization API | Final 1.0 bounded access-evaluation profile |
 | Unknown standard members | Ignored as AuthZEN requires |
 | `wasi_authz` extension | Strictly parsed and crate-versioned; unknown members rejected |
@@ -10,13 +10,13 @@
 | Decision caching | Unsupported |
 | Native Rust | Supported |
 | WASIp2 outbound HTTP | Additive `wasip2` client feature with an injected cancellation-safe pollable waiter |
-| WASIp3 outbound HTTP | Additive `wasip3` client feature using `wasip3` 0.7.0 and final `wasi:http@0.3.0` |
-| Component bindings | `wit-bindgen` 0.57.1, exactly matching the runtime embedded by tagged `wasip3` 0.7.0 |
+| WASIp3 outbound HTTP | Additive `wasip3` client feature using `wasip3` 0.9.0+wasi-0.3.0 and final `wasi:http@0.3.0` |
+| Component bindings | `wit-bindgen` 0.62.0, exactly matching the runtime embedded by tagged `wasip3` 0.9.0+wasi-0.3.0 |
 | Browser bindings | `wasm-bindgen` 0.2.126 in the locked Leptos/browser graph; unrelated to the WASI HTTP ABI |
-| Wasmtime | `46.0.1`, final-WASI component contract |
+| Wasmtime | `50.0.0`, final-WASI component contract |
 | Spin 4.0.2 | Tagged compatibility canary; final-WASI linking is unavailable |
 | Maintained Spin fork `c34c584...` (`4.1.0-pre0`) | Release-candidate final-WASI terminal/outbound-HTTP lane; WAC middleware remains experimental and no upstream tagged support is claimed |
-| Spin SDK | Git revision `a02d330fe9357be2d18e6deef400511195ce6f7f`; Rust 1.94 final-WASI component and Tonic gRPC lane |
+| Spin SDK | Git revision `3cf30012b50a1afb750dac3d28aa6da4a32c3468` (SDK 7.0.0); Rust 1.99.0 toolchain |
 | Cedar | Embedded provider and native reference PDP |
 | SpiceDB | CheckPermission adapter tested with `1.54.0` |
 | Leptos | Current 0.8 line, islands-compatible request/server-function helpers |
@@ -70,17 +70,17 @@ Host error strings are never returned through the transport error surface.
 ## Companion surface
 
 A downstream consumer such as `leptos_wasi` depends on this repository through
-local path dependencies that span two workspaces at two different versions.
-Only `wasi-auth` is publishable; every other companion crate is a path-only
-compatibility fixture, so a consumer cannot pin them from a registry and must
-pin a repository revision instead.
+local path dependencies. Portable middleware crates are a separate git pin of
+`codeitlikemiley/wasi-http-middleware`. Only `wasi-auth` is publishable from
+this repository. Middleware crate version `0.2.0-alpha.3` stays on revision
+`896f8f5426b1bdc6d208367d0ac8dbf44146dfda` until `v0.2.0-alpha.4` is published.
 
 [`companion.toml`](../companion.toml) is the machine-readable record of that
 surface. It lists every crate a consumer may depend on with its resolved
 version, owning workspace, and publishability; every built component with its
 source directory, artifact path, SBOM, and WIT report; and the evidence a
 release bundle carries. `scripts/generate-companion-manifest.sh` derives it from
-`cargo metadata` for both workspaces, and CI fails if the tracked copy drifts,
+`cargo metadata` for this workspace, and CI fails if the tracked copy drifts,
 so a rename, a move, or a version bump cannot silently desynchronize a
 consumer's lock.
 
@@ -92,21 +92,33 @@ git-ignored by design; they do not resolve in a checkout at any revision. A
 consumer pins a revision for source and obtains the evidence from the bundle a
 release run uploads.
 
-The six supported companion crates, marked `direct = true`, are
+The five path companion crates, marked `direct = true`, are
 `leptos-wasi-authz`, `wasi-authz-cedar`, `wasi-authz-client`,
-`wasi-authz-contract`, `wasi-authz-spicedb` — all at the workspace version —
-and `wasi-http-authn`, which lives in the excluded
-`legacy/wasi-http-middleware` workspace and moves on its own `0.2.0-alpha.3`
-line. The two version lines are independent by design; a consumer must pin
-both.
+`wasi-authz-contract`, and `wasi-authz-spicedb`, all at the workspace version.
+`wasi-http-authn` is also `direct = true` and is fetched from the middleware
+git revision on its own `0.2.0-alpha.3` line. The two version lines are
+independent; a consumer pins both.
 
-Four further path-local crates are recorded with `direct = false`:
-`wasi-authz-http`, `wasi-authz-testkit`, `wasi-http-metadata`, and
-`wasi-http-policy-core`. A consumer should not name these in its own manifest,
-but they are not incidental either — they must be present in the checkout for a
-`--locked` build to resolve, and `wasi-http-metadata`'s types (`AuthContextV1`,
-`VerifiedAuthContext`, and siblings) are re-exported through
-`leptos-wasi-authz`, so they are part of the surface a consumer observes even
-without depending on them. That set is derived from the resolved dependency
-graph rather than listed by hand, so a new intermediate crate cannot appear
-unrecorded.
+`wasi-authz-http` and `wasi-authz-testkit` are path-local crates with
+`direct = false`. `wasi-http-metadata` and `wasi-http-policy-core` are the
+same git revision as `wasi-http-authn`, also `direct = false`. A consumer
+should not name those four in its own manifest. The path crates must be
+present in the checkout. The middleware crates are fetched by revision.
+`wasi-http-metadata`'s types (`AuthContextV1`, `VerifiedAuthContext`, and
+siblings) are re-exported through `leptos-wasi-authz`.
+
+Native trusted ingress and the `wasi-auth` crate do not depend on these
+middleware crates. The portable context is unsigned base64url JSON.
+`decode_auth_context` and `accept_trusted_ingress` reject the dotted HMAC
+envelope and do not verify the MAC. Portable security headers are `nosniff`
+and `Referrer-Policy: strict-origin-when-cross-origin`. This crate's response
+policy is `same-origin` plus CSP and HSTS. Those policies are different
+owners. On this revision, `apply_response_security` and `CorsConfig::apply`
+still insert their own values, so running both writers on one response
+replaces `Referrer-Policy` and `nosniff` and can replace a CORS policy
+already present. The production path does not call the portable helpers.
+The non-overwrite guard is the separate signed-context change: it leaves a
+response unchanged when a foreign referrer, CSP, nosniff, or HSTS value is
+already present, and a second value for those headers or for CORS is a
+failed response. Portable `apply_security_headers` still inserts, so it
+replaces referrer and `nosniff` if it runs after that guard.

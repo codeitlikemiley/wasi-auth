@@ -102,7 +102,7 @@ serde.workspace = true
 serde_json.workspace = true
 sha1 = { version = "0.10.6", optional = true }
 sha2 = { version = "0.10.9", optional = true }
-spin-sdk = { git = "https://github.com/codeitlikemiley/spin-rust-sdk", rev = "a02d330fe9357be2d18e6deef400511195ce6f7f", version = "6.0.0", default-features = false, features = ["json", "pg"], optional = true }
+spin-sdk = { git = "https://github.com/codeitlikemiley/spin-rust-sdk", rev = "3cf30012b50a1afb750dac3d28aa6da4a32c3468", version = "7.0.0", default-features = false, features = ["json", "pg"], optional = true }
 subtle = { version = "2.6.1", optional = true }
 thiserror.workspace = true
 tokio = { version = "1.52.0", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"], optional = true }

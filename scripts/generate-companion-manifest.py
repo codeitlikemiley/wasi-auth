@@ -28,11 +28,16 @@ COMPANION_CRATES = [
     ("wasi-authz-client", "crates/wasi-authz-client", "wasi-auth"),
     ("wasi-authz-contract", "crates/wasi-authz-contract", "wasi-auth"),
     ("wasi-authz-spicedb", "crates/wasi-authz-spicedb", "wasi-auth"),
-    (
-        "wasi-http-authn",
-        "legacy/wasi-http-middleware/crates/authn",
-        "wasi-http-middleware",
-    ),
+]
+
+# Canonical middleware crates. They are git dependencies of this workspace, not
+# files in the checkout. `direct` follows the previous companion contract:
+# consumers may name `wasi-http-authn`; the other two stay indirect because
+# `leptos-wasi-authz` re-exports their types.
+GIT_COMPANION_CRATES = [
+    ("wasi-http-authn", True),
+    ("wasi-http-metadata", False),
+    ("wasi-http-policy-core", False),
 ]
 
 # Built component artifacts. The source directory and the artifact name differ
@@ -174,19 +179,14 @@ def transitive_lines(repository: pathlib.Path, workspaces: dict) -> list[str]:
     unrecorded.
     """
     direct = {name for name, _, _ in COMPANION_CRATES}
+    direct.update(name for name, _direct in GIT_COMPANION_CRATES)
     seen: dict[str, tuple[str, str]] = {}
-    for workspace, manifest in (
-        ("wasi-auth", repository / "Cargo.toml"),
-        (
-            "wasi-http-middleware",
-            repository / "legacy/wasi-http-middleware/Cargo.toml",
-        ),
-    ):
-        roots = {name for name, _, ws in COMPANION_CRATES if ws == workspace}
-        for name in sorted(local_closure(manifest, roots)):
-            if name in direct or name in seen:
-                continue
-            seen[name] = (workspace, manifest)
+    manifest = repository / "Cargo.toml"
+    roots = {name for name, _, ws in COMPANION_CRATES if ws == "wasi-auth"}
+    for name in sorted(local_closure(manifest, roots)):
+        if name in direct or name in seen:
+            continue
+        seen[name] = ("wasi-auth", manifest)
 
     lines: list[str] = []
     for name in sorted(seen):
@@ -216,6 +216,58 @@ def transitive_lines(repository: pathlib.Path, workspaces: dict) -> list[str]:
     return lines
 
 
+def compat_value(repository: pathlib.Path, key: str) -> str:
+    """Return one double-quoted value from `compatibility.toml`."""
+    prefix = f"{key} "
+    for line in (repository / "compatibility.toml").read_text().splitlines():
+        stripped = line.strip()
+        if stripped.startswith(prefix) or stripped.startswith(f"{key}="):
+            return stripped.split('"', 2)[1]
+    print(f"error: missing compatibility.toml key: {key}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def git_companion_lines(repository: pathlib.Path, packages: dict) -> list[str]:
+    """Record canonical middleware crates by repository and revision."""
+    revision = compat_value(repository, "wasi_http_middleware_revision")
+    origin = compat_value(repository, "wasi_http_middleware_repository")
+    version = compat_value(repository, "wasi_http_middleware")
+    by_name: dict[str, dict] = {}
+    for package in packages.values():
+        by_name.setdefault(package["name"], package)
+    lines: list[str] = []
+    for name, direct in GIT_COMPANION_CRATES:
+        package = by_name.get(name)
+        source = "" if package is None else package.get("source") or ""
+        if package is None or revision not in source or origin not in source:
+            print(
+                f"error: companion crate {name} is not the pinned git revision",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        if package["version"] != version:
+            print(
+                f"error: companion crate {name} version {package['version']} "
+                f"does not match compatibility.toml {version}",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        lines.extend(
+            [
+                "",
+                "[[crate]]",
+                "package = " + quote(name),
+                "repository = " + quote(origin),
+                "rev = " + quote(revision),
+                "version = " + quote(package["version"]),
+                "workspace = " + quote("wasi-http-middleware"),
+                "publish = " + ("true" if publishable(package) else "false"),
+                "direct = " + ("true" if direct else "false"),
+            ]
+        )
+    return lines
+
+
 def quote(value: str) -> str:
     """Return one TOML basic string."""
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
@@ -232,12 +284,8 @@ def main() -> int:
     repository = pathlib.Path(sys.argv[1]).resolve()
     output = pathlib.Path(sys.argv[2])
 
-    workspaces = {
-        "wasi-auth": metadata(repository / "Cargo.toml"),
-        "wasi-http-middleware": metadata(
-            repository / "legacy/wasi-http-middleware/Cargo.toml"
-        ),
-    }
+    workspaces = {"wasi-auth": metadata(repository / "Cargo.toml")}
+    resolved_packages, _nodes, _names = resolve_graph(repository / "Cargo.toml")
 
     release = workspaces["wasi-auth"]["wasi-auth"]["version"]
 
@@ -256,11 +304,10 @@ def main() -> int:
         "# repository-relative and do resolve.",
         "#",
         "# `direct = true` marks a crate a consumer is supported in naming in its own",
-        "# manifest. `direct = false` marks a path-local crate reached only through",
-        "# one of those — never named by a consumer, but required in the checkout for",
-        "# a `--locked` build, and in at least one case re-exporting types through a",
-        "# direct crate's public API. The indirect set is derived from the resolved",
-        "# dependency graph, so a new intermediate crate cannot slip in unrecorded.",
+        "# manifest. `direct = false` marks a crate reached only through one of those.",
+        "# Path entries must exist in this checkout. Middleware entries name a git",
+        "# repository and revision; they are not files in this checkout. The indirect",
+        "# path set is derived from the resolved dependency graph.",
         f"schema = {SCHEMA}",
         "",
         "[release]",
@@ -308,6 +355,7 @@ def main() -> int:
             ]
         )
 
+    lines.extend(git_companion_lines(repository, resolved_packages))
     lines.extend(transitive_lines(repository, workspaces))
 
     for component, package_name, source_path, wit_stem in COMPONENTS:

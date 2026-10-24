@@ -339,8 +339,9 @@ fi
 
 # --- stage 5: prefetch dependencies -----------------------------------------
 #
-# The root workspace and the excluded legacy middleware workspace, so the first
-# cargo command of the session compiles instead of downloading.
+# The root workspace, so the first cargo command of the session compiles
+# instead of downloading. Canonical middleware crates resolve from the git
+# revision in Cargo.lock.
 #
 # `--locked` is deliberate and load-bearing: several release scripts call
 # require_clean_tree, so a hook that regenerated a lockfile would leave the
@@ -349,10 +350,8 @@ fi
 # rewrite a tracked file. `cargo fuzz` fetches what it needs at run time.
 
 if [[ "${WASI_AUTH_SETUP_SKIP_FETCH:-0}" != "1" ]]; then
-    log "prefetching crates for the root and legacy workspaces"
+    log "prefetching crates for the root workspace"
     cargo fetch --locked --manifest-path "${REPO_ROOT}/Cargo.toml"
-    cargo fetch --locked \
-        --manifest-path "${REPO_ROOT}/legacy/wasi-http-middleware/Cargo.toml"
 fi
 
 # --- stage 6: report ---------------------------------------------------------
