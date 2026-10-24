@@ -5,9 +5,10 @@
 //! uses the same header name and a different, unsigned encoding. Those bytes
 //! are not a credential here and never install authority.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error as StdError;
 use std::future::Future;
+use std::sync::Mutex;
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use hmac::{Hmac, Mac};
@@ -75,6 +76,15 @@ pub enum TrustedContextError {
     /// The envelope was issued for another request boundary.
     #[error("trusted-context request binding does not match")]
     BindingMismatch,
+    /// This guest process already accepted this exact envelope.
+    ///
+    /// The MAC still binds audience, method, path, and request ID, so the
+    /// captured bytes cannot authorize a different request. A second
+    /// presentation of the same bytes fails closed in this process. Another
+    /// process that shares the key has its own window and can accept the
+    /// envelope until the freshness limit. There is no cross-instance store.
+    #[error("trusted-context envelope was already accepted")]
+    Replayed,
     /// The signed values violate the bounded request-context contract.
     #[error("trusted-context payload is invalid")]
     InvalidContext,
@@ -92,7 +102,7 @@ pub struct TrustedContextCodec {
 }
 
 impl TrustedContextCodec {
-    /// Constructs a codec with a five-second replay window.
+    /// Constructs a codec with a five-second freshness window.
     ///
     /// # Errors
     ///
@@ -113,7 +123,7 @@ impl TrustedContextCodec {
         })
     }
 
-    /// Overrides the bounded replay window.
+    /// Overrides the bounded freshness window.
     ///
     /// # Errors
     ///
@@ -200,10 +210,12 @@ impl TrustedContextCodec {
     /// Opens and reconstructs a verified context only when signature,
     /// freshness, audience, method, path, and request ID all match.
     ///
+    /// This check does not consume the envelope. [`accept_signed_trusted_context`]
+    /// is what rejects a second presentation in this process.
+    ///
     /// # Errors
     ///
-    /// Fails closed for malformed, stale, replayed-across-boundary, or invalid
-    /// context data.
+    /// Fails closed for malformed, stale, rebound, or invalid context data.
     pub fn open(
         &self,
         envelope: &str,
@@ -941,9 +953,15 @@ pub fn install_signed_guest_context(
 /// Verifies one HMAC trusted-context envelope and installs it in extensions.
 ///
 /// Forged headers, the unsigned portable-middleware context, expired or
-/// rebound envelopes, duplicate contexts, and requests that still carry caller
+/// rebound envelopes, a second presentation of an envelope this process
+/// already accepted, duplicate contexts, and requests that still carry caller
 /// credentials fail closed. Every path removes the wire header and caller
 /// credentials so a later middleware cannot authenticate the request again.
+///
+/// The seen-set is process-local and bounded by the freshness window. A
+/// stateless guest cannot share it with another instance. Ingress still
+/// strips client envelopes, so this defense applies when the guest itself is
+/// reachable with a captured loopback envelope.
 ///
 /// `Ok(None)` is an anonymous request: no envelope and no caller credentials.
 ///
@@ -998,9 +1016,58 @@ pub fn accept_signed_trusted_context<B>(
     let opened = codec.open(&envelope, &method, &path, &request_id, now_unix_seconds);
     strip_identity_material(request.headers_mut());
     let context = opened.map_err(GuestBoundaryError::Rejected)?;
+    consume_accepted_envelope(codec, &envelope, now_unix_seconds)
+        .map_err(GuestBoundaryError::Rejected)?;
     request.extensions_mut().insert(context.auth().clone());
     request.extensions_mut().insert(context.clone());
     Ok(Some(context))
+}
+
+/// Signatures this process has already accepted, retained until the freshness
+/// window that `open` would still allow has ended.
+struct AcceptedEnvelopeWindow {
+    by_signature: BTreeMap<[u8; 32], u64>,
+}
+
+static ACCEPTED_ENVELOPES: Mutex<AcceptedEnvelopeWindow> = Mutex::new(AcceptedEnvelopeWindow {
+    by_signature: BTreeMap::new(),
+});
+
+fn consume_accepted_envelope(
+    codec: &TrustedContextCodec,
+    envelope: &str,
+    now_unix_seconds: u64,
+) -> Result<(), TrustedContextError> {
+    let (_, encoded_signature) = envelope
+        .split_once('.')
+        .ok_or(TrustedContextError::InvalidEnvelope)?;
+    let mut signature = URL_SAFE_NO_PAD
+        .decode(encoded_signature)
+        .map_err(|_| TrustedContextError::InvalidEnvelope)?;
+    if signature.len() != 32 {
+        signature.zeroize();
+        return Err(TrustedContextError::InvalidEnvelope);
+    }
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&signature);
+    signature.zeroize();
+    // `open` allows a seal up to one second ahead of `now`. Keep the signature
+    // until that envelope can no longer pass the freshness check.
+    let fresh_until = now_unix_seconds
+        .saturating_add(1)
+        .saturating_add(codec.max_age_seconds);
+    let mut window = ACCEPTED_ENVELOPES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    window
+        .by_signature
+        .retain(|_, expires_at| *expires_at >= now_unix_seconds);
+    if window.by_signature.contains_key(&key) {
+        key.zeroize();
+        return Err(TrustedContextError::Replayed);
+    }
+    window.by_signature.insert(key, fresh_until);
+    Ok(())
 }
 
 /// Removes identity and credential headers echoed by a downstream response.
@@ -1773,6 +1840,20 @@ mod tests {
         );
         assert!(!format!("{accepted:?}").contains("session-one"));
 
+        let mut replayed = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check")
+            .header(REQUEST_ID_HEADER, "request-signed")
+            .header(AUTH_CONTEXT_HEADER, &envelope)
+            .body(())
+            .expect("valid fixture");
+        assert_eq!(
+            accept_signed_trusted_context(&codec, &mut replayed, 100),
+            Err(GuestBoundaryError::Rejected(TrustedContextError::Replayed))
+        );
+        assert!(replayed.extensions().get::<VerifiedAuthContext>().is_none());
+        assert!(!replayed.headers().contains_key(AUTH_CONTEXT_HEADER));
+
         assert_eq!(
             accept_signed_trusted_context(&codec, &mut request, 100),
             Err(GuestBoundaryError::DuplicateContext)
@@ -1818,7 +1899,7 @@ mod tests {
                 105,
             ),
             Ok(context.clone()),
-            "the same binding is valid through the configured max age"
+            "open checks freshness and does not consume the envelope"
         );
         assert_eq!(
             codec.open(
@@ -1842,6 +1923,54 @@ mod tests {
             ),
             Err(TrustedContextError::InvalidEnvelope)
         );
+    }
+
+    #[test]
+    fn a_different_envelope_is_still_accepted_after_a_replay_rejection() {
+        let (codec, context, _) = sealed_context();
+        let first = codec
+            .seal(&context, &Method::POST, "/api/authorization/check", 150)
+            .expect("first seal");
+        let second = codec
+            .seal(&context, &Method::POST, "/api/authorization/check", 151)
+            .expect("second seal");
+        assert_ne!(first, second);
+
+        let mut request = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check")
+            .header(REQUEST_ID_HEADER, "request-signed")
+            .header(AUTH_CONTEXT_HEADER, &first)
+            .body(())
+            .expect("valid fixture");
+        accept_signed_trusted_context(&codec, &mut request, 150)
+            .expect("first presentation")
+            .expect("authenticated context");
+
+        let mut replayed = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check")
+            .header(REQUEST_ID_HEADER, "request-signed")
+            .header(AUTH_CONTEXT_HEADER, &first)
+            .body(())
+            .expect("valid fixture");
+        assert_eq!(
+            accept_signed_trusted_context(&codec, &mut replayed, 154),
+            Err(GuestBoundaryError::Rejected(TrustedContextError::Replayed))
+        );
+        assert!(replayed.extensions().get::<VerifiedAuthContext>().is_none());
+
+        let mut other = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check")
+            .header(REQUEST_ID_HEADER, "request-signed")
+            .header(AUTH_CONTEXT_HEADER, &second)
+            .body(())
+            .expect("valid fixture");
+        let accepted = accept_signed_trusted_context(&codec, &mut other, 151)
+            .expect("different envelope")
+            .expect("authenticated context");
+        assert_eq!(accepted, context);
     }
 
     #[test]

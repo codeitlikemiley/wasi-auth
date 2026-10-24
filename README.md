@@ -60,7 +60,8 @@ The private `wasi-auth-ingress` service is distributed as a signed binary/OCI
 artifact, not as a second public crate. It terminates public HTTP, REST, and
 gRPC traffic, validates credentials through a prepared native PostgreSQL pool,
 and sends the loopback-only Spin backend a five-second HMAC envelope bound to
-audience, method, path, and request ID. Migration
+audience, method, path, and request ID. The guest accepts that envelope once
+per process. Migration
 `0009_context_invalidation` publishes transactional cache invalidations; the
 ingress refuses startup if the trigger set is incomplete. The default REST
 Cedar check executes in the ingress from the same strictly validated policy

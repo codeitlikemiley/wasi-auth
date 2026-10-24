@@ -20,14 +20,19 @@ build-validated default; a malformed or unavailable active record fails
 closed.
 
 Authenticated requests receive an HMAC-SHA-256 context envelope bound to the
-deployment audience, HTTP method, path, request ID, and a five-second replay
-window. The ingress removes `Authorization`, proxy authorization, and session
-cookies before forwarding that envelope, and marks the envelope sensitive.
-The guest must accept it with `accept_signed_trusted_context`. The unsigned
-portable middleware context is a different encoding of the same header name
-and is rejected. Spin must listen only on loopback or an equivalent private
-pod network; credential-bearing requests that reach the guest without a valid
-envelope fail closed.
+deployment audience, HTTP method, path, request ID, and a five-second
+freshness window. The ingress removes client `x-wasi-auth-*` headers,
+`Authorization`, proxy authorization, and session cookies before forwarding
+that envelope, and marks the envelope sensitive. The guest must accept it
+with `accept_signed_trusted_context`, which consumes the envelope once in
+that process. A second presentation to the same process fails closed. A
+different guest process that shares the key can accept it until the window
+ends. The unsigned portable middleware context is a different encoding of the
+same header name and is rejected. Spin must listen only on loopback or an
+equivalent private pod network; that placement is the deployment rule, and
+the guest still fails closed if a captured envelope is presented twice to
+the same process. Credential-bearing requests that reach the guest without a
+valid envelope fail closed.
 
 The direct Hyper terminal streams bodies and trailers without buffering,
 preserving gRPC

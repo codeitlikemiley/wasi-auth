@@ -33,10 +33,21 @@ mutation. UI hiding and coarse HTTP admission never replace this check.
   context is already installed, or when the envelope is missing, duplicated,
   tampered, rebound to another method, path, or request ID, expired, or sealed
   more than one second in the future.
-- The same binding may be presented again until the configured maximum age
-  (default five seconds, maximum thirty). That window is the replay bound.
-  There is no second shared nonce store between ingress and the guest.
-  Query strings and bodies are not part of the HMAC binding.
+- `accept_signed_trusted_context` accepts each exact envelope once in the
+  guest process. A second presentation fails closed as replay, including an
+  immediate retry of the same method, path, and request ID. The MAC still
+  binds audience, method, path, and request ID, so those bytes cannot
+  authorize a different request. The freshness window remains one to thirty
+  seconds (default five). `TrustedContextCodec::open` checks that window and
+  does not consume the envelope.
+- The seen-set lives in the guest process. A second instance that shares the
+  HMAC key can accept the same envelope until the freshness window ends.
+  There is no cross-instance nonce store. Ingress strips every client
+  `x-wasi-auth-*` header, including a correctly signed client envelope, so
+  the public listener does not honor a captured envelope. The residual replay
+  requires a caller who can reach the guest directly. Loopback is the
+  deployment rule; it is not the security proof.
+- Query strings and bodies are not part of the HMAC binding.
 - CORS and browser security headers are single-owner. `CorsConfig::apply` and
   `apply_response_security` leave a response unchanged when another policy,
   including portable middleware's `strict-origin-when-cross-origin` referrer
