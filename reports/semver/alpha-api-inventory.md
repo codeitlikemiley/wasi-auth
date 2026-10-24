@@ -5,7 +5,7 @@ commit `043f5b6`, the first local contract/testkit checkpoint. Neither that
 checkpoint nor any other `wasi-authz` version has been published. It is not a
 public SemVer baseline.
 
-`cargo-semver-checks 0.48.0` is deliberately run with
+`cargo-semver-checks 0.51.0` is deliberately run with
 `--release-type patch` so it does not skip analysis merely because both trees
 declare the same initial-alpha version. The expected diagnostics are:
 

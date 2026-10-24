@@ -14,7 +14,6 @@ import unittest
 class NormalizeSbomTests(unittest.TestCase):
     def test_canonicalizes_local_package_and_dependency_references(self) -> None:
         repository = "/checkout/wasi-auth"
-        sibling = f"{repository}/legacy/wasi-http-middleware"
         local_fixture = "/checkout/local-fixture"
         fixture_reference = (
             f"path+file://{local_fixture}#local_fixture@1.0.0"
@@ -62,7 +61,6 @@ class NormalizeSbomTests(unittest.TestCase):
                     sys.executable,
                     str(pathlib.Path(__file__).with_name("normalize-sbom.py")),
                     repository,
-                    sibling,
                     str(output),
                 ],
                 check=True,

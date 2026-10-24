@@ -4,7 +4,7 @@ channel = "rc"
 publish = true
 
 [rust]
-msrv = "1.93.0"
+msrv = "1.99.0"
 current_stable = "stable"
 component_target = "wasm32-wasip2"
 native_ci_target = "x86_64-unknown-linux-gnu"
@@ -12,22 +12,20 @@ native_ci_target = "x86_64-unknown-linux-gnu"
 [wasi]
 http = "0.3.0"
 wasip2_crate = "0.14.7"
-wasip3_crate = "0.7.0"
+wasip3_crate = "0.9.0+wasi-0.3.0"
 # `wit_bindgen` is the version this workspace's own component code binds with,
-# pinned to match the generator embedded by tagged `wasip3 0.7.0`; mixed
-# versions duplicate async stream intrinsics. Generate `wasip3 0.7.0` bindings
-# with 0.57.1.
+# pinned to match the generator embedded by tagged `wasip3 0.9.0+wasi-0.3.0`.
+# Generate those bindings with 0.62.0.
 #
-# `legacy_middleware_wit_bindgen` is what the excluded
-# `legacy/wasi-http-middleware` workspace binds with, recorded here because the
-# HTTP PEP depends on `wasi-http-middleware-component-support` and therefore
-# links both generators. Both values are load-bearing; neither alone describes
-# the shipped component.
-wit_bindgen = "0.57.1"
-legacy_middleware_wit_bindgen = "0.59.0"
+# `wit_bindgen` matches the generator embedded by tagged
+# `wasip3 0.9.0+wasi-0.3.0`. `legacy_middleware_wit_bindgen` is the generator
+# used by the canonical `wasi-http-middleware` revision. Both are 0.62.0.
+# Preview 2 (`wasip2`) still brings its own `wit-bindgen` 0.57.1.
+wit_bindgen = "0.62.0"
+legacy_middleware_wit_bindgen = "0.62.0"
 
 [runtimes]
-wasmtime = "46.0.1"
+wasmtime = "50.0.0"
 spin_stable = "4.0.2"
 spin_main_version = "4.1.0-pre0"
 spin_main_repository = "https://github.com/codeitlikemiley/spin"
@@ -37,8 +35,8 @@ spin_main_final_wasi_terminal = true
 spin_main_final_wasi_outbound_http = true
 spin_main_precomposed_default_features = false
 spin_main_native_middleware = false
-spin_sdk = "6.0.0"
-spin_sdk_revision = "a02d330fe9357be2d18e6deef400511195ce6f7f"
+spin_sdk = "7.0.0"
+spin_sdk_revision = "3cf30012b50a1afb750dac3d28aa6da4a32c3468"
 spin_middleware_revision = "27451471b8ba0faeffa01c5a4ddd6daee9a9d526"
 spin_final_wasi_blocking = false
 
@@ -49,9 +47,9 @@ cargo_audit = "0.22.1"
 cargo_deny = "0.20.2"
 cargo_cyclonedx = "0.5.9"
 cargo_fuzz = "0.13.2"
-cargo_semver_checks = "0.48.0"
+cargo_semver_checks = "0.51.0"
 cargo_hack = "0.6.45"
-fuzz_rust = "nightly-2026-03-06"
+fuzz_rust = "nightly-2026-09-01"
 cosign = "3.1.1"
 oras = "1.3.2"
 spicedb = "1.54.0"
@@ -82,7 +80,12 @@ cedar_policy = "4.11.2"
 
 [dependencies]
 wasi_http_middleware = "0.2.0-alpha.3"
-wasi_http_middleware_revision = "006352a4d334cef06e7a5f8bdafe8968861cab8b"
+wasi_http_middleware_repository = "https://github.com/codeitlikemiley/wasi-http-middleware"
+# Head of wasi-http-middleware pull request 1. Baseline security and CORS
+# response fields are written only when absent. The next published tag is
+# v0.2.0-alpha.4; until that tag exists, consumers pin this revision. Crate
+# version stays 0.2.0-alpha.3.
+wasi_http_middleware_revision = "3df96c21a7906b885e67229e9a7c8c01b6497109"
 
 [support]
 wasmtime_final_wasi = true
