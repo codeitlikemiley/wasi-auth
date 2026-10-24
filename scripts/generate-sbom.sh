@@ -13,12 +13,6 @@ if [[ "${actual}" != *"${expected}"* ]]; then
     exit 1
 fi
 
-sibling="${REPO_ROOT}/legacy/wasi-http-middleware"
-if [[ ! -d "${sibling}" ]]; then
-    echo "error: pinned unpublished sibling is missing: ${sibling}" >&2
-    exit 1
-fi
-
 mkdir -p "${ARTIFACT_ROOT}/sbom"
 rm -f "${ARTIFACT_ROOT}/sbom/"*.cdx.json
 metadata="$(cargo metadata --locked --no-deps --format-version 1)"
@@ -54,7 +48,7 @@ list_packages | while IFS=$'\t' read -r package manifest; do
     destination="${ARTIFACT_ROOT}/sbom/${package}.cdx.json"
     mv "${generated}" "${destination}"
     python3 "${REPO_ROOT}/scripts/normalize-sbom.py" \
-        "${REPO_ROOT}" "${sibling}" "${destination}"
+        "${REPO_ROOT}" "${destination}"
 done
 
 echo "wrote CycloneDX SBOMs in ${ARTIFACT_ROOT}/sbom"

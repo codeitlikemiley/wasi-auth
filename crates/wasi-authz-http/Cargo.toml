@@ -19,6 +19,7 @@ wasi-http-policy-core.workspace = true
 
 [dev-dependencies]
 wasi-authz-testkit = { path = "../wasi-authz-testkit", version = "=0.1.0-rc.5" }
+wasi-http-authn.workspace = true
 
 [lints]
 workspace = true

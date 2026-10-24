@@ -3,7 +3,12 @@
 This records what `leptos_wasi` must change to move its pin of this repository
 from `wasi-auth 0.1.0-alpha.4` to `0.1.0-rc.3`, and what this repository
 produced for it. Nothing in `leptos_wasi` was modified to produce this; every
-build check below ran against a scratch copy.
+build check below ran against a scratch copy. The `legacy/wasi-http-middleware`
+paths below describe that study. Current consumers pin
+`codeitlikemiley/wasi-http-middleware` revision
+`3df96c21a7906b885e67229e9a7c8c01b6497109` for `wasi-http-authn`,
+`wasi-http-metadata`, and `wasi-http-policy-core`. Those sources are not in
+this checkout.
 
 The API evidence was verified against `leptos_wasi` `main` = `fa424c1` and
 this repository at `2e8a1b9`, and carries to `rc.3` unchanged: the `rc.3`
@@ -123,9 +128,10 @@ the chain, immediately before the terminal. Both PDPs export the handler and
 import none, so they remain terminals outside the HTTP chain and take no
 position in the stack. No component was added or removed since `alpha.4`.
 
-`legacy/wasi-http-middleware/components/` still contains all five locked
-middleware components (`request-id`, `security-headers`, `cors`,
-`authn-policy`, `secure-defaults`) plus `passthrough`.
+At the studied revision, `legacy/wasi-http-middleware/components/` contained
+the five locked middleware components (`request-id`, `security-headers`,
+`cors`, `authn-policy`, `secure-defaults`) plus `passthrough`. Those
+components now build from `codeitlikemiley/wasi-http-middleware`.
 
 ## 3. The release bundle
 
@@ -293,14 +299,16 @@ replaced rather than carried forward:
 - `[middleware].baseline_revision = "6977a75…"` does not exist here either. It
   is `[release].semver_baseline` from the standalone `wasi-http-middleware`
   repository, whose history predates the subtree import. If the field must
-  survive, source it from `legacy/wasi-http-middleware/compatibility.toml`
-  rather than from this repository's git history.
+  survive, source it from that repository's `compatibility.toml` rather than
+  from this repository's git history.
 
 Also note `[authorization].source_revision = "1bf8034…"` is a `0.1.0-alpha.3`
 commit even though the section is labelled `0.1.0-alpha.4`.
 
-`[middleware]` needs no change. That subtree is byte-identical, so
-`0.2.0-alpha.3` and its `source_revision`/`artifact_revision` remain accurate.
+`[middleware]` needed no change for the `rc.3` study. That subtree was
+byte-identical, so `0.2.0-alpha.3` and its `source_revision`/`artifact_revision`
+were accurate for that pin. Current consumers use git revision
+`3df96c21a7906b885e67229e9a7c8c01b6497109` until `v0.2.0-alpha.4`.
 
 ### `tests/middleware/artifact-sets.toml`
 

@@ -10,16 +10,14 @@ import uuid
 from typing import Any
 
 
-def normalize(value: Any, repository: str, sibling: str) -> Any:
+def normalize(value: Any, repository: str) -> Any:
     """Remove machine-specific repository paths recursively."""
     if isinstance(value, str):
-        return value.replace(repository, ".").replace(sibling, "legacy/wasi-http-middleware")
+        return value.replace(repository, ".")
     if isinstance(value, list):
-        return [normalize(item, repository, sibling) for item in value]
+        return [normalize(item, repository) for item in value]
     if isinstance(value, dict):
-        return {
-            key: normalize(item, repository, sibling) for key, item in value.items()
-        }
+        return {key: normalize(item, repository) for key, item in value.items()}
     return value
 
 
@@ -65,13 +63,12 @@ def canonicalize_local_cargo_references(document: dict[str, Any]) -> dict[str, A
 
 def main() -> int:
     """Normalize one CycloneDX JSON document in place."""
-    if len(sys.argv) != 4:
-        print("usage: normalize-sbom.py REPOSITORY SIBLING SBOM", file=sys.stderr)
+    if len(sys.argv) != 3:
+        print("usage: normalize-sbom.py REPOSITORY SBOM", file=sys.stderr)
         return 2
     repository = str(pathlib.Path(sys.argv[1]).resolve())
-    sibling = str(pathlib.Path(sys.argv[2]).resolve())
-    path = pathlib.Path(sys.argv[3])
-    document = normalize(json.loads(path.read_text()), repository, sibling)
+    path = pathlib.Path(sys.argv[2])
+    document = normalize(json.loads(path.read_text()), repository)
     document = canonicalize_local_cargo_references(document)
     metadata = document.get("metadata", {})
     metadata.pop("timestamp", None)

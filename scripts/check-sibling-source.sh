@@ -4,15 +4,34 @@ set -euo pipefail
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
-middleware="${REPO_ROOT}/legacy/wasi-http-middleware"
 expected="$(compat_value wasi_http_middleware_revision)"
-if [[ ! -f "${middleware}/Cargo.toml" ]]; then
-    echo "error: imported middleware source is unavailable: ${middleware}" >&2
-    exit 1
-fi
-if ! git -C "${REPO_ROOT}" merge-base --is-ancestor "${expected}" HEAD; then
-    echo "error: imported middleware history is missing its pinned revision" >&2
-    echo "expected: ${expected}" >&2
-    exit 1
-fi
-echo "verified imported middleware revision ${expected}"
+repository="$(compat_value wasi_http_middleware_repository)"
+python3 - "${REPO_ROOT}/Cargo.lock" "${expected}" "${repository}" <<'PY'
+import pathlib
+import sys
+
+lock_path, expected, repository = sys.argv[1:]
+text = pathlib.Path(lock_path).read_text()
+packages = text.split("[[package]]")
+found = []
+for block in packages:
+    if '\nname = "wasi-http-metadata"' not in block:
+        continue
+    for line in block.splitlines():
+        if line.startswith("source = "):
+            found.append(line)
+if len(found) != 1:
+    print(
+        f"error: expected one wasi-http-metadata source, found {len(found)}",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+source = found[0]
+needle = f"git+{repository}?rev={expected}#{expected}"
+if needle not in source:
+    print("error: middleware lock source does not match compatibility.toml", file=sys.stderr)
+    print(f"expected: {needle}", file=sys.stderr)
+    print(f"found: {source}", file=sys.stderr)
+    raise SystemExit(1)
+print(f"verified canonical middleware revision {expected}")
+PY

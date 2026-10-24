@@ -1,14 +1,15 @@
 # Continuous integration
 
-The middleware history and compatibility sources are imported under
-`legacy/wasi-http-middleware` at the exact revision in `compatibility.toml`.
-Every CI job runs `scripts/check-sibling-source.sh`, which verifies that the
-pinned source revision remains an ancestor of the consolidated repository.
-There is no cross-repository path dependency or checkout prerequisite.
+Canonical HTTP middleware comes from
+`codeitlikemiley/wasi-http-middleware` at the git revision in
+`compatibility.toml`. Every CI job runs `scripts/check-sibling-source.sh`,
+which verifies that `Cargo.lock` records that revision. The sources are not
+vendored in this checkout, and the revision is not an ancestor of this
+repository. The next published middleware tag is `v0.2.0-alpha.4`.
 
 Blocking lanes cover:
 
-- Rust 1.93 MSRV and current stable, Clippy, tests, doctests, rustdoc, and the
+- Rust 1.99.0 MSRV and current stable, Clippy, tests, doctests, rustdoc, and the
   public feature powerset through every pair;
 - additive WASIp2, WASIp3, and dual-client builds;
 - an explicit private-alpha API break inventory against `043f5b6`;

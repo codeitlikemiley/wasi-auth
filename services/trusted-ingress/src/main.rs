@@ -4,9 +4,12 @@ use std::{
     collections::VecDeque,
     convert::Infallible,
     env,
+    error::Error as StdError,
     net::SocketAddr,
+    pin::Pin,
     sync::{Arc, Mutex},
-    time::{SystemTime, UNIX_EPOCH},
+    task::{Context, Poll},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use axum::{
@@ -16,7 +19,9 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use http::{HeaderValue, StatusCode, Uri, header::HOST, uri::Authority};
+use bytes::Buf;
+use http::{HeaderMap, HeaderValue, StatusCode, Uri, header::HOST, uri::Authority};
+use http_body::{Body as HttpBody, Frame, SizeHint};
 use hyper::service::service_fn;
 use hyper_util::{
     client::legacy::{Client, connect::HttpConnector},
@@ -38,10 +43,12 @@ use wasi_auth::{
         RequestId, RoleId, SessionId, UserId, VerifiedRequestContext,
     },
     http::{
-        AUTH_CONTEXT_HEADER, AuthenticatedSession, Credential, CredentialAuthenticator,
-        DEFAULT_MAX_REQUEST_BODY_BYTES, HttpBoundaryError, REQUEST_ID_HEADER,
+        AuthenticatedSession, Credential, CredentialAuthenticator, DEFAULT_MAX_REQUEST_BODY_BYTES,
+        DEFAULT_MAX_STREAM_BODY_BYTES, HttpBoundaryError, REQUEST_ID_HEADER, RequestBodyLimitError,
         ResponseSecurityPolicy, RoutePolicy, TrustedContextCodec, TrustedIngress,
-        TrustedIngressConfig, apply_response_security, strip_untrusted_auth_metadata,
+        TrustedIngressConfig, apply_response_security, conflicting_edge_security_headers,
+        enforce_declared_body_limit, install_signed_guest_context, sanitize_downstream_response,
+        strip_forwarded_credentials, strip_untrusted_auth_metadata,
     },
     postgres::{
         PostgresAuthStore, PostgresStoreError,
@@ -55,9 +62,11 @@ use wasi_auth::{
 };
 
 const DEFAULT_TOKEN_CACHE_CAPACITY: usize = 4_096;
+const DEFAULT_UNARY_TIMEOUT_SECONDS: u64 = 30;
+const DEFAULT_STREAM_TIMEOUT_SECONDS: u64 = 5 * 60;
 
 type NativeVerifier = AccessTokenVerifier<NativePostgresTransport, SystemClock>;
-type ProxyClient = Client<HttpConnector, Body>;
+type ProxyClient = Client<HttpConnector, BoundedBody<Body>>;
 
 #[derive(Clone)]
 struct AppState {
@@ -71,6 +80,8 @@ struct AppState {
     cedar: Arc<tokio::sync::RwLock<CachedCedar>>,
     native_authorization_enabled: bool,
     secure_transport: bool,
+    unary_timeout: Duration,
+    stream_timeout: Duration,
 }
 
 struct BackendOrigin {
@@ -375,6 +386,18 @@ async fn main() -> Result<(), StartupError> {
     let mut http2_builder = Client::builder(TokioExecutor::new());
     http2_builder.http2_only(true);
     let http2_client = http2_builder.build(connector);
+    let unary_timeout = duration_from_env(
+        "AUTH_INGRESS_UNARY_TIMEOUT_SECONDS",
+        DEFAULT_UNARY_TIMEOUT_SECONDS,
+        1,
+        120,
+    )?;
+    let stream_timeout = duration_from_env(
+        "AUTH_INGRESS_STREAM_TIMEOUT_SECONDS",
+        DEFAULT_STREAM_TIMEOUT_SECONDS,
+        1,
+        900,
+    )?;
     let state = AppState {
         ingress: Arc::new(TrustedIngress::new(
             ingress_config,
@@ -395,6 +418,8 @@ async fn main() -> Result<(), StartupError> {
         secure_transport: env::var("AUTH_PUBLIC_BASE_URL")
             .unwrap_or_else(|_| "http://127.0.0.1:3008".to_owned())
             .starts_with("https://"),
+        unary_timeout,
+        stream_timeout,
     };
     let listener = tokio::net::TcpListener::bind(listen).await?;
     tracing::info!(%listen, "native trusted ingress is ready");
@@ -433,6 +458,15 @@ async fn serve(listener: tokio::net::TcpListener, state: AppState) -> Result<(),
 
 async fn proxy_request(state: AppState, mut request: Request) -> Response {
     strip_untrusted_auth_metadata(request.headers_mut());
+    let grpc = is_grpc_request(&request);
+    let body_limit = if grpc {
+        DEFAULT_MAX_STREAM_BODY_BYTES
+    } else {
+        DEFAULT_MAX_REQUEST_BODY_BYTES
+    };
+    if let Err(status) = declared_body_status(request.headers(), body_limit) {
+        return (status, "Request rejected.").into_response();
+    }
     if let Err(status) = ensure_request_id(&mut request) {
         return (status, "Request correlation is invalid.").into_response();
     }
@@ -487,11 +521,12 @@ async fn proxy_request(state: AppState, mut request: Request) -> Response {
                 return internal_error();
             }
         };
-        let header = match HeaderValue::from_str(&envelope) {
-            Ok(header) => header,
-            Err(_) => return internal_error(),
-        };
-        request.headers_mut().insert(AUTH_CONTEXT_HEADER, header);
+        if install_signed_guest_context(request.headers_mut(), &envelope).is_err() {
+            tracing::error!("failed to install signed trusted request context");
+            return internal_error();
+        }
+    } else {
+        strip_forwarded_credentials(request.headers_mut());
     }
     if mutation_may_change_authorization(request.method(), request.uri().path()) {
         state.invalidation_tracker.invalidate();
@@ -501,7 +536,6 @@ async fn proxy_request(state: AppState, mut request: Request) -> Response {
         Err(_) => return internal_error(),
     };
     *request.uri_mut() = uri;
-    let grpc = is_grpc_request(&request);
     if grpc {
         *request.version_mut() = http::Version::HTTP_2;
         remove_http2_hop_headers(request.headers_mut());
@@ -511,17 +545,201 @@ async fn proxy_request(state: AppState, mut request: Request) -> Response {
             .headers_mut()
             .insert(HOST, state.backend.host.clone());
     }
-    let response = if grpc {
-        state.http2_client.request(request).await
+    let request = bound_request(request, body_limit);
+    let timeout = if grpc {
+        state.stream_timeout
     } else {
-        state.http1_client.request(request).await
+        state.unary_timeout
     };
+    let response = tokio::time::timeout(timeout, async {
+        if grpc {
+            state.http2_client.request(request).await
+        } else {
+            state.http1_client.request(request).await
+        }
+    })
+    .await;
     match response {
-        Ok(response) => response.map(Body::new),
-        Err(error) => {
+        Ok(Ok(response)) => finish_backend_response(response.map(Body::new)),
+        Ok(Err(error)) if is_body_limit(&error) => {
+            (StatusCode::PAYLOAD_TOO_LARGE, "Request rejected.").into_response()
+        }
+        Ok(Err(error)) => {
             tracing::error!(error = %error, "trusted ingress backend request failed");
             internal_error()
         }
+        Err(_elapsed) => (StatusCode::GATEWAY_TIMEOUT, "Request rejected.").into_response(),
+    }
+}
+
+fn declared_body_status(headers: &HeaderMap, limit: usize) -> Result<(), StatusCode> {
+    match enforce_declared_body_limit(headers, limit) {
+        Ok(()) => Ok(()),
+        Err(RequestBodyLimitError::TooLarge) => Err(StatusCode::PAYLOAD_TOO_LARGE),
+        Err(RequestBodyLimitError::Invalid | _) => Err(StatusCode::BAD_REQUEST),
+    }
+}
+
+fn duration_from_env(
+    name: &'static str,
+    default_seconds: u64,
+    minimum: u64,
+    maximum: u64,
+) -> Result<Duration, StartupError> {
+    let seconds = match env::var(name) {
+        Ok(value) => value
+            .parse::<u64>()
+            .map_err(|_| StartupError::Invalid(name))?,
+        Err(_) => default_seconds,
+    };
+    duration_from_secs(seconds, minimum, maximum).ok_or(StartupError::Invalid(name))
+}
+
+fn duration_from_secs(seconds: u64, minimum: u64, maximum: u64) -> Option<Duration> {
+    (minimum..=maximum)
+        .contains(&seconds)
+        .then_some(Duration::from_secs(seconds))
+}
+
+fn bound_request(request: Request, limit: usize) -> http::Request<BoundedBody<Body>> {
+    let (parts, body) = request.into_parts();
+    http::Request::from_parts(parts, BoundedBody::new(body, limit))
+}
+
+fn finish_backend_response(mut response: Response) -> Response {
+    if conflicting_edge_security_headers(response.headers()) {
+        return (StatusCode::BAD_GATEWAY, "Request rejected.").into_response();
+    }
+    sanitize_downstream_response(&mut response);
+    response
+}
+
+fn is_body_limit(error: &(impl StdError + 'static)) -> bool {
+    let mut current = Some(error as &dyn StdError);
+    while let Some(error) = current {
+        if error.downcast_ref::<BodyLimitExceeded>().is_some() {
+            return true;
+        }
+        current = error.source();
+    }
+    false
+}
+
+struct BodyLimitExceeded;
+
+impl std::fmt::Debug for BodyLimitExceeded {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("BodyLimitExceeded")
+    }
+}
+
+impl std::fmt::Display for BodyLimitExceeded {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("request body exceeds its configured limit")
+    }
+}
+
+impl StdError for BodyLimitExceeded {}
+
+enum BoundError<E> {
+    Limit,
+    Inner(E),
+}
+
+impl<E> std::fmt::Debug for BoundError<E>
+where
+    E: std::fmt::Debug,
+{
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Limit => formatter.write_str("request body exceeds its configured limit"),
+            Self::Inner(error) => std::fmt::Debug::fmt(error, formatter),
+        }
+    }
+}
+
+impl<E> std::fmt::Display for BoundError<E>
+where
+    E: std::fmt::Display,
+{
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Limit => formatter.write_str("request body exceeds its configured limit"),
+            Self::Inner(error) => std::fmt::Display::fmt(error, formatter),
+        }
+    }
+}
+
+impl<E> StdError for BoundError<E>
+where
+    E: StdError + 'static,
+{
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            Self::Limit => Some(&BODY_LIMIT_EXCEEDED),
+            Self::Inner(error) => Some(error),
+        }
+    }
+}
+
+const BODY_LIMIT_EXCEEDED: BodyLimitExceeded = BodyLimitExceeded;
+
+struct BoundedBody<B> {
+    inner: B,
+    remaining: usize,
+    exceeded: bool,
+}
+
+impl<B> BoundedBody<B> {
+    const fn new(inner: B, limit: usize) -> Self {
+        Self {
+            inner,
+            remaining: limit,
+            exceeded: false,
+        }
+    }
+}
+
+impl<B> HttpBody for BoundedBody<B>
+where
+    B: HttpBody + Unpin,
+    B::Data: Buf,
+    B::Error: StdError + Send + Sync + 'static,
+{
+    type Data = B::Data;
+    type Error = BoundError<B::Error>;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        let this = self.get_mut();
+        if this.exceeded {
+            return Poll::Ready(Some(Err(BoundError::Limit)));
+        }
+        match Pin::new(&mut this.inner).poll_frame(context) {
+            Poll::Ready(Some(Ok(frame))) => {
+                let len = frame.data_ref().map_or(0, Buf::remaining);
+                if len > this.remaining {
+                    this.exceeded = true;
+                    this.remaining = 0;
+                    return Poll::Ready(Some(Err(BoundError::Limit)));
+                }
+                this.remaining -= len;
+                Poll::Ready(Some(Ok(frame)))
+            }
+            Poll::Ready(Some(Err(error))) => Poll::Ready(Some(Err(BoundError::Inner(error)))),
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        self.inner.size_hint()
     }
 }
 
@@ -759,6 +977,7 @@ fn secure_authorization_response(mut response: Response, secure_transport: bool)
         ResponseSecurityPolicy::Sensitive,
         secure_transport,
     );
+    sanitize_downstream_response(&mut response);
     response
 }
 
@@ -1168,5 +1387,143 @@ mod tests {
             ..valid
         };
         assert!(cedar_from_active_bundle(invalid).is_err());
+    }
+
+    #[test]
+    fn request_timeouts_reject_unbounded_values() {
+        assert_eq!(
+            duration_from_secs(DEFAULT_UNARY_TIMEOUT_SECONDS, 1, 120),
+            Some(Duration::from_secs(DEFAULT_UNARY_TIMEOUT_SECONDS))
+        );
+        assert_eq!(
+            duration_from_secs(DEFAULT_STREAM_TIMEOUT_SECONDS, 1, 900),
+            Some(Duration::from_secs(DEFAULT_STREAM_TIMEOUT_SECONDS))
+        );
+        assert_eq!(duration_from_secs(0, 1, 120), None);
+        assert_eq!(duration_from_secs(121, 1, 120), None);
+    }
+
+    #[test]
+    fn anonymous_requests_honor_the_declared_body_limit() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::CONTENT_LENGTH,
+            HeaderValue::from_static("999999999"),
+        );
+        assert_eq!(
+            declared_body_status(&headers, DEFAULT_MAX_REQUEST_BODY_BYTES),
+            Err(StatusCode::PAYLOAD_TOO_LARGE)
+        );
+        headers.insert(
+            http::header::CONTENT_LENGTH,
+            HeaderValue::from_static("nope"),
+        );
+        assert_eq!(
+            declared_body_status(&headers, DEFAULT_MAX_REQUEST_BODY_BYTES),
+            Err(StatusCode::BAD_REQUEST)
+        );
+    }
+
+    #[tokio::test]
+    async fn bounded_body_fails_closed_without_echoing_the_payload() {
+        use http_body_util::{BodyExt, Full};
+
+        let payload = vec![b'a'; 64];
+        let body = BoundedBody::new(Full::new(bytes::Bytes::from(payload)), 8);
+        let error = body.collect().await.expect_err("body limit");
+
+        assert!(is_body_limit(&error));
+        let rendered = error.to_string();
+        assert_eq!(rendered, "request body exceeds its configured limit");
+        assert!(!rendered.contains('a'));
+    }
+
+    #[tokio::test]
+    async fn native_authorization_rejects_a_cross_tenant_resource() {
+        use wasi_auth::context::AuthenticationAssurance;
+
+        struct FixtureAuthenticator;
+
+        impl CredentialAuthenticator for FixtureAuthenticator {
+            type Error = std::io::Error;
+
+            async fn authenticate(
+                &self,
+                _credential: &Credential,
+            ) -> Result<AuthenticatedSession, Self::Error> {
+                Ok(AuthenticatedSession {
+                    principal: Principal::new(
+                        UserId::new("user-one").expect("valid fixture"),
+                        "https://issuer.example",
+                        false,
+                    )
+                    .expect("valid fixture"),
+                    organization_id: Some(
+                        OrganizationId::new("organization-one").expect("valid fixture"),
+                    ),
+                    session_id: SessionId::new("session-one").expect("valid fixture"),
+                    assurance: AuthenticationAssurance::Aal1,
+                    issued_at_unix_seconds: 1,
+                    expires_at_unix_seconds: u64::MAX / 2,
+                    decision_id: None,
+                    policy_revision: None,
+                    authorization: AuthorizationSnapshot::new(
+                        ["document.read"],
+                        [RoleId::new("reader").expect("valid fixture")],
+                        None,
+                        None,
+                    )
+                    .expect("valid fixture"),
+                })
+            }
+        }
+
+        let ingress = TrustedIngress::new(
+            TrustedIngressConfig::new("https://app.example").expect("valid fixture"),
+            FixtureAuthenticator,
+            SystemClock,
+        );
+        let request = http::Request::builder()
+            .header(http::header::AUTHORIZATION, "Bearer token")
+            .header(&REQUEST_ID_HEADER, "request-tenant")
+            .body(())
+            .expect("valid fixture");
+        let context = ingress
+            .authenticate_request(&request, RoutePolicy::Authenticated)
+            .await
+            .expect("authenticated")
+            .expect("context");
+        let cedar = CedarProvider::new_validated(
+            DEFAULT_APPLICATION_POLICY,
+            DEFAULT_APPLICATION_SCHEMA,
+            "[]",
+            DEFAULT_APPLICATION_POLICY_REVISION,
+        )
+        .expect("default policy");
+
+        let allowed = evaluate_authorization(
+            &cedar,
+            AuthorizationCheckInput {
+                action: "document.read".to_owned(),
+                resource_type: "Document".to_owned(),
+                resource_id: "document-1".to_owned(),
+                organization_id: None,
+            },
+            &context,
+        )
+        .expect("same-tenant check");
+        assert!(allowed.allowed);
+
+        let rejected = evaluate_authorization(
+            &cedar,
+            AuthorizationCheckInput {
+                action: "document.read".to_owned(),
+                resource_type: "Document".to_owned(),
+                resource_id: "document-1".to_owned(),
+                organization_id: Some("organization-two".to_owned()),
+            },
+            &context,
+        );
+        assert!(matches!(rejected, Err(StatusCode::FORBIDDEN)));
     }
 }

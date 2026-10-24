@@ -8,16 +8,14 @@ an empty-by-default feature graph.
 
 Current version: `0.1.0-rc.2`.
 
-The standalone crate baseline is Rust 1.93, `wasip3` 0.7.0 with final
-`wasi:http@0.3.0`, and Wasmtime 46.0.1. Tagged Spin 4.0.2 cannot link the
-final-WASI components. Spin consumers are pinned to SDK revision
-`a02d330fe9357be2d18e6deef400511195ce6f7f` until a tagged upstream release contains
-the required final-WASI and gRPC graph. That immutable SDK manifest declares
-Rust 1.93. The maintained Spin runtime fork is pinned to
-`c34c584dbf77b3a3528ad0536aa9ce4761b9f772`; it is the release-candidate
+The standalone crate baseline is Rust 1.99.0, `wasip3` 0.9.0+wasi-0.3.0 with
+final `wasi:http@0.3.0`, `wit-bindgen` 0.62.0, and Wasmtime 50.0.0. Spin
+consumers use SDK 7.0.0 at git revision
+`3cf30012b50a1afb750dac3d28aa6da4a32c3468`. The library MSRV is Rust 1.99.0.
+Official upstream Spin v4.2.5 linux-amd64 is the E2E host for
+`wasi:http/handler@0.3.0`. The maintained Spin runtime fork remains pinned to
+`c34c584dbf77b3a3528ad0536aa9ce4761b9f772` for the recorded release-candidate
 terminal lane, while WAC-composed middleware remains experimental. The
-library and SDK MSRV is Rust 1.93; the native Spin host requires Rust 1.94
-because its Wasmtime 46 dependency graph declares that floor. The
 Leptos/browser dependency graph is locked to `wasm-bindgen` 0.2.126; that
 browser binding version is independent of the WASI component ABI.
 
@@ -60,7 +58,8 @@ The private `wasi-auth-ingress` service is distributed as a signed binary/OCI
 artifact, not as a second public crate. It terminates public HTTP, REST, and
 gRPC traffic, validates credentials through a prepared native PostgreSQL pool,
 and sends the loopback-only Spin backend a five-second HMAC envelope bound to
-audience, method, path, and request ID. Migration
+audience, method, path, and request ID. The guest accepts that envelope once
+per process. Migration
 `0009_context_invalidation` publishes transactional cache invalidations; the
 ingress refuses startup if the trigger set is incomplete. The default REST
 Cedar check executes in the ingress from the same strictly validated policy

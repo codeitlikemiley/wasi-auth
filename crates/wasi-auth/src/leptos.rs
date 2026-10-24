@@ -19,8 +19,10 @@ pub enum LeptosAuthError {
 
 /// Installs a verified context into the current Leptos request owner.
 ///
-/// Call this from `leptos_wasi::Handler::handle_with_context` after native
-/// trusted ingress has authenticated the request.
+/// Call this from `leptos_wasi::Handler::handle_with_context` after
+/// [`crate::http::accept_signed_trusted_context`] has verified the HMAC
+/// envelope. Do not pass a context decoded from the portable middleware
+/// header.
 pub fn provide_verified_auth_context(context: VerifiedAuthContext) {
     provide_context(context);
 }

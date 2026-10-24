@@ -484,6 +484,33 @@ mod tests {
         assert_eq!(result, Err(BoundaryError::ServiceMismatch));
     }
 
+    #[test]
+    fn portable_context_rejects_the_signed_wasi_auth_envelope() {
+        use http::{HeaderValue, Request};
+        use wasi_http_authn::{AuthnRejection, TrustedIngressConfig, accept_trusted_ingress};
+        use wasi_http_metadata::{AUTH_CONTEXT_HEADER, decode_auth_context};
+
+        let envelope = "eyJhdWRpZW5jZSI6ImFwaSJ9.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let value = HeaderValue::from_str(envelope).expect("ascii fixture");
+        assert!(decode_auth_context(&value).is_err());
+
+        let payload_only =
+            HeaderValue::from_str("eyJhdWRpZW5jZSI6ImFwaSJ9").expect("ascii fixture");
+        assert!(decode_auth_context(&payload_only).is_err());
+
+        let mut request = Request::builder()
+            .header(AUTH_CONTEXT_HEADER, envelope)
+            .body(())
+            .expect("valid fixture");
+        let config =
+            TrustedIngressConfig::new("orders-api", ["orders-api"]).expect("valid fixture");
+        assert_eq!(
+            accept_trusted_ingress(&config, &mut request),
+            Err(AuthnRejection::InvalidBoundary)
+        );
+        assert!(!request.headers().contains_key(AUTH_CONTEXT_HEADER));
+    }
+
     fn block_on<F>(future: F) -> F::Output
     where
         F: std::future::Future,
