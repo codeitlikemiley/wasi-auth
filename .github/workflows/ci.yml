@@ -115,7 +115,7 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           workspaces: wasi-auth
-      - run: cargo install cargo-semver-checks --locked --version 0.48.0
+      - run: cargo install cargo-semver-checks --locked --version 0.51.0
       - run: bash scripts/check-alpha-api-inventory.sh
 
   dependency-policy:
@@ -275,7 +275,7 @@ jobs:
           path: wasi-auth
       - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
-          toolchain: nightly-2026-03-06
+          toolchain: nightly-2026-09-01
       - run: cargo install cargo-fuzz --locked --version 0.13.2
       - run: bash scripts/run-fuzz-smoke.sh
         env:
