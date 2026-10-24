@@ -32,8 +32,19 @@ pub enum ContextError {
 
 macro_rules! bounded_identifier {
     ($(#[$meta:meta])* $name:ident) => {
+        bounded_identifier!(@item [Debug], $(#[$meta])* $name);
+    };
+    (redacted_debug $(#[$meta:meta])* $name:ident) => {
+        bounded_identifier!(@item [], $(#[$meta])* $name);
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+                formatter.write_str(concat!(stringify!($name), "([REDACTED])"))
+            }
+        }
+    };
+    (@item [$($derive:ident),*], $(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
-        #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+        #[derive(Clone, $($derive,)* Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
         #[serde(transparent)]
         pub struct $name(String);
 
@@ -88,7 +99,11 @@ bounded_identifier!(
     OrganizationId
 );
 bounded_identifier!(
+    redacted_debug
     /// Stable authenticated session identifier.
+    ///
+    /// `Debug` prints `SessionId([REDACTED])`. `Display` and [`SessionId::as_str`]
+    /// still return the identifier for storage and the signed envelope.
     SessionId
 );
 bounded_identifier!(
@@ -467,5 +482,18 @@ mod tests {
     #[test]
     fn assurance_aal2_satisfies_aal1() {
         assert!(AuthenticationAssurance::Aal2.satisfies(AuthenticationAssurance::Aal1));
+    }
+
+    #[test]
+    fn session_id_debug_does_not_reveal_the_identifier() {
+        let session_id = SessionId::new("session-secret-value").expect("valid fixture");
+        let rendered = format!("{session_id:?}");
+        let alternate = format!("{session_id:#?}");
+        assert_eq!(rendered, "SessionId([REDACTED])");
+        assert_eq!(alternate, "SessionId([REDACTED])");
+        assert!(!rendered.contains("session-secret-value"));
+        assert!(!alternate.contains("session-secret-value"));
+        assert_eq!(session_id.as_str(), "session-secret-value");
+        assert_eq!(session_id.to_string(), "session-secret-value");
     }
 }

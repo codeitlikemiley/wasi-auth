@@ -1526,6 +1526,77 @@ mod tests {
         assert!(!response.headers().contains_key(STRICT_TRANSPORT_SECURITY));
     }
 
+    #[test]
+    fn debug_forms_omit_the_session_identifier() {
+        let (_, context, _) = sealed_context();
+        let rendered = format!("{context:?}");
+        assert!(!rendered.contains("session-one"));
+        assert!(!rendered.contains(context.auth().session_id().as_str()));
+        assert_eq!(
+            format!("{:?}", context.auth().session_id()),
+            "SessionId([REDACTED])"
+        );
+    }
+
+    #[test]
+    fn spin_envelopes_can_be_exported_for_the_host_probe() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_secs();
+        let auth = VerifiedAuthContext::from_validated(ValidatedContextParts {
+            principal: Principal::new(
+                UserId::new("user-one").expect("valid fixture"),
+                "https://issuer.example",
+                false,
+            )
+            .expect("valid fixture"),
+            organization_id: Some(OrganizationId::new("organization-one").expect("valid fixture")),
+            session_id: SessionId::new("session-one").expect("valid fixture"),
+            request_id: RequestId::new("request-spin").expect("valid fixture"),
+            assurance: AuthenticationAssurance::Aal1,
+            issued_at_unix_seconds: now.saturating_sub(10),
+            expires_at_unix_seconds: now.saturating_add(3_600),
+            decision_id: None,
+            policy_revision: None,
+        })
+        .expect("valid context");
+        let context = VerifiedRequestContext::from_verified(
+            auth,
+            AuthorizationSnapshot::new(
+                ["document.read"],
+                [RoleId::new("reader").expect("valid fixture")],
+                None,
+                None,
+            )
+            .expect("valid snapshot"),
+        );
+        let codec = TrustedContextCodec::new("fullstack-app", [7; 32])
+            .expect("valid codec")
+            .with_max_age_seconds(30)
+            .expect("max age");
+        let valid = codec
+            .seal(&context, &Method::GET, "/guest", now)
+            .expect("valid envelope");
+        let expired = codec
+            .seal(&context, &Method::GET, "/guest", now.saturating_sub(120))
+            .expect("expired envelope");
+        assert!(valid.contains('.'));
+        assert_ne!(valid, expired);
+        let Ok(path) = std::env::var("SPIN_ENVELOPE_OUT") else {
+            return;
+        };
+        let mut tampered = valid.clone().into_bytes();
+        let last = tampered.last_mut().expect("signature byte");
+        *last = if *last == b'A' { b'B' } else { b'A' };
+        let tampered = String::from_utf8(tampered).expect("ascii envelope");
+        std::fs::write(
+            path,
+            format!("valid {valid}\nexpired {expired}\ntampered {tampered}\n"),
+        )
+        .expect("envelope file");
+    }
+
     fn sealed_context() -> (TrustedContextCodec, VerifiedRequestContext, String) {
         let request = Request::builder()
             .method(Method::POST)
