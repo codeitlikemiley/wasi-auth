@@ -52,18 +52,27 @@ fi
 expected_imports="${report}.expected-imports"
 actual_imports="${report}.actual-imports"
 cat >"${expected_imports}" <<EOF
-wasi:cli/environment@0.2.6
+wasi:cli/environment@0.2.12
 wasi:cli/environment@${wasi_http_version}
-wasi:cli/exit@0.2.6
-wasi:cli/stderr@0.2.6
+wasi:cli/exit@0.2.12
+wasi:cli/stderr@0.2.12
+wasi:cli/stdin@0.2.12
+wasi:cli/stdout@0.2.12
+wasi:cli/terminal-input@0.2.12
+wasi:cli/terminal-output@0.2.12
+wasi:cli/terminal-stderr@0.2.12
+wasi:cli/terminal-stdin@0.2.12
+wasi:cli/terminal-stdout@0.2.12
+wasi:clocks/monotonic-clock@0.2.12
 wasi:clocks/monotonic-clock@${wasi_http_version}
 wasi:clocks/types@${wasi_http_version}
 wasi:http/client@${wasi_http_version}
 wasi:http/handler@${wasi_http_version}
 wasi:http/types@${wasi_http_version}
-wasi:io/error@0.2.6
-wasi:io/streams@0.2.6
-wasi:random/insecure-seed@0.2.6
+wasi:io/error@0.2.12
+wasi:io/poll@0.2.12
+wasi:io/streams@0.2.12
+wasi:random/insecure-seed@0.2.12
 EOF
 grep -E '^[[:space:]]+import ' "${report}" \
     | sed -E 's/^[[:space:]]+import //; s/;$//' \
@@ -107,14 +116,23 @@ fi
 cedar_expected="${cedar_report}.expected-imports"
 cedar_actual="${cedar_report}.actual-imports"
 cat >"${cedar_expected}" <<EOF
-wasi:cli/environment@0.2.6
+wasi:cli/environment@0.2.12
 wasi:cli/environment@${wasi_http_version}
-wasi:cli/exit@0.2.6
-wasi:cli/stderr@0.2.6
+wasi:cli/exit@0.2.12
+wasi:cli/stderr@0.2.12
+wasi:cli/stdin@0.2.12
+wasi:cli/stdout@0.2.12
+wasi:cli/terminal-input@0.2.12
+wasi:cli/terminal-output@0.2.12
+wasi:cli/terminal-stderr@0.2.12
+wasi:cli/terminal-stdin@0.2.12
+wasi:cli/terminal-stdout@0.2.12
+wasi:clocks/monotonic-clock@0.2.12
 wasi:http/types@${wasi_http_version}
-wasi:io/error@0.2.6
-wasi:io/streams@0.2.6
-wasi:random/insecure-seed@0.2.6
+wasi:io/error@0.2.12
+wasi:io/poll@0.2.12
+wasi:io/streams@0.2.12
+wasi:random/insecure-seed@0.2.12
 EOF
 grep -E '^[[:space:]]+import ' "${cedar_report}" \
     | sed -E 's/^[[:space:]]+import //; s/;$//' \
@@ -164,17 +182,26 @@ fi
 spicedb_expected="${spicedb_report}.expected-imports"
 spicedb_actual="${spicedb_report}.actual-imports"
 cat >"${spicedb_expected}" <<EOF
-wasi:cli/environment@0.2.6
+wasi:cli/environment@0.2.12
 wasi:cli/environment@${wasi_http_version}
-wasi:cli/exit@0.2.6
-wasi:cli/stderr@0.2.6
+wasi:cli/exit@0.2.12
+wasi:cli/stderr@0.2.12
+wasi:cli/stdin@0.2.12
+wasi:cli/stdout@0.2.12
+wasi:cli/terminal-input@0.2.12
+wasi:cli/terminal-output@0.2.12
+wasi:cli/terminal-stderr@0.2.12
+wasi:cli/terminal-stdin@0.2.12
+wasi:cli/terminal-stdout@0.2.12
+wasi:clocks/monotonic-clock@0.2.12
 wasi:clocks/monotonic-clock@${wasi_http_version}
 wasi:clocks/types@${wasi_http_version}
 wasi:http/client@${wasi_http_version}
 wasi:http/types@${wasi_http_version}
-wasi:io/error@0.2.6
-wasi:io/streams@0.2.6
-wasi:random/insecure-seed@0.2.6
+wasi:io/error@0.2.12
+wasi:io/poll@0.2.12
+wasi:io/streams@0.2.12
+wasi:random/insecure-seed@0.2.12
 EOF
 grep -E '^[[:space:]]+import ' "${spicedb_report}" \
     | sed -E 's/^[[:space:]]+import //; s/;$//' \

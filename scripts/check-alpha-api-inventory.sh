@@ -30,7 +30,9 @@ run_expected_alpha_break() {
     local status=$?
     set -e
 
-    if [[ "${status}" -ne 1 ]]; then
+    # cargo-semver-checks 0.49+ exits 100 when lints fail and 101 on a tool
+    # error. The older 0.48 gate used exit 1 for the same lint failure.
+    if [[ "${status}" -ne 100 ]]; then
         cat "${output}" >&2
         echo "error: expected an internal-alpha API diagnostic for ${package}, found exit ${status}" >&2
         exit 1

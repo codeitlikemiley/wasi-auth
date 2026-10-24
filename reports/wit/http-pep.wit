@@ -7,12 +7,21 @@ world root {
   import wasi:http/client@0.3.0;
   import wasi:clocks/monotonic-clock@0.3.0;
   import wasi:cli/environment@0.3.0;
-  import wasi:io/error@0.2.6;
-  import wasi:io/streams@0.2.6;
-  import wasi:cli/environment@0.2.6;
-  import wasi:cli/exit@0.2.6;
-  import wasi:cli/stderr@0.2.6;
-  import wasi:random/insecure-seed@0.2.6;
+  import wasi:io/poll@0.2.12;
+  import wasi:clocks/monotonic-clock@0.2.12;
+  import wasi:io/error@0.2.12;
+  import wasi:io/streams@0.2.12;
+  import wasi:cli/stdout@0.2.12;
+  import wasi:cli/stderr@0.2.12;
+  import wasi:cli/stdin@0.2.12;
+  import wasi:cli/environment@0.2.12;
+  import wasi:cli/exit@0.2.12;
+  import wasi:cli/terminal-input@0.2.12;
+  import wasi:cli/terminal-output@0.2.12;
+  import wasi:cli/terminal-stdin@0.2.12;
+  import wasi:cli/terminal-stdout@0.2.12;
+  import wasi:cli/terminal-stderr@0.2.12;
+  import wasi:random/insecure-seed@0.2.12;
 
   export wasi:http/handler@0.3.0;
 }
@@ -49,6 +58,18 @@ package wasi:http@0.3.0 {
       set-status-code: func(status-code: status-code) -> result;
       get-headers: func() -> headers;
       consume-body: static func(this: response, res: future<result<_, error-code>>) -> tuple<stream<u8>, future<result<option<trailers>, error-code>>>;
+    }
+
+    resource fields {
+      from-list: static func(entries: list<tuple<field-name, field-value>>) -> result<fields, header-error>;
+      copy-all: func() -> list<tuple<field-name, field-value>>;
+    }
+
+    resource request-options {
+      constructor();
+      set-connect-timeout: func(duration: option<duration>) -> result<_, request-options-error>;
+      set-first-byte-timeout: func(duration: option<duration>) -> result<_, request-options-error>;
+      set-between-bytes-timeout: func(duration: option<duration>) -> result<_, request-options-error>;
     }
 
     record DNS-error-payload {
@@ -108,27 +129,23 @@ package wasi:http@0.3.0 {
       internal-error(option<string>),
     }
 
-    resource fields {
-      from-list: static func(entries: list<tuple<field-name, field-value>>) -> result<fields, header-error>;
-      copy-all: func() -> list<tuple<field-name, field-value>>;
-    }
-
-    resource request-options {
-      constructor();
-      set-connect-timeout: func(duration: option<duration>) -> result<_, request-options-error>;
-      set-first-byte-timeout: func(duration: option<duration>) -> result<_, request-options-error>;
-      set-between-bytes-timeout: func(duration: option<duration>) -> result<_, request-options-error>;
-    }
+    type trailers = fields;
 
     type headers = fields;
 
-    type trailers = fields;
+    variant scheme {
+      HTTP,
+      HTTPS,
+      other(string),
+    }
 
     variant request-options-error {
       not-supported,
       immutable,
       other(option<string>),
     }
+
+    type status-code = u16;
 
     type field-name = string;
 
@@ -154,14 +171,6 @@ package wasi:http@0.3.0 {
       patch,
       other(string),
     }
-
-    variant scheme {
-      HTTP,
-      HTTPS,
-      other(string),
-    }
-
-    type status-code = u16;
   }
   interface handler {
     use types.{request, response, error-code};
@@ -183,17 +192,28 @@ package wasi:cli@0.3.0 {
 }
 
 
-package wasi:io@0.2.6 {
-  interface error {
-    resource error {
-      to-debug-string: func() -> string;
+package wasi:io@0.2.12 {
+  interface poll {
+    resource pollable {
+      block: func();
     }
+
+    poll: func(in: list<borrow<pollable>>) -> list<u32>;
+  }
+  interface error {
+    resource error;
   }
   interface streams {
     use error.{error};
+    use poll.{pollable};
+
+    resource input-stream;
 
     resource output-stream {
-      blocking-write-and-flush: func(contents: list<u8>) -> result<_, stream-error>;
+      check-write: func() -> result<u64, stream-error>;
+      write: func(contents: list<u8>) -> result<_, stream-error>;
+      blocking-flush: func() -> result<_, stream-error>;
+      subscribe: func() -> pollable;
     }
 
     variant stream-error {
@@ -204,22 +224,64 @@ package wasi:io@0.2.6 {
 }
 
 
-package wasi:cli@0.2.6 {
+package wasi:clocks@0.2.12 {
+  interface monotonic-clock {
+    use wasi:io/poll@0.2.12.{pollable};
+
+    type duration = u64;
+
+    subscribe-duration: func(when: duration) -> pollable;
+  }
+}
+
+
+package wasi:cli@0.2.12 {
+  interface stdout {
+    use wasi:io/streams@0.2.12.{output-stream};
+
+    get-stdout: func() -> output-stream;
+  }
+  interface stderr {
+    use wasi:io/streams@0.2.12.{output-stream};
+
+    get-stderr: func() -> output-stream;
+  }
+  interface stdin {
+    use wasi:io/streams@0.2.12.{input-stream};
+
+    get-stdin: func() -> input-stream;
+  }
   interface environment {
     get-environment: func() -> list<tuple<string, string>>;
   }
   interface exit {
     exit: func(status: result);
   }
-  interface stderr {
-    use wasi:io/streams@0.2.6.{output-stream};
+  interface terminal-input {
+    resource terminal-input;
+  }
+  interface terminal-output {
+    resource terminal-output;
+  }
+  interface terminal-stdin {
+    use terminal-input.{terminal-input};
 
-    get-stderr: func() -> output-stream;
+    get-terminal-stdin: func() -> option<terminal-input>;
+  }
+  interface terminal-stdout {
+    use terminal-output.{terminal-output};
+
+    get-terminal-stdout: func() -> option<terminal-output>;
+  }
+  interface terminal-stderr {
+    use terminal-output.{terminal-output};
+
+    get-terminal-stderr: func() -> option<terminal-output>;
   }
 }
 
 
-package wasi:random@0.2.6 {
+package wasi:random@0.2.12 {
   interface insecure-seed {
     insecure-seed: func() -> tuple<u64, u64>;
   }
