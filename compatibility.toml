@@ -81,11 +81,11 @@ cedar_policy = "4.11.2"
 [dependencies]
 wasi_http_middleware = "0.2.0-alpha.3"
 wasi_http_middleware_repository = "https://github.com/codeitlikemiley/wasi-http-middleware"
-# Stabilization commit on gol/stabilize-middleware-contracts-894a. This is not
-# an ancestor of wasi-auth. The next published tag is v0.2.0-alpha.4; until
-# that tag exists, consumers pin this revision. Crate version stays
-# 0.2.0-alpha.3 because that version already describes 61b4199.
-wasi_http_middleware_revision = "896f8f5426b1bdc6d208367d0ac8dbf44146dfda"
+# Head of wasi-http-middleware pull request 1. Baseline security and CORS
+# response fields are written only when absent. The next published tag is
+# v0.2.0-alpha.4; until that tag exists, consumers pin this revision. Crate
+# version stays 0.2.0-alpha.3.
+wasi_http_middleware_revision = "3df96c21a7906b885e67229e9a7c8c01b6497109"
 
 [support]
 wasmtime_final_wasi = true

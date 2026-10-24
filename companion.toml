@@ -76,7 +76,7 @@ direct = true
 [[crate]]
 package = "wasi-http-authn"
 repository = "https://github.com/codeitlikemiley/wasi-http-middleware"
-rev = "896f8f5426b1bdc6d208367d0ac8dbf44146dfda"
+rev = "3df96c21a7906b885e67229e9a7c8c01b6497109"
 version = "0.2.0-alpha.3"
 workspace = "wasi-http-middleware"
 publish = true
@@ -85,7 +85,7 @@ direct = true
 [[crate]]
 package = "wasi-http-metadata"
 repository = "https://github.com/codeitlikemiley/wasi-http-middleware"
-rev = "896f8f5426b1bdc6d208367d0ac8dbf44146dfda"
+rev = "3df96c21a7906b885e67229e9a7c8c01b6497109"
 version = "0.2.0-alpha.3"
 workspace = "wasi-http-middleware"
 publish = true
@@ -94,7 +94,7 @@ direct = false
 [[crate]]
 package = "wasi-http-policy-core"
 repository = "https://github.com/codeitlikemiley/wasi-http-middleware"
-rev = "896f8f5426b1bdc6d208367d0ac8dbf44146dfda"
+rev = "3df96c21a7906b885e67229e9a7c8c01b6497109"
 version = "0.2.0-alpha.3"
 workspace = "wasi-http-middleware"
 publish = true

@@ -45,10 +45,10 @@ server_fn = { version = "=0.8.13", default-features = false, features = ["axum-n
 thiserror = "2.0.17"
 wasi-authz-contract = { path = "crates/wasi-authz-contract", version = "=0.1.0-rc.5" }
 wasi-authz-client = { path = "crates/wasi-authz-client", version = "=0.1.0-rc.5" }
-wasi-http-metadata = { git = "https://github.com/codeitlikemiley/wasi-http-middleware", rev = "896f8f5426b1bdc6d208367d0ac8dbf44146dfda", version = "=0.2.0-alpha.3" }
-wasi-http-policy-core = { git = "https://github.com/codeitlikemiley/wasi-http-middleware", rev = "896f8f5426b1bdc6d208367d0ac8dbf44146dfda", version = "=0.2.0-alpha.3" }
-wasi-http-middleware-component-support = { git = "https://github.com/codeitlikemiley/wasi-http-middleware", rev = "896f8f5426b1bdc6d208367d0ac8dbf44146dfda", version = "=0.2.0-alpha.3" }
-wasi-http-authn = { git = "https://github.com/codeitlikemiley/wasi-http-middleware", rev = "896f8f5426b1bdc6d208367d0ac8dbf44146dfda", version = "=0.2.0-alpha.3" }
+wasi-http-metadata = { git = "https://github.com/codeitlikemiley/wasi-http-middleware", rev = "3df96c21a7906b885e67229e9a7c8c01b6497109", version = "=0.2.0-alpha.3" }
+wasi-http-policy-core = { git = "https://github.com/codeitlikemiley/wasi-http-middleware", rev = "3df96c21a7906b885e67229e9a7c8c01b6497109", version = "=0.2.0-alpha.3" }
+wasi-http-middleware-component-support = { git = "https://github.com/codeitlikemiley/wasi-http-middleware", rev = "3df96c21a7906b885e67229e9a7c8c01b6497109", version = "=0.2.0-alpha.3" }
+wasi-http-authn = { git = "https://github.com/codeitlikemiley/wasi-http-middleware", rev = "3df96c21a7906b885e67229e9a7c8c01b6497109", version = "=0.2.0-alpha.3" }
 wasip3 = { version = "=0.9.0+wasi-0.3.0", features = ["http-compat"] }
 # Match the generator embedded by tagged `wasip3 0.9.0+wasi-0.3.0` and by
 # the canonical middleware revision above.
