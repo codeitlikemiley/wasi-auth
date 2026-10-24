@@ -1,8 +1,14 @@
 //! Native trusted-ingress authentication and HTTP security policy.
+//!
+//! The HMAC envelope in [`AUTH_CONTEXT_HEADER`] is the only context this crate
+//! will turn into a [`VerifiedAuthContext`]. The portable middleware context
+//! uses the same header name and a different, unsigned encoding. Those bytes
+//! are not a credential here and never install authority.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error as StdError;
 use std::future::Future;
+use std::sync::Mutex;
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use hmac::{Hmac, Mac};
@@ -10,7 +16,7 @@ use http::header::{
     ACCESS_CONTROL_ALLOW_CREDENTIALS, ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS,
     ACCESS_CONTROL_ALLOW_ORIGIN, ACCESS_CONTROL_REQUEST_HEADERS, ACCESS_CONTROL_REQUEST_METHOD,
     AUTHORIZATION, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_SECURITY_POLICY, COOKIE, ORIGIN,
-    REFERRER_POLICY, STRICT_TRANSPORT_SECURITY, VARY, X_CONTENT_TYPE_OPTIONS,
+    PROXY_AUTHORIZATION, REFERRER_POLICY, STRICT_TRANSPORT_SECURITY, VARY, X_CONTENT_TYPE_OPTIONS,
 };
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Request, Response, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -27,6 +33,11 @@ use crate::context::{
 
 /// Default bounded body size for auth, REST, and unary gRPC requests.
 pub const DEFAULT_MAX_REQUEST_BODY_BYTES: usize = 256 * 1024;
+/// Maximum forwarded body for one streaming request.
+///
+/// This is 100 messages at [`DEFAULT_MAX_REQUEST_BODY_BYTES`], matching the
+/// gRPC stream message budget. It is not a second authentication policy.
+pub const DEFAULT_MAX_STREAM_BODY_BYTES: usize = 100 * DEFAULT_MAX_REQUEST_BODY_BYTES;
 /// Canonical request correlation header.
 pub const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-request-id");
 /// Internal identity metadata header removed from every public request.
@@ -36,8 +47,16 @@ pub const MAX_TRUSTED_CONTEXT_HEADER_BYTES: usize = 32 * 1024;
 const TRUSTED_CONTEXT_VERSION: u8 = 1;
 const DEFAULT_TRUSTED_CONTEXT_MAX_AGE_SECONDS: u64 = 5;
 const TRUSTED_CONTEXT_DOMAIN: &[u8] = b"wasi-auth:trusted-context:v1\0";
+const RESERVED_AUTH_PREFIX: &str = "x-wasi-auth-";
 const LEGACY_SESSION_HEADER: HeaderName = HeaderName::from_static("x-auth-session");
 const LEGACY_ADMIN_HEADER: HeaderName = HeaderName::from_static("x-auth-admin-token");
+const HOST_SESSION_COOKIE: &str = "__Host-session";
+const DEVELOPMENT_SESSION_COOKIE: &str = "wasi_auth_dev_session";
+const CANONICAL_REFERRER_POLICY: &str = "same-origin";
+const CANONICAL_CONTENT_SECURITY_POLICY: &str =
+    "default-src 'self'; frame-ancestors 'none'; base-uri 'self'";
+const CANONICAL_CONTENT_TYPE_OPTIONS: &str = "nosniff";
+const CANONICAL_HSTS: &str = "max-age=31536000; includeSubDomains";
 /// Browser CSRF header paired with the host-only CSRF cookie.
 pub const CSRF_HEADER: HeaderName = HeaderName::from_static("x-csrf-token");
 
@@ -57,6 +76,15 @@ pub enum TrustedContextError {
     /// The envelope was issued for another request boundary.
     #[error("trusted-context request binding does not match")]
     BindingMismatch,
+    /// This guest process already accepted this exact envelope.
+    ///
+    /// The MAC still binds audience, method, path, and request ID, so the
+    /// captured bytes cannot authorize a different request. A second
+    /// presentation of the same bytes fails closed in this process. Another
+    /// process that shares the key has its own window and can accept the
+    /// envelope until the freshness limit. There is no cross-instance store.
+    #[error("trusted-context envelope was already accepted")]
+    Replayed,
     /// The signed values violate the bounded request-context contract.
     #[error("trusted-context payload is invalid")]
     InvalidContext,
@@ -74,7 +102,7 @@ pub struct TrustedContextCodec {
 }
 
 impl TrustedContextCodec {
-    /// Constructs a codec with a five-second replay window.
+    /// Constructs a codec with a five-second freshness window.
     ///
     /// # Errors
     ///
@@ -95,7 +123,7 @@ impl TrustedContextCodec {
         })
     }
 
-    /// Overrides the bounded replay window.
+    /// Overrides the bounded freshness window.
     ///
     /// # Errors
     ///
@@ -182,10 +210,12 @@ impl TrustedContextCodec {
     /// Opens and reconstructs a verified context only when signature,
     /// freshness, audience, method, path, and request ID all match.
     ///
+    /// This check does not consume the envelope. [`accept_signed_trusted_context`]
+    /// is what rejects a second presentation in this process.
+    ///
     /// # Errors
     ///
-    /// Fails closed for malformed, stale, replayed-across-boundary, or invalid
-    /// context data.
+    /// Fails closed for malformed, stale, rebound, or invalid context data.
     pub fn open(
         &self,
         envelope: &str,
@@ -202,14 +232,14 @@ impl TrustedContextCodec {
             .split_once('.')
             .filter(|(_, signature)| !signature.contains('.'))
             .ok_or(TrustedContextError::InvalidEnvelope)?;
-        let signature = URL_SAFE_NO_PAD
+        let mut signature = URL_SAFE_NO_PAD
             .decode(signature)
             .map_err(|_| TrustedContextError::InvalidEnvelope)?;
         let mut verifier = self.mac()?;
         verifier.update(payload.as_bytes());
-        verifier
-            .verify_slice(&signature)
-            .map_err(|_| TrustedContextError::InvalidEnvelope)?;
+        let verification = verifier.verify_slice(&signature);
+        signature.zeroize();
+        verification.map_err(|_| TrustedContextError::InvalidEnvelope)?;
         let payload = URL_SAFE_NO_PAD
             .decode(payload)
             .map_err(|_| TrustedContextError::InvalidEnvelope)?;
@@ -418,9 +448,18 @@ impl CorsConfig {
 
     /// Applies simple-request CORS response headers for an allowed origin.
     ///
-    /// Returns `false` without adding headers when the origin is absent or not
-    /// allowed.
+    /// Returns `false` without adding headers when the origin is absent, not
+    /// allowed, or the response already carries CORS headers from another
+    /// policy. An existing allow-origin is left unchanged so two CORS policies
+    /// cannot be composed onto one response.
     pub fn apply<B>(&self, request_headers: &HeaderMap, response: &mut Response<B>) -> bool {
+        if response.headers().contains_key(ACCESS_CONTROL_ALLOW_ORIGIN)
+            || response
+                .headers()
+                .contains_key(ACCESS_CONTROL_ALLOW_CREDENTIALS)
+        {
+            return false;
+        }
         let Some(origin) = request_headers
             .get(ORIGIN)
             .and_then(|value| value.to_str().ok())
@@ -562,13 +601,22 @@ where
 }
 
 /// Credential extracted from the public HTTP request.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum Credential {
     /// Authorization bearer token.
     Bearer(String),
     /// Host-only browser session cookie.
     SessionCookie(String),
+}
+
+impl std::fmt::Debug for Credential {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Bearer(_) => formatter.write_str("Bearer([REDACTED])"),
+            Self::SessionCookie(_) => formatter.write_str("SessionCookie([REDACTED])"),
+        }
+    }
 }
 
 /// Session result returned by a concrete credential authenticator.
@@ -802,11 +850,284 @@ where
     }
 }
 
+/// Failure while accepting a signed trusted context at the guest boundary.
+#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
+#[non_exhaustive]
+pub enum GuestBoundaryError {
+    /// A verified context was already installed for this request.
+    #[error("verified request context is already installed")]
+    DuplicateContext,
+    /// The request carried both a signed context and caller credentials.
+    #[error("signed context and caller credentials are both present")]
+    DuplicateAuthentication,
+    /// Credentials arrived without a valid signed envelope.
+    #[error("credentials arrived without a signed trusted context")]
+    CredentialWithoutEnvelope,
+    /// The envelope was missing a binding, expired, forged, or unsigned.
+    #[error(transparent)]
+    Rejected(TrustedContextError),
+}
+
 /// Removes every externally supplied internal identity header.
+///
+/// This includes the signed context header, every other `x-wasi-auth-*`
+/// header, and the legacy session and admin-token headers. Header names are
+/// matched case-insensitively.
 pub fn strip_untrusted_auth_metadata(headers: &mut HeaderMap) {
-    headers.remove(AUTH_CONTEXT_HEADER);
-    headers.remove(LEGACY_SESSION_HEADER);
-    headers.remove(LEGACY_ADMIN_HEADER);
+    let reserved = headers
+        .keys()
+        .filter(|name| is_reserved_identity_header(name))
+        .cloned()
+        .collect::<Vec<_>>();
+    for name in reserved {
+        headers.remove(name);
+    }
+}
+
+/// Removes caller credentials before a request is forwarded to the guest.
+///
+/// Authorization, proxy authorization, and session cookies are credentials.
+/// Other cookies, including the CSRF cookie, are preserved. A cookie header
+/// that is not visible UTF-8 is dropped so a hidden session cookie cannot be
+/// forwarded.
+pub fn strip_forwarded_credentials(headers: &mut HeaderMap) {
+    headers.remove(AUTHORIZATION);
+    headers.remove(PROXY_AUTHORIZATION);
+    let cookies = headers.get_all(COOKIE).iter().cloned().collect::<Vec<_>>();
+    headers.remove(COOKIE);
+    for cookie in cookies {
+        let Ok(text) = cookie.to_str() else {
+            continue;
+        };
+        let kept = text
+            .split(';')
+            .map(str::trim)
+            .filter(|part| !part.is_empty() && !is_session_cookie_pair(part))
+            .collect::<Vec<_>>();
+        let joined = kept.join("; ");
+        if joined.is_empty() {
+            continue;
+        }
+        if let Ok(value) = HeaderValue::from_str(&joined) {
+            headers.append(COOKIE, value);
+        }
+    }
+}
+
+/// Installs one sensitive HMAC envelope and removes caller credentials.
+///
+/// Call this only after trusted ingress has authenticated the request. The
+/// guest recovers authority with [`accept_signed_trusted_context`]. Portable
+/// middleware context bytes are not accepted by that function.
+///
+/// # Errors
+///
+/// Returns [`TrustedContextError::InvalidEnvelope`] when `envelope` is empty,
+/// oversized, or not a single header value.
+pub fn install_signed_guest_context(
+    headers: &mut HeaderMap,
+    envelope: &str,
+) -> Result<(), TrustedContextError> {
+    let mut parts = envelope.split('.');
+    let payload = parts.next().filter(|part| !part.is_empty());
+    let signature = parts.next().filter(|part| !part.is_empty());
+    if envelope.len() > MAX_TRUSTED_CONTEXT_HEADER_BYTES
+        || payload.is_none()
+        || signature.is_none()
+        || parts.next().is_some()
+        || envelope
+            .bytes()
+            .any(|byte| byte.is_ascii_whitespace() || !byte.is_ascii())
+    {
+        return Err(TrustedContextError::InvalidEnvelope);
+    }
+    let mut header =
+        HeaderValue::from_str(envelope).map_err(|_| TrustedContextError::InvalidEnvelope)?;
+    header.set_sensitive(true);
+    strip_untrusted_auth_metadata(headers);
+    strip_forwarded_credentials(headers);
+    headers.insert(AUTH_CONTEXT_HEADER, header);
+    Ok(())
+}
+
+/// Verifies one HMAC trusted-context envelope and installs it in extensions.
+///
+/// Forged headers, the unsigned portable-middleware context, expired or
+/// rebound envelopes, a second presentation of an envelope this process
+/// already accepted, duplicate contexts, and requests that still carry caller
+/// credentials fail closed. Every path removes the wire header and caller
+/// credentials so a later middleware cannot authenticate the request again.
+///
+/// The seen-set is process-local and bounded by the freshness window. A
+/// stateless guest cannot share it with another instance. Ingress still
+/// strips client envelopes, so this defense applies when the guest itself is
+/// reachable with a captured loopback envelope.
+///
+/// `Ok(None)` is an anonymous request: no envelope and no caller credentials.
+///
+/// # Errors
+///
+/// Returns [`GuestBoundaryError`] without installing authority.
+pub fn accept_signed_trusted_context<B>(
+    codec: &TrustedContextCodec,
+    request: &mut Request<B>,
+    now_unix_seconds: u64,
+) -> Result<Option<VerifiedRequestContext>, GuestBoundaryError> {
+    if request
+        .extensions()
+        .get::<VerifiedRequestContext>()
+        .is_some()
+        || request.extensions().get::<VerifiedAuthContext>().is_some()
+    {
+        strip_identity_material(request.headers_mut());
+        return Err(GuestBoundaryError::DuplicateContext);
+    }
+    let envelope = match single_text_header(request.headers(), &AUTH_CONTEXT_HEADER) {
+        Ok(value) => value.map(str::to_owned),
+        Err(error) => {
+            strip_identity_material(request.headers_mut());
+            return Err(GuestBoundaryError::Rejected(error));
+        }
+    };
+    let credentials = has_forwarded_credential(request.headers());
+    let Some(envelope) = envelope else {
+        strip_identity_material(request.headers_mut());
+        return if credentials {
+            Err(GuestBoundaryError::CredentialWithoutEnvelope)
+        } else {
+            Ok(None)
+        };
+    };
+    if credentials {
+        strip_identity_material(request.headers_mut());
+        return Err(GuestBoundaryError::DuplicateAuthentication);
+    }
+    let request_id = match single_text_header(request.headers(), &REQUEST_ID_HEADER) {
+        Ok(Some(value)) => value.to_owned(),
+        Ok(None) | Err(_) => {
+            strip_identity_material(request.headers_mut());
+            return Err(GuestBoundaryError::Rejected(
+                TrustedContextError::BindingMismatch,
+            ));
+        }
+    };
+    let method = request.method().clone();
+    let path = request.uri().path().to_owned();
+    let opened = codec.open(&envelope, &method, &path, &request_id, now_unix_seconds);
+    strip_identity_material(request.headers_mut());
+    let context = opened.map_err(GuestBoundaryError::Rejected)?;
+    consume_accepted_envelope(codec, &envelope, now_unix_seconds)
+        .map_err(GuestBoundaryError::Rejected)?;
+    request.extensions_mut().insert(context.auth().clone());
+    request.extensions_mut().insert(context.clone());
+    Ok(Some(context))
+}
+
+/// Signatures this process has already accepted, retained until the freshness
+/// window that `open` would still allow has ended.
+struct AcceptedEnvelopeWindow {
+    by_signature: BTreeMap<[u8; 32], u64>,
+}
+
+static ACCEPTED_ENVELOPES: Mutex<AcceptedEnvelopeWindow> = Mutex::new(AcceptedEnvelopeWindow {
+    by_signature: BTreeMap::new(),
+});
+
+fn consume_accepted_envelope(
+    codec: &TrustedContextCodec,
+    envelope: &str,
+    now_unix_seconds: u64,
+) -> Result<(), TrustedContextError> {
+    let (_, encoded_signature) = envelope
+        .split_once('.')
+        .ok_or(TrustedContextError::InvalidEnvelope)?;
+    let mut signature = URL_SAFE_NO_PAD
+        .decode(encoded_signature)
+        .map_err(|_| TrustedContextError::InvalidEnvelope)?;
+    if signature.len() != 32 {
+        signature.zeroize();
+        return Err(TrustedContextError::InvalidEnvelope);
+    }
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&signature);
+    signature.zeroize();
+    // `open` allows a seal up to one second ahead of `now`. Keep the signature
+    // until that envelope can no longer pass the freshness check.
+    let fresh_until = now_unix_seconds
+        .saturating_add(1)
+        .saturating_add(codec.max_age_seconds);
+    let mut window = ACCEPTED_ENVELOPES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    window
+        .by_signature
+        .retain(|_, expires_at| *expires_at >= now_unix_seconds);
+    if window.by_signature.contains_key(&key) {
+        key.zeroize();
+        return Err(TrustedContextError::Replayed);
+    }
+    window.by_signature.insert(key, fresh_until);
+    Ok(())
+}
+
+/// Removes identity and credential headers echoed by a downstream response.
+pub fn sanitize_downstream_response<B>(response: &mut Response<B>) {
+    strip_untrusted_auth_metadata(response.headers_mut());
+    response.headers_mut().remove(AUTHORIZATION);
+    response.headers_mut().remove(PROXY_AUTHORIZATION);
+    response.headers_mut().remove(COOKIE);
+}
+
+fn strip_identity_material(headers: &mut HeaderMap) {
+    strip_untrusted_auth_metadata(headers);
+    strip_forwarded_credentials(headers);
+}
+
+fn is_reserved_identity_header(name: &HeaderName) -> bool {
+    let name = name.as_str();
+    name.starts_with(RESERVED_AUTH_PREFIX)
+        || name == LEGACY_SESSION_HEADER.as_str()
+        || name == LEGACY_ADMIN_HEADER.as_str()
+}
+
+fn has_forwarded_credential(headers: &HeaderMap) -> bool {
+    headers.contains_key(AUTHORIZATION)
+        || headers.contains_key(PROXY_AUTHORIZATION)
+        || cookie_header_has_session(headers)
+}
+
+fn cookie_header_has_session(headers: &HeaderMap) -> bool {
+    headers.get_all(COOKIE).iter().any(|value| {
+        value
+            .to_str()
+            .is_ok_and(|text| text.split(';').any(is_session_cookie_pair))
+    })
+}
+
+fn is_session_cookie_pair(part: &str) -> bool {
+    let name = part
+        .trim()
+        .split_once('=')
+        .map(|(name, _)| name.trim())
+        .unwrap_or("");
+    name == HOST_SESSION_COOKIE || name == DEVELOPMENT_SESSION_COOKIE
+}
+
+fn single_text_header<'a>(
+    headers: &'a HeaderMap,
+    name: &HeaderName,
+) -> Result<Option<&'a str>, TrustedContextError> {
+    let mut values = headers.get_all(name).iter();
+    let Some(value) = values.next() else {
+        return Ok(None);
+    };
+    if values.next().is_some() {
+        return Err(TrustedContextError::InvalidEnvelope);
+    }
+    value
+        .to_str()
+        .map(Some)
+        .map_err(|_| TrustedContextError::InvalidEnvelope)
 }
 
 /// Applies mandatory no-store and browser security headers.
@@ -827,11 +1148,19 @@ pub enum ResponseSecurityPolicy {
 }
 
 /// Applies route-specific cache and browser security headers.
+///
+/// A response that already carries a different referrer, CSP, nosniff, or
+/// HSTS value is left untouched. Portable middleware uses
+/// `strict-origin-when-cross-origin`; overwriting it with this crate's
+/// `same-origin` policy would enforce two owners' rules on one response.
 pub fn apply_response_security<B>(
     response: &mut Response<B>,
     policy: ResponseSecurityPolicy,
     secure_transport: bool,
 ) {
+    if foreign_response_security(response.headers()) {
+        return;
+    }
     let headers = response.headers_mut();
     headers.insert(
         CACHE_CONTROL,
@@ -845,45 +1174,120 @@ pub fn apply_response_security<B>(
             }
         },
     );
-    headers.insert(X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
-    headers.insert(REFERRER_POLICY, HeaderValue::from_static("same-origin"));
+    headers.insert(
+        X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static(CANONICAL_CONTENT_TYPE_OPTIONS),
+    );
+    headers.insert(
+        REFERRER_POLICY,
+        HeaderValue::from_static(CANONICAL_REFERRER_POLICY),
+    );
     if policy != ResponseSecurityPolicy::ImmutableAsset {
         headers.insert(
             CONTENT_SECURITY_POLICY,
-            HeaderValue::from_static("default-src 'self'; frame-ancestors 'none'; base-uri 'self'"),
+            HeaderValue::from_static(CANONICAL_CONTENT_SECURITY_POLICY),
         );
     }
     if secure_transport {
         headers.insert(
             STRICT_TRANSPORT_SECURITY,
-            HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+            HeaderValue::from_static(CANONICAL_HSTS),
         );
     } else {
         headers.remove(STRICT_TRANSPORT_SECURITY);
     }
 }
 
+/// Returns whether a response already has conflicting duplicate edge-security
+/// or CORS headers.
+///
+/// One owner may set each policy header. A second appended value means two
+/// policies were enforced and the response must be discarded.
+#[must_use]
+pub fn conflicting_edge_security_headers(headers: &HeaderMap) -> bool {
+    [
+        REFERRER_POLICY,
+        CONTENT_SECURITY_POLICY,
+        STRICT_TRANSPORT_SECURITY,
+        X_CONTENT_TYPE_OPTIONS,
+        ACCESS_CONTROL_ALLOW_ORIGIN,
+        ACCESS_CONTROL_ALLOW_CREDENTIALS,
+        ACCESS_CONTROL_ALLOW_METHODS,
+        ACCESS_CONTROL_ALLOW_HEADERS,
+    ]
+    .into_iter()
+    .any(|name| headers.get_all(name).iter().nth(1).is_some())
+}
+
+fn foreign_response_security(headers: &HeaderMap) -> bool {
+    header_disagrees(headers, REFERRER_POLICY, CANONICAL_REFERRER_POLICY)
+        || header_disagrees(
+            headers,
+            CONTENT_SECURITY_POLICY,
+            CANONICAL_CONTENT_SECURITY_POLICY,
+        )
+        || header_disagrees(
+            headers,
+            X_CONTENT_TYPE_OPTIONS,
+            CANONICAL_CONTENT_TYPE_OPTIONS,
+        )
+        || header_disagrees(headers, STRICT_TRANSPORT_SECURITY, CANONICAL_HSTS)
+}
+
+fn header_disagrees(headers: &HeaderMap, name: HeaderName, expected: &str) -> bool {
+    headers
+        .get_all(name)
+        .iter()
+        .any(|value| value.as_bytes() != expected.as_bytes())
+}
+
+/// Declared `Content-Length` violation.
+#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
+#[non_exhaustive]
+pub enum RequestBodyLimitError {
+    /// The header was duplicated or not a decimal byte count.
+    #[error("request body length is invalid")]
+    Invalid,
+    /// The declared length exceeds the route limit.
+    #[error("request body exceeds its configured limit")]
+    TooLarge,
+}
+
+/// Rejects a duplicated, malformed, or oversized declared body length.
+///
+/// A missing `Content-Length` is allowed. Callers that stream a body must
+/// still count the bytes they forward.
+pub fn enforce_declared_body_limit(
+    headers: &HeaderMap,
+    limit: usize,
+) -> Result<(), RequestBodyLimitError> {
+    let values = headers.get_all(CONTENT_LENGTH);
+    let mut lengths = values.iter();
+    let Some(value) = lengths.next() else {
+        return Ok(());
+    };
+    if lengths.next().is_some() {
+        return Err(RequestBodyLimitError::Invalid);
+    }
+    let length = value
+        .to_str()
+        .ok()
+        .and_then(|text| text.parse::<usize>().ok())
+        .ok_or(RequestBodyLimitError::Invalid)?;
+    if length > limit {
+        return Err(RequestBodyLimitError::TooLarge);
+    }
+    Ok(())
+}
+
 fn validate_content_length<E>(headers: &HeaderMap, limit: usize) -> Result<(), HttpBoundaryError<E>>
 where
     E: StdError + Send + Sync + 'static,
 {
-    let values = headers.get_all(CONTENT_LENGTH);
-    let mut lengths = values.iter();
-    let first = lengths.next();
-    if lengths.next().is_some() {
-        return Err(HttpBoundaryError::InvalidContentLength);
-    }
-    if let Some(value) = first {
-        let length = value
-            .to_str()
-            .ok()
-            .and_then(|text| text.parse::<usize>().ok())
-            .ok_or(HttpBoundaryError::InvalidContentLength)?;
-        if length > limit {
-            return Err(HttpBoundaryError::BodyTooLarge);
-        }
-    }
-    Ok(())
+    enforce_declared_body_limit(headers, limit).map_err(|error| match error {
+        RequestBodyLimitError::Invalid => HttpBoundaryError::InvalidContentLength,
+        RequestBodyLimitError::TooLarge => HttpBoundaryError::BodyTooLarge,
+    })
 }
 
 fn request_id<E>(headers: &HeaderMap) -> Result<RequestId, HttpBoundaryError<E>>
@@ -918,9 +1322,9 @@ where
     if authorization.next().is_some() {
         return Err(HttpBoundaryError::InvalidCredentials);
     }
-    let host_session_cookie = cookie_value(headers, "__Host-session")?;
+    let host_session_cookie = cookie_value(headers, HOST_SESSION_COOKIE)?;
     let development_session_cookie = if allow_development_session_cookie {
-        cookie_value(headers, "wasi_auth_dev_session")?
+        cookie_value(headers, DEVELOPMENT_SESSION_COOKIE)?
     } else {
         None
     };
@@ -1187,5 +1591,514 @@ mod tests {
             ))
         );
         assert!(!response.headers().contains_key(STRICT_TRANSPORT_SECURITY));
+    }
+
+    #[test]
+    fn debug_forms_omit_the_session_identifier() {
+        let (_, context, _) = sealed_context();
+        let rendered = format!("{context:?}");
+        assert!(!rendered.contains("session-one"));
+        assert!(!rendered.contains(context.auth().session_id().as_str()));
+        assert_eq!(
+            format!("{:?}", context.auth().session_id()),
+            "SessionId([REDACTED])"
+        );
+    }
+
+    #[test]
+    fn spin_envelopes_can_be_exported_for_the_host_probe() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_secs();
+        let auth = VerifiedAuthContext::from_validated(ValidatedContextParts {
+            principal: Principal::new(
+                UserId::new("user-one").expect("valid fixture"),
+                "https://issuer.example",
+                false,
+            )
+            .expect("valid fixture"),
+            organization_id: Some(OrganizationId::new("organization-one").expect("valid fixture")),
+            session_id: SessionId::new("session-one").expect("valid fixture"),
+            request_id: RequestId::new("request-spin").expect("valid fixture"),
+            assurance: AuthenticationAssurance::Aal1,
+            issued_at_unix_seconds: now.saturating_sub(10),
+            expires_at_unix_seconds: now.saturating_add(3_600),
+            decision_id: None,
+            policy_revision: None,
+        })
+        .expect("valid context");
+        let context = VerifiedRequestContext::from_verified(
+            auth,
+            AuthorizationSnapshot::new(
+                ["document.read"],
+                [RoleId::new("reader").expect("valid fixture")],
+                None,
+                None,
+            )
+            .expect("valid snapshot"),
+        );
+        let codec = TrustedContextCodec::new("fullstack-app", [7; 32])
+            .expect("valid codec")
+            .with_max_age_seconds(30)
+            .expect("max age");
+        let valid = codec
+            .seal(&context, &Method::GET, "/guest", now)
+            .expect("valid envelope");
+        let expired = codec
+            .seal(&context, &Method::GET, "/guest", now.saturating_sub(120))
+            .expect("expired envelope");
+        assert!(valid.contains('.'));
+        assert_ne!(valid, expired);
+        let Ok(path) = std::env::var("SPIN_ENVELOPE_OUT") else {
+            return;
+        };
+        let mut tampered = valid.clone().into_bytes();
+        let last = tampered.last_mut().expect("signature byte");
+        *last = if *last == b'A' { b'B' } else { b'A' };
+        let tampered = String::from_utf8(tampered).expect("ascii envelope");
+        std::fs::write(
+            path,
+            format!("valid {valid}\nexpired {expired}\ntampered {tampered}\n"),
+        )
+        .expect("envelope file");
+    }
+
+    fn sealed_context() -> (TrustedContextCodec, VerifiedRequestContext, String) {
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check")
+            .header(AUTHORIZATION, "Bearer token")
+            .header(REQUEST_ID_HEADER, "request-signed")
+            .body(())
+            .expect("valid fixture");
+        let ingress = TrustedIngress::new(
+            TrustedIngressConfig::new("https://app.example").expect("valid fixture"),
+            FixtureAuthenticator,
+            FixtureClock,
+        );
+        let context = futures::executor::block_on(
+            ingress.authenticate_request(&request, RoutePolicy::Authenticated),
+        )
+        .expect("trusted request")
+        .expect("authenticated context");
+        let codec = TrustedContextCodec::new("fullstack-app", [7; 32]).expect("valid codec");
+        let envelope = codec
+            .seal(&context, &Method::POST, "/api/authorization/check", 100)
+            .expect("sealed context");
+        (codec, context, envelope)
+    }
+
+    fn portable_middleware_context() -> String {
+        let json = r#"{"version":1,"state":"authenticated","service_id":"orders","audiences":["api://orders"],"principal":{"issuer":"https://idp.example","subject":"admin","roles":["owner"],"scopes":["document.write"]},"decision_id":"decision-forged","policy_revision":"forged"}"#;
+        URL_SAFE_NO_PAD.encode(json)
+    }
+
+    #[test]
+    fn forged_identity_headers_are_stripped_and_do_not_grant_authority() {
+        let (codec, _, _) = sealed_context();
+        let mut request = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check")
+            .header(REQUEST_ID_HEADER, "request-signed")
+            .header("x-wasi-auth-subject", "admin")
+            .header("x-auth-admin-token", "forged-admin")
+            .header("x-auth-session", "forged-session")
+            .body(())
+            .expect("valid fixture");
+        let mixed_case = HeaderName::from_bytes(b"X-Wasi-Auth-Role").expect("valid header");
+        request
+            .headers_mut()
+            .insert(mixed_case.clone(), HeaderValue::from_static("owner"));
+
+        let accepted = accept_signed_trusted_context(&codec, &mut request, 100);
+
+        assert_eq!(accepted, Ok(None));
+        assert!(request.extensions().get::<VerifiedAuthContext>().is_none());
+        assert!(
+            request
+                .extensions()
+                .get::<VerifiedRequestContext>()
+                .is_none()
+        );
+        assert!(!request.headers().contains_key("x-wasi-auth-subject"));
+        assert!(!request.headers().contains_key(mixed_case));
+        assert!(!request.headers().contains_key("x-auth-admin-token"));
+        assert!(!request.headers().contains_key("x-auth-session"));
+    }
+
+    #[test]
+    fn portable_middleware_context_is_not_a_signed_wasi_auth_context() {
+        let (codec, context, envelope) = sealed_context();
+        let portable = portable_middleware_context();
+        assert!(
+            !portable.contains('.'),
+            "portable context is unsigned base64url JSON"
+        );
+        assert!(
+            envelope.contains('.'),
+            "signed context is payload.signature"
+        );
+        assert_ne!(portable, envelope);
+        let mut headers = HeaderMap::new();
+        assert_eq!(
+            install_signed_guest_context(&mut headers, &portable),
+            Err(TrustedContextError::InvalidEnvelope)
+        );
+        assert!(!headers.contains_key(AUTH_CONTEXT_HEADER));
+
+        assert_eq!(
+            codec.open(
+                &portable,
+                &Method::POST,
+                "/api/authorization/check",
+                "request-signed",
+                100,
+            ),
+            Err(TrustedContextError::InvalidEnvelope)
+        );
+        let forged_signature = format!("{portable}.AAAA");
+        assert_eq!(
+            codec.open(
+                &forged_signature,
+                &Method::POST,
+                "/api/authorization/check",
+                "request-signed",
+                100,
+            ),
+            Err(TrustedContextError::InvalidEnvelope)
+        );
+
+        let mut request = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check")
+            .header(REQUEST_ID_HEADER, "request-signed")
+            .header(AUTH_CONTEXT_HEADER, &portable)
+            .body(())
+            .expect("valid fixture");
+        let accepted = accept_signed_trusted_context(&codec, &mut request, 100);
+        assert_eq!(
+            accepted,
+            Err(GuestBoundaryError::Rejected(
+                TrustedContextError::InvalidEnvelope
+            ))
+        );
+        assert!(request.extensions().get::<VerifiedAuthContext>().is_none());
+        assert!(!request.headers().contains_key(AUTH_CONTEXT_HEADER));
+        assert_ne!(
+            context.auth().principal().user_id().as_str(),
+            "admin",
+            "the forged portable subject must not become the verified principal"
+        );
+    }
+
+    #[test]
+    fn signed_context_accepts_once_and_fails_closed_on_expiry_rebind_and_replay() {
+        let (codec, context, envelope) = sealed_context();
+        let mut request = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check?ignored=1")
+            .header(REQUEST_ID_HEADER, "request-signed")
+            .header(AUTHORIZATION, "Bearer token")
+            .header(COOKIE, "__Host-session=session-secret; theme=light")
+            .header(AUTH_CONTEXT_HEADER, &envelope)
+            .body(())
+            .expect("valid fixture");
+
+        assert_eq!(
+            accept_signed_trusted_context(&codec, &mut request, 100),
+            Err(GuestBoundaryError::DuplicateAuthentication)
+        );
+        assert!(
+            request
+                .extensions()
+                .get::<VerifiedRequestContext>()
+                .is_none()
+        );
+        assert!(!request.headers().contains_key(AUTHORIZATION));
+        assert!(!request.headers().contains_key(AUTH_CONTEXT_HEADER));
+
+        let mut request = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check")
+            .header(REQUEST_ID_HEADER, "request-signed")
+            .header(AUTH_CONTEXT_HEADER, &envelope)
+            .body(())
+            .expect("valid fixture");
+        let accepted = accept_signed_trusted_context(&codec, &mut request, 100)
+            .expect("signed context")
+            .expect("authenticated context");
+        assert_eq!(accepted, context);
+        assert_eq!(
+            request.extensions().get::<VerifiedRequestContext>(),
+            Some(&context)
+        );
+        assert!(!request.headers().contains_key(AUTH_CONTEXT_HEADER));
+        assert!(
+            format!("{accepted:?}").contains("[REDACTED]"),
+            "session identifier must not appear in debug output"
+        );
+        assert!(!format!("{accepted:?}").contains("session-one"));
+
+        let mut replayed = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check")
+            .header(REQUEST_ID_HEADER, "request-signed")
+            .header(AUTH_CONTEXT_HEADER, &envelope)
+            .body(())
+            .expect("valid fixture");
+        assert_eq!(
+            accept_signed_trusted_context(&codec, &mut replayed, 100),
+            Err(GuestBoundaryError::Rejected(TrustedContextError::Replayed))
+        );
+        assert!(replayed.extensions().get::<VerifiedAuthContext>().is_none());
+        assert!(!replayed.headers().contains_key(AUTH_CONTEXT_HEADER));
+
+        assert_eq!(
+            accept_signed_trusted_context(&codec, &mut request, 100),
+            Err(GuestBoundaryError::DuplicateContext)
+        );
+        assert_eq!(
+            request.extensions().get::<VerifiedRequestContext>(),
+            Some(&context)
+        );
+
+        let mut rebound = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check")
+            .header(REQUEST_ID_HEADER, "request-replayed")
+            .header(AUTH_CONTEXT_HEADER, &envelope)
+            .body(())
+            .expect("valid fixture");
+        assert_eq!(
+            accept_signed_trusted_context(&codec, &mut rebound, 100),
+            Err(GuestBoundaryError::Rejected(
+                TrustedContextError::BindingMismatch
+            ))
+        );
+        assert!(rebound.extensions().get::<VerifiedAuthContext>().is_none());
+
+        let mut expired = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check")
+            .header(REQUEST_ID_HEADER, "request-signed")
+            .header(AUTH_CONTEXT_HEADER, &envelope)
+            .body(())
+            .expect("valid fixture");
+        assert_eq!(
+            accept_signed_trusted_context(&codec, &mut expired, 106),
+            Err(GuestBoundaryError::Rejected(TrustedContextError::Expired))
+        );
+        assert!(expired.extensions().get::<VerifiedAuthContext>().is_none());
+        assert_eq!(
+            codec.open(
+                &envelope,
+                &Method::POST,
+                "/api/authorization/check",
+                "request-signed",
+                105,
+            ),
+            Ok(context.clone()),
+            "open checks freshness and does not consume the envelope"
+        );
+        assert_eq!(
+            codec.open(
+                &envelope,
+                &Method::POST,
+                "/api/authorization/check",
+                "request-signed",
+                98,
+            ),
+            Err(TrustedContextError::Expired),
+            "a context sealed more than one second in the future is rejected"
+        );
+        let other_key = TrustedContextCodec::new("fullstack-app", [9; 32]).expect("valid codec");
+        assert_eq!(
+            other_key.open(
+                &envelope,
+                &Method::POST,
+                "/api/authorization/check",
+                "request-signed",
+                100,
+            ),
+            Err(TrustedContextError::InvalidEnvelope)
+        );
+    }
+
+    #[test]
+    fn a_different_envelope_is_still_accepted_after_a_replay_rejection() {
+        let (codec, context, _) = sealed_context();
+        let first = codec
+            .seal(&context, &Method::POST, "/api/authorization/check", 150)
+            .expect("first seal");
+        let second = codec
+            .seal(&context, &Method::POST, "/api/authorization/check", 151)
+            .expect("second seal");
+        assert_ne!(first, second);
+
+        let mut request = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check")
+            .header(REQUEST_ID_HEADER, "request-signed")
+            .header(AUTH_CONTEXT_HEADER, &first)
+            .body(())
+            .expect("valid fixture");
+        accept_signed_trusted_context(&codec, &mut request, 150)
+            .expect("first presentation")
+            .expect("authenticated context");
+
+        let mut replayed = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check")
+            .header(REQUEST_ID_HEADER, "request-signed")
+            .header(AUTH_CONTEXT_HEADER, &first)
+            .body(())
+            .expect("valid fixture");
+        assert_eq!(
+            accept_signed_trusted_context(&codec, &mut replayed, 154),
+            Err(GuestBoundaryError::Rejected(TrustedContextError::Replayed))
+        );
+        assert!(replayed.extensions().get::<VerifiedAuthContext>().is_none());
+
+        let mut other = Request::builder()
+            .method(Method::POST)
+            .uri("/api/authorization/check")
+            .header(REQUEST_ID_HEADER, "request-signed")
+            .header(AUTH_CONTEXT_HEADER, &second)
+            .body(())
+            .expect("valid fixture");
+        let accepted = accept_signed_trusted_context(&codec, &mut other, 151)
+            .expect("different envelope")
+            .expect("authenticated context");
+        assert_eq!(accepted, context);
+    }
+
+    #[test]
+    fn guest_install_strips_credentials_and_marks_the_envelope_sensitive() {
+        let (_, _, envelope) = sealed_context();
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, HeaderValue::from_static("Bearer token"));
+        headers.insert(
+            COOKIE,
+            HeaderValue::from_static("__Host-session=secret; theme=light"),
+        );
+        headers.insert("x-wasi-auth-subject", HeaderValue::from_static("admin"));
+
+        install_signed_guest_context(&mut headers, &envelope).expect("install envelope");
+
+        let installed = headers.get(AUTH_CONTEXT_HEADER).expect("signed header");
+        assert_eq!(installed.to_str().expect("text"), envelope);
+        assert!(installed.is_sensitive());
+        assert!(!headers.contains_key(AUTHORIZATION));
+        assert!(!headers.contains_key("x-wasi-auth-subject"));
+        assert_eq!(
+            headers.get(COOKIE).and_then(|value| value.to_str().ok()),
+            Some("theme=light")
+        );
+        assert_eq!(
+            format!("{:?}", Credential::Bearer("token".to_owned())),
+            "Bearer([REDACTED])"
+        );
+    }
+
+    #[test]
+    fn credentials_without_an_envelope_fail_closed() {
+        let (codec, _, _) = sealed_context();
+        let mut request = Request::builder()
+            .header(AUTHORIZATION, "Bearer token")
+            .body(())
+            .expect("valid fixture");
+
+        assert_eq!(
+            accept_signed_trusted_context(&codec, &mut request, 100),
+            Err(GuestBoundaryError::CredentialWithoutEnvelope)
+        );
+        assert!(!request.headers().contains_key(AUTHORIZATION));
+        assert!(request.extensions().get::<VerifiedAuthContext>().is_none());
+    }
+
+    #[test]
+    fn downstream_responses_do_not_echo_identity_headers() {
+        let mut response = Response::builder()
+            .header(AUTH_CONTEXT_HEADER, "payload.signature")
+            .header(AUTHORIZATION, "Bearer token")
+            .header(COOKIE, "__Host-session=secret")
+            .header("x-wasi-auth-subject", "admin")
+            .header(
+                http::header::SET_COOKIE,
+                "__Host-session=next; Secure; HttpOnly",
+            )
+            .body(())
+            .expect("valid fixture");
+
+        sanitize_downstream_response(&mut response);
+
+        assert!(!response.headers().contains_key(AUTH_CONTEXT_HEADER));
+        assert!(!response.headers().contains_key(AUTHORIZATION));
+        assert!(!response.headers().contains_key(COOKIE));
+        assert!(!response.headers().contains_key("x-wasi-auth-subject"));
+        assert!(response.headers().contains_key(http::header::SET_COOKIE));
+    }
+
+    #[test]
+    fn cors_and_security_headers_do_not_overwrite_a_foreign_policy() {
+        let config = CorsConfig::new(["https://app.example"], ["GET"], ["content-type"], true)
+            .expect("valid cors");
+        let mut response = Response::new(());
+        response.headers_mut().insert(
+            ACCESS_CONTROL_ALLOW_ORIGIN,
+            HeaderValue::from_static("https://middleware.example"),
+        );
+        let request = Request::builder()
+            .header(ORIGIN, "https://app.example")
+            .body(())
+            .expect("valid fixture");
+
+        assert!(!config.apply(request.headers(), &mut response));
+        assert_eq!(
+            response.headers().get(ACCESS_CONTROL_ALLOW_ORIGIN),
+            Some(&HeaderValue::from_static("https://middleware.example"))
+        );
+        assert!(
+            !response
+                .headers()
+                .contains_key(ACCESS_CONTROL_ALLOW_CREDENTIALS)
+        );
+
+        response.headers_mut().insert(
+            REFERRER_POLICY,
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        );
+        apply_response_security(&mut response, ResponseSecurityPolicy::Sensitive, true);
+        assert_eq!(
+            response.headers().get(REFERRER_POLICY),
+            Some(&HeaderValue::from_static("strict-origin-when-cross-origin"))
+        );
+        assert!(!response.headers().contains_key(CONTENT_SECURITY_POLICY));
+        assert!(!response.headers().contains_key(CACHE_CONTROL));
+
+        response
+            .headers_mut()
+            .append(REFERRER_POLICY, HeaderValue::from_static("same-origin"));
+        assert!(conflicting_edge_security_headers(response.headers()));
+    }
+
+    #[test]
+    fn declared_body_limit_rejects_duplicates_and_oversized_lengths() {
+        let mut headers = HeaderMap::new();
+        headers.append(CONTENT_LENGTH, HeaderValue::from_static("4"));
+        headers.append(CONTENT_LENGTH, HeaderValue::from_static("4"));
+        assert_eq!(
+            enforce_declared_body_limit(&headers, 8),
+            Err(RequestBodyLimitError::Invalid)
+        );
+        headers = HeaderMap::new();
+        headers.insert(CONTENT_LENGTH, HeaderValue::from_static("9"));
+        assert_eq!(
+            enforce_declared_body_limit(&headers, 8),
+            Err(RequestBodyLimitError::TooLarge)
+        );
+        headers.insert(CONTENT_LENGTH, HeaderValue::from_static("8"));
+        assert_eq!(enforce_declared_body_limit(&headers, 8), Ok(()));
     }
 }

@@ -45,8 +45,11 @@ It forwards streaming bodies and trailers without buffering, so Tonic unary,
 server-streaming, client-streaming, and bidirectional-streaming preserve
 backpressure and terminal status. Spin listens only on loopback or an
 equivalent private pod network. A five-second HMAC envelope is bound to the
-audience, method, path, and request ID; the guest strips external copies and
-production rejects credential-bearing requests without a valid envelope.
+audience, method, path, and request ID. The guest accepts each envelope once
+in that process and strips external copies. Another instance that shares the
+key can still accept the envelope until it expires. Production rejects
+credential-bearing requests without a valid envelope. Ingress strips client
+envelopes before it seals its own.
 
 ## Application assembly
 
