@@ -1404,6 +1404,15 @@ mod tests {
     use super::*;
     use crate::context::{RoleId, UserId};
 
+    /// Parallel tests share one process-local window and pass different
+    /// synthetic clocks. A later clock would prune an entry another test
+    /// still needs, so tests that consume an envelope take this lock.
+    fn serialize_replay_window() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     #[derive(Debug, Error)]
     #[error("fixture error")]
     struct FixtureError;
@@ -1794,6 +1803,7 @@ mod tests {
 
     #[test]
     fn signed_context_accepts_once_and_fails_closed_on_expiry_rebind_and_replay() {
+        let _replay_window = serialize_replay_window();
         let (codec, context, envelope) = sealed_context();
         let mut request = Request::builder()
             .method(Method::POST)
@@ -1927,6 +1937,7 @@ mod tests {
 
     #[test]
     fn a_different_envelope_is_still_accepted_after_a_replay_rejection() {
+        let _replay_window = serialize_replay_window();
         let (codec, context, _) = sealed_context();
         let first = codec
             .seal(&context, &Method::POST, "/api/authorization/check", 150)
