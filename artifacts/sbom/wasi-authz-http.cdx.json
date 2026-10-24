@@ -3,7 +3,7 @@
   "components": [
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=896f8f5426b1bdc6d208367d0ac8dbf44146dfda#wasi-http-metadata@0.2.0-alpha.3",
+      "bom-ref": "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=3df96c21a7906b885e67229e9a7c8c01b6497109#wasi-http-metadata@0.2.0-alpha.3",
       "description": "Trusted HTTP metadata contract for composed WASI middleware",
       "externalReferences": [
         {
@@ -17,14 +17,14 @@
         }
       ],
       "name": "wasi-http-metadata",
-      "purl": "pkg:cargo/wasi-http-metadata@0.2.0-alpha.3?vcs_url=git%2Bhttps://github.com/codeitlikemiley/wasi-http-middleware%40896f8f5426b1bdc6d208367d0ac8dbf44146dfda",
+      "purl": "pkg:cargo/wasi-http-metadata@0.2.0-alpha.3?vcs_url=git%2Bhttps://github.com/codeitlikemiley/wasi-http-middleware%403df96c21a7906b885e67229e9a7c8c01b6497109",
       "scope": "required",
       "type": "library",
       "version": "0.2.0-alpha.3"
     },
     {
       "author": "Uriah Galang <codeitlikemiley@gmail.com>",
-      "bom-ref": "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=896f8f5426b1bdc6d208367d0ac8dbf44146dfda#wasi-http-policy-core@0.2.0-alpha.3",
+      "bom-ref": "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=3df96c21a7906b885e67229e9a7c8c01b6497109#wasi-http-policy-core@0.2.0-alpha.3",
       "description": "Pure policy engine for reusable WASI HTTP middleware components",
       "externalReferences": [
         {
@@ -38,7 +38,7 @@
         }
       ],
       "name": "wasi-http-policy-core",
-      "purl": "pkg:cargo/wasi-http-policy-core@0.2.0-alpha.3?vcs_url=git%2Bhttps://github.com/codeitlikemiley/wasi-http-middleware%40896f8f5426b1bdc6d208367d0ac8dbf44146dfda",
+      "purl": "pkg:cargo/wasi-http-policy-core@0.2.0-alpha.3?vcs_url=git%2Bhttps://github.com/codeitlikemiley/wasi-http-middleware%403df96c21a7906b885e67229e9a7c8c01b6497109",
       "scope": "required",
       "type": "library",
       "version": "0.2.0-alpha.3"
@@ -1698,7 +1698,7 @@
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18"
       ],
-      "ref": "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=896f8f5426b1bdc6d208367d0ac8dbf44146dfda#wasi-http-metadata@0.2.0-alpha.3"
+      "ref": "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=3df96c21a7906b885e67229e9a7c8c01b6497109#wasi-http-metadata@0.2.0-alpha.3"
     },
     {
       "dependsOn": [
@@ -1706,9 +1706,9 @@
         "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
-        "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=896f8f5426b1bdc6d208367d0ac8dbf44146dfda#wasi-http-metadata@0.2.0-alpha.3"
+        "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=3df96c21a7906b885e67229e9a7c8c01b6497109#wasi-http-metadata@0.2.0-alpha.3"
       ],
-      "ref": "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=896f8f5426b1bdc6d208367d0ac8dbf44146dfda#wasi-http-policy-core@0.2.0-alpha.3"
+      "ref": "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=3df96c21a7906b885e67229e9a7c8c01b6497109#wasi-http-policy-core@0.2.0-alpha.3"
     },
     {
       "dependsOn": [
@@ -1735,8 +1735,8 @@
         "registry+https://github.com/rust-lang/crates.io-index#http@1.4.2",
         "pkg:cargo/wasi-authz-client@0.1.0-rc.5",
         "pkg:cargo/wasi-authz-contract@0.1.0-rc.5",
-        "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=896f8f5426b1bdc6d208367d0ac8dbf44146dfda#wasi-http-metadata@0.2.0-alpha.3",
-        "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=896f8f5426b1bdc6d208367d0ac8dbf44146dfda#wasi-http-policy-core@0.2.0-alpha.3"
+        "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=3df96c21a7906b885e67229e9a7c8c01b6497109#wasi-http-metadata@0.2.0-alpha.3",
+        "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=3df96c21a7906b885e67229e9a7c8c01b6497109#wasi-http-policy-core@0.2.0-alpha.3"
       ],
       "ref": "pkg:cargo/wasi-authz-http@0.1.0-rc.5"
     },

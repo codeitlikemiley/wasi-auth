@@ -4538,7 +4538,7 @@ dependencies = [
 [[package]]
 name = "wasi-http-authn"
 version = "0.2.0-alpha.3"
-source = "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=896f8f5426b1bdc6d208367d0ac8dbf44146dfda#896f8f5426b1bdc6d208367d0ac8dbf44146dfda"
+source = "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=3df96c21a7906b885e67229e9a7c8c01b6497109#3df96c21a7906b885e67229e9a7c8c01b6497109"
 dependencies = [
  "http",
  "thiserror 2.0.18",
@@ -4549,7 +4549,7 @@ dependencies = [
 [[package]]
 name = "wasi-http-metadata"
 version = "0.2.0-alpha.3"
-source = "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=896f8f5426b1bdc6d208367d0ac8dbf44146dfda#896f8f5426b1bdc6d208367d0ac8dbf44146dfda"
+source = "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=3df96c21a7906b885e67229e9a7c8c01b6497109#3df96c21a7906b885e67229e9a7c8c01b6497109"
 dependencies = [
  "base64",
  "http",
@@ -4561,7 +4561,7 @@ dependencies = [
 [[package]]
 name = "wasi-http-middleware-component-support"
 version = "0.2.0-alpha.3"
-source = "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=896f8f5426b1bdc6d208367d0ac8dbf44146dfda#896f8f5426b1bdc6d208367d0ac8dbf44146dfda"
+source = "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=3df96c21a7906b885e67229e9a7c8c01b6497109#3df96c21a7906b885e67229e9a7c8c01b6497109"
 dependencies = [
  "http",
  "wasip3",
@@ -4571,7 +4571,7 @@ dependencies = [
 [[package]]
 name = "wasi-http-policy-core"
 version = "0.2.0-alpha.3"
-source = "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=896f8f5426b1bdc6d208367d0ac8dbf44146dfda#896f8f5426b1bdc6d208367d0ac8dbf44146dfda"
+source = "git+https://github.com/codeitlikemiley/wasi-http-middleware?rev=3df96c21a7906b885e67229e9a7c8c01b6497109#3df96c21a7906b885e67229e9a7c8c01b6497109"
 dependencies = [
  "http",
  "serde",

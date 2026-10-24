@@ -6,7 +6,7 @@ produced for it. Nothing in `leptos_wasi` was modified to produce this; every
 build check below ran against a scratch copy. The `legacy/wasi-http-middleware`
 paths below describe that study. Current consumers pin
 `codeitlikemiley/wasi-http-middleware` revision
-`896f8f5426b1bdc6d208367d0ac8dbf44146dfda` for `wasi-http-authn`,
+`3df96c21a7906b885e67229e9a7c8c01b6497109` for `wasi-http-authn`,
 `wasi-http-metadata`, and `wasi-http-policy-core`. Those sources are not in
 this checkout.
 
@@ -308,7 +308,7 @@ commit even though the section is labelled `0.1.0-alpha.4`.
 `[middleware]` needed no change for the `rc.3` study. That subtree was
 byte-identical, so `0.2.0-alpha.3` and its `source_revision`/`artifact_revision`
 were accurate for that pin. Current consumers use git revision
-`896f8f5426b1bdc6d208367d0ac8dbf44146dfda` until `v0.2.0-alpha.4`.
+`3df96c21a7906b885e67229e9a7c8c01b6497109` until `v0.2.0-alpha.4`.
 
 ### `tests/middleware/artifact-sets.toml`
 

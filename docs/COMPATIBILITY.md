@@ -73,7 +73,7 @@ A downstream consumer such as `leptos_wasi` depends on this repository through
 local path dependencies. Portable middleware crates are a separate git pin of
 `codeitlikemiley/wasi-http-middleware`. Only `wasi-auth` is publishable from
 this repository. Middleware crate version `0.2.0-alpha.3` stays on revision
-`896f8f5426b1bdc6d208367d0ac8dbf44146dfda` until `v0.2.0-alpha.4` is published.
+`3df96c21a7906b885e67229e9a7c8c01b6497109` until `v0.2.0-alpha.4` is published.
 
 [`companion.toml`](../companion.toml) is the machine-readable record of that
 surface. It lists every crate a consumer may depend on with its resolved
